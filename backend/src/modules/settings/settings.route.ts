@@ -23,7 +23,7 @@ async function handleGetPublicSettings() {
   const all = await getSystemSettings();
   const pub: Record<string, string> = {};
   for (const key of PUBLIC_SETTINGS_FIELDS) {
-    if (key in all) pub[key] = all[key];
+    if (key in all) pub[key] = all[key] ?? "";
   }
   return { data: pub };
 }
