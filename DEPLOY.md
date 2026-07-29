@@ -1,19 +1,19 @@
-# 🚀 Panduan Deploy di CloudPanel VPS
+# 🚀 Panduan Deploy di CloudPanel VPS (Bun Backend)
 
-Panduan lengkap untuk mendeploy project **Rescamp** (backend Bun/Elysia + frontend React/Vite) di VPS menggunakan **CloudPanel**.
+Panduan resmi mendeploy project **Rescamp** dengan backend murni berbasis **Bun / ElysiaJS** dan frontend **React / Vite** di VPS menggunakan **CloudPanel**.
 
 ---
 
 ## 📋 Persyaratan Sistem
 
-| Komponen | Versi Minimum |
-|---|---|
-| OS | Ubuntu 22.04 / Debian 12 |
-| CloudPanel | v2.x |
-| Bun | v1.1+ |
-| Node.js | v20+ (untuk build frontend) |
-| MySQL | v8.0+ (tersedia di CloudPanel) |
-| RAM | 1 GB (rekomendasi 2 GB+) |
+| Komponen | Versi Minimum | Keterangan |
+|---|---|---|
+| **OS** | Ubuntu 22.04 / Debian 12 | Sistem operasi VPS |
+| **CloudPanel** | v2.x | Panel Manajemen Server |
+| **Bun** | v1.1+ | **Runtime utama backend** |
+| **Node.js** | v20+ | Hanya untuk build asset frontend (`npm run build`) |
+| **MySQL** | v8.0+ | Database (tersedia di CloudPanel) |
+| **RAM** | 1 GB | Rekomendasi 2 GB+ |
 
 ---
 
@@ -22,17 +22,15 @@ Panduan lengkap untuk mendeploy project **Rescamp** (backend Bun/Elysia + fronte
 ```
 Internet
    │
-   ▼
-CloudPanel Nginx (Reverse Proxy)
-   ├── app.domain.com       → /htdocs/app.domain.com (static files Vite)
-   └── app.domain.com/api/  → localhost:3000 (Bun/Elysia backend)
+   ├── api.domain.com  ──(Nginx Proxy)──> http://127.0.0.1:3000 (Bun/Elysia Backend)
+   └── app.domain.com  ──(Nginx Static)─> /htdocs/app.domain.com (Vite/React Static Files)
 ```
 
 ---
 
 ## 📦 Bagian 1 — Persiapan VPS
 
-### 1.1 Install Bun
+### 1.1 Install Bun Runtime (Wajib)
 
 ```bash
 curl -fsSL https://bun.sh/install | bash
@@ -40,7 +38,7 @@ source ~/.bashrc
 bun --version
 ```
 
-### 1.2 Install Node.js (untuk build frontend)
+### 1.2 Install Node.js (untuk Build Frontend)
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
@@ -49,87 +47,82 @@ node --version
 npm --version
 ```
 
-### 1.3 Install PM2 (process manager untuk backend)
-
-```bash
-sudo npm install -g pm2
-pm2 --version
-```
-
 ---
 
 ## 🗄️ Bagian 2 — Setup Database MySQL di CloudPanel
 
-### 2.1 Buat Database
+### 2.1 Buat Database Baru
 
 1. Login ke **CloudPanel** → **Databases** → **Add Database**
-2. Isi:
+2. Isi data berikut:
    - **Database Name**: `domain_dashboard`
    - **Username**: `rescamp_user`
-   - **Password**: *(generate password kuat)*
+   - **Password**: *(gunakan password kuat)*
 3. Klik **Add Database**
 
-### 2.2 Catat Kredensial Database
+### 2.2 Kredensial Database
 
 ```
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_NAME=domain_dashboard
 DB_USER=rescamp_user
-DB_PASSWORD=<password-yang-dibuat>
+DB_PASSWORD=<password-database>
 ```
 
 ---
 
 ## 🌐 Bagian 3 — Setup Domain di CloudPanel
 
-### 3.1 Buat Site
+### 3.1 Domain Backend API (`api.domain.com`)
 
 1. CloudPanel → **Sites** → **Add Site**
-2. Isi:
-   - **Domain**: `app.domain.com`
-   - **Site User**: *(buat user baru atau pilih existing)*
-   - **Document Root**: `/home/<user>/htdocs/app.domain.com`
+2. Pilih type: **Node.js** (atau Python/Generic)
+3. Domain Name: `api.domain.com`
+4. Aktifkan **SSL** → Let's Encrypt
+
+### 3.2 Domain Frontend App (`app.domain.com`)
+
+1. CloudPanel → **Sites** → **Add Site**
+2. Domain Name: `app.domain.com`
 3. Aktifkan **SSL** → Let's Encrypt
 
 ---
 
 ## 📁 Bagian 4 — Clone Repository & Setup Project
 
-### 4.1 SSH ke VPS
+### 4.1 SSH ke VPS (sebagai root)
 
 ```bash
 ssh root@<ip-vps>
-su - <username-cloudpanel>
 ```
 
-### 4.2 Clone Repository
+### 4.2 Clone Repository ke Folder Site
 
 ```bash
-cd /home/<user>/htdocs/
-git clone https://github.com/anggiadiputra/rescamp.git rescamp
-cd rescamp
+cd /home/<user>/htdocs/api.domain.com/
+git clone https://github.com/anggiadiputra/rescamp.git .
 ```
 
 ---
 
-## ⚙️ Bagian 5 — Konfigurasi Backend
+## ⚙️ Bagian 5 — Konfigurasi & Migrasi Backend Bun
 
 ### 5.1 Buat File `.env` Backend
 
 ```bash
-cd /home/<user>/htdocs/rescamp/backend
+cd /home/<user>/htdocs/api.domain.com/backend
 nano .env
 ```
 
-Isi lengkap `.env` backend:
+Isi konfigurasi `.env`:
 
 ```env
 # ── Server ─────────────────────────────────────
 PORT=3000
 APP_URL=https://app.domain.com
 
-# CORS — harus sama persis dengan URL frontend
+# CORS — URL frontend React
 CORS_ORIGIN=https://app.domain.com
 
 # ── Database ────────────────────────────────────
@@ -140,8 +133,8 @@ DB_PASSWORD=<password-database>
 DB_NAME=domain_dashboard
 
 # ── JWT ─────────────────────────────────────────
-# WAJIB diganti! Generate dengan: openssl rand -hex 32
-JWT_SECRET=ganti-ini-dengan-string-acak-minimal-32-karakter
+# Generate dengan: openssl rand -hex 32
+JWT_SECRET=ganti-dengan-string-acak-minimal-32-karakter
 JWT_EXPIRY=24h
 
 # ── Resellercamp (Liquid API) ───────────────────
@@ -159,34 +152,103 @@ SUMOPOD_WEBHOOK_SECRET=<webhook-secret>
 > openssl rand -hex 32
 > ```
 
-### 5.2 Install Dependensi Backend
+### 5.2 Install Dependensi Backend dengan Bun
 
 ```bash
-cd /home/<user>/htdocs/rescamp/backend
+cd /home/<user>/htdocs/api.domain.com/backend
 bun install
 ```
 
 ### 5.3 Jalankan Migrasi Database
 
 ```bash
-bun run db:push
+export $(grep -v '^#' .env | xargs) && bun run db:push
 ```
 
 ---
 
-## 🏗️ Bagian 6 — Build & Deploy Frontend
+## 🔁 Bagian 6 — Pengelolaan Service Backend (Bun)
 
-### 6.1 Install Dependensi & Build
+### Cara 1: Menggunakan Systemd Service (Sangat Direkomendasikan 🌟)
+
+Systemd adalah pengelola service bawaan Linux. **Paling efisien, 0 MB overhead RAM tambahan**, dan tidak memerlukan instalasi PM2/Node.js di backend.
+
+#### 1. Buat file service systemd:
+```bash
+nano /etc/systemd/system/rescamp-api.service
+```
+
+#### 2. Tempelkan isi berikut:
+```ini
+[Unit]
+Description=Rescamp Backend API (Bun Runtime)
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/<user>/htdocs/api.domain.com/backend
+ExecStart=/root/.bun/bin/bun run src/index.ts
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+```
+*(Catatan: Cek lokasi binary Bun dengan `which bun`. Jika outputnya `/usr/local/bin/bun`, gantilah `ExecStart` di atas).*
+
+#### 3. Aktifkan & Jalankan Service:
+```bash
+systemctl daemon-reload
+systemctl enable rescamp-api
+systemctl start rescamp-api
+```
+
+#### 4. Cek Status Service:
+```bash
+systemctl status rescamp-api
+```
+
+Output sukses:
+```
+● rescamp-api.service - Rescamp Backend API (Bun Runtime)
+     Active: active (running)
+     Main PID: 182722 (bun)
+     Memory: 46.4M
+     bun[182722]: 🚀 Server running on http://localhost:3000
+```
+
+---
+
+### Cara 2: Menggunakan PM2 (Opsional)
+
+Jika Anda lebih memilih PM2 untuk manajemen proses:
 
 ```bash
-cd /home/<user>/htdocs/rescamp/frontend
+# Install PM2 via Bun
+bun install -g pm2
+
+# Jalankan backend Bun
+cd /home/<user>/htdocs/api.domain.com/backend
+pm2 start "bun run src/index.ts" --name rescamp-api
+pm2 save
+pm2 startup
+```
+
+---
+
+## 🏗️ Bagian 7 — Build & Deploy Frontend React
+
+### 7.1 Build Asset Frontend
+
+```bash
+cd /home/<user>/htdocs/api.domain.com/frontend
 npm install
 npm run build
 ```
 
-Output: folder `dist/` berisi file statis siap deploy.
-
-### 6.2 Copy Build ke Document Root
+### 7.2 Copy Build ke Document Root Frontend Site
 
 ```bash
 rsync -av --delete dist/ /home/<user>/htdocs/app.domain.com/
@@ -194,251 +256,165 @@ rsync -av --delete dist/ /home/<user>/htdocs/app.domain.com/
 
 ---
 
-## 🔁 Bagian 7 — Setup PM2 untuk Backend
-
-### 7.1 Buat File Konfigurasi PM2
-
-```bash
-cd /home/<user>/htdocs/rescamp/backend
-nano ecosystem.config.cjs
-```
-
-```javascript
-module.exports = {
-  apps: [
-    {
-      name: "rescamp-api",
-      script: "bun",
-      args: "run src/index.ts",
-      cwd: "/home/<user>/htdocs/rescamp/backend",
-      interpreter: "none",
-      env: {
-        NODE_ENV: "production",
-      },
-      watch: false,
-      max_memory_restart: "512M",
-      restart_delay: 3000,
-      log_date_format: "YYYY-MM-DD HH:mm:ss",
-    },
-  ],
-};
-```
-
-### 7.2 Jalankan Backend
-
-```bash
-pm2 start ecosystem.config.cjs
-pm2 save
-pm2 startup   # ikuti instruksi yang muncul
-```
-
-### 7.3 Verifikasi
-
-```bash
-pm2 status
-curl http://localhost:3000/api/settings
-```
-
----
-
 ## 🌍 Bagian 8 — Konfigurasi Nginx di CloudPanel
 
-### 8.1 Edit Vhost
+### 8.1 Nginx Vhost untuk Domain API (`api.domain.com`)
 
-CloudPanel → **Sites** → pilih `app.domain.com` → **Vhost** → Edit dan ganti seluruh isi dengan:
+CloudPanel → **Sites** → pilih `api.domain.com` → **Vhost** → Edit dan ganti dengan:
 
 ```nginx
 server {
-    listen 80;
-    listen [::]:80;
-    server_name app.domain.com;
-    return 301 https://$host$request_uri;
-}
+  listen 80;
+  listen [::]:80;
+  listen 443 quic;
+  listen 443 ssl;
+  listen [::]:443 quic;
+  listen [::]:443 ssl;
+  http2 on;
+  http3 off;
+  {{ssl_certificate_key}}
+  {{ssl_certificate}}
+  server_name api.domain.com;
+  {{root}}
 
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name app.domain.com;
+  {{nginx_access_log}}
+  {{nginx_error_log}}
 
-    ssl_certificate /etc/letsencrypt/live/app.domain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/app.domain.com/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers on;
+  if ($scheme != "https") {
+    rewrite ^ https://$host$request_uri permanent;
+  }
 
-    root /home/<user>/htdocs/app.domain.com;
-    index index.html;
+  location ~ /.well-known {
+    auth_basic off;
+    allow all;
+  }
 
-    # ── Proxy /api ke Bun backend ─────────────────
-    location /api/ {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-        proxy_read_timeout 120s;
-        proxy_connect_timeout 10s;
-    }
+  {{settings}}
 
-    # ── SPA React — semua route → index.html ──────
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
+  include /etc/nginx/global_settings;
 
-    # ── Cache asset statis ─────────────────────────
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2|woff|ttf|map)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
-
-    # ── Security Headers ───────────────────────────
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header X-XSS-Protection "1; mode=block" always;
+  # PROXY SEMUA REQUEST KE BACKEND BUN (PORT 3000)
+  location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Server $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Host $host;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "Upgrade";
+    proxy_pass_request_headers on;
+    proxy_read_timeout 900;
+  }
 }
 ```
 
-### 8.2 Reload Nginx
+> **Catatan Penting:** Penggunaan `proxy_pass http://127.0.0.1:3000;` pada `location /` di atas mencegah terjadinya error **403 Forbidden** saat mengakses domain backend di browser.
 
-```bash
-sudo nginx -t
-sudo systemctl reload nginx
+---
+
+### 8.2 Nginx Vhost untuk Domain Frontend (`app.domain.com`)
+
+CloudPanel → **Sites** → pilih `app.domain.com` → **Vhost** → Edit:
+
+```nginx
+server {
+  listen 80;
+  listen [::]:80;
+  listen 443 ssl http2;
+  server_name app.domain.com;
+
+  {{ssl_certificate_key}}
+  {{ssl_certificate}}
+
+  root /home/<user>/htdocs/app.domain.com;
+  index index.html;
+
+  # SPA Routing React
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+
+  location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2|woff|ttf)$ {
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+  }
+}
 ```
 
 ---
 
-## 🔄 Bagian 9 — Script Deploy Otomatis
+## 🔄 Bagian 9 — Script Deploy Otomatis (`deploy.sh`)
 
-Buat file `deploy.sh` di root project:
+Buat file `deploy.sh` di folder backend untuk mempermudah update di masa depan:
 
 ```bash
-nano /home/<user>/htdocs/rescamp/deploy.sh
+nano /home/<user>/htdocs/api.domain.com/deploy.sh
 ```
 
 ```bash
 #!/bin/bash
 set -e
 
-SITE_USER="<user>"
-FRONTEND_ROOT="/home/$SITE_USER/htdocs/app.domain.com"
-PROJECT_ROOT="/home/$SITE_USER/htdocs/rescamp"
+PROJECT_ROOT="/home/<user>/htdocs/api.domain.com"
+FRONTEND_ROOT="/home/<user>/htdocs/app.domain.com"
 
-echo "🔄 [1/5] Pulling latest changes from GitHub..."
+echo "🔄 [1/5] Pulling latest code..."
 cd $PROJECT_ROOT
 git pull origin main
 
-echo "📦 [2/5] Installing backend dependencies..."
+echo "📦 [2/5] Installing backend dependencies with Bun..."
 cd $PROJECT_ROOT/backend
 bun install
 
 echo "🗄️  [3/5] Running database migrations..."
-bun run db:push
+export $(grep -v '^#' .env | xargs) && bun run db:push
 
-echo "♻️  [4/5] Restarting backend..."
-pm2 restart rescamp-api
+echo "♻️  [4/5] Restarting Bun backend service..."
+systemctl restart rescamp-api
 
 echo "🏗️  [5/5] Building & deploying frontend..."
 cd $PROJECT_ROOT/frontend
 npm run build
 rsync -av --delete dist/ $FRONTEND_ROOT/
 
-echo ""
-echo "✅ Deploy berhasil! App tersedia di https://app.domain.com"
+echo "✅ Deploy selesai! Backend & Frontend up-to-date."
 ```
 
 ```bash
-chmod +x /home/<user>/htdocs/rescamp/deploy.sh
-```
-
-Jalankan update dengan satu perintah:
-```bash
-/home/<user>/htdocs/rescamp/deploy.sh
+chmod +x /home/<user>/htdocs/api.domain.com/deploy.sh
 ```
 
 ---
 
-## 🔒 Bagian 10 — Keamanan
+## 🩺 Bagian 10 — Troubleshooting Umum
 
-### 10.1 Firewall
+### 1. Error `403 Forbidden` di Domain API
+- **Sebab:** Vhost Nginx menggunakan `try_files $uri $uri/ /index.html;` padahal folder domain API tidak memiliki file `index.html`.
+- **Solusi:** Ganti `location /` di Vhost CloudPanel domain API menjadi:
+  `proxy_pass http://127.0.0.1:3000;`
 
+### 2. Error `Access denied for user 'root'@'localhost'` saat `db:push`
+- **Sebab:** `drizzle-kit` CLI tidak otomatis membaca file `.env`.
+- **Solusi:** Jalankan dengan meng-export variabel `.env` secara eksplisit:
+  `export $(grep -v '^#' .env | xargs) && bun run db:push`
+
+### 3. Cek Log Backend Bun (Systemd)
 ```bash
-sudo ufw allow OpenSSH
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-# Jangan buka port 3000 ke publik!
-sudo ufw enable
-sudo ufw status
-```
-
-### 10.2 Konfigurasi Webhook Sumopod
-
-Di dashboard Sumopod, set URL webhook ke:
-```
-https://app.domain.com/api/payments/webhook
+journalctl -u rescamp-api -f --lines 50
 ```
 
 ---
 
-## 🩺 Bagian 11 — Troubleshooting
+## ✅ Checklist Akhir Deploy
 
-### Backend tidak berjalan
-
-```bash
-pm2 logs rescamp-api --lines 100
-pm2 restart rescamp-api
-```
-
-### Cek koneksi database
-
-```bash
-mysql -u rescamp_user -p domain_dashboard -e "SHOW TABLES;"
-```
-
-### Frontend 404 saat refresh
-
-Pastikan Nginx punya:
-```nginx
-location / {
-    try_files $uri $uri/ /index.html;
-}
-```
-
-### CORS error di browser
-
-Pastikan `CORS_ORIGIN` di `.env` backend tepat sama dengan URL frontend (termasuk `https://`):
-```env
-CORS_ORIGIN=https://app.domain.com
-```
-
-### Monitoring real-time
-
-```bash
-pm2 logs rescamp-api          # log backend
-pm2 monit                     # resource monitor
-sudo tail -f /var/log/nginx/error.log  # error nginx
-```
-
----
-
-## ✅ Checklist Deploy
-
-- [ ] Bun & Node.js terinstall di VPS
-- [ ] PM2 terinstall global (`npm install -g pm2`)
-- [ ] Database MySQL dibuat di CloudPanel
-- [ ] Repository di-clone: `git clone https://github.com/anggiadiputra/rescamp.git`
+- [ ] Bun runtime terinstall (`bun --version`)
+- [ ] Database MySQL terbuat di CloudPanel
 - [ ] File `backend/.env` dikonfigurasi lengkap
-- [ ] `JWT_SECRET` diganti dengan string acak kuat (`openssl rand -hex 32`)
-- [ ] `bun install` berhasil di folder `backend/`
-- [ ] `bun run db:push` berhasil (tabel terbuat di MySQL)
-- [ ] Backend berjalan via PM2 (`pm2 status`)
-- [ ] Frontend di-build (`npm run build`) & di-copy ke document root
-- [ ] Nginx vhost dikonfigurasi dengan proxy `/api/` dan `try_files`
-- [ ] SSL Let's Encrypt aktif
-- [ ] Firewall hanya membuka port 22, 80, 443
-- [ ] Webhook Sumopod mengarah ke URL produksi
-- [ ] Test login dari browser berhasil
-- [ ] Test buat transaksi/invoice berhasil
+- [ ] `bun run db:push` sukses membuat tabel
+- [ ] Service Systemd `rescamp-api` aktif (`active (running)`)
+- [ ] Vhost `api.domain.com` proxy ke `http://127.0.0.1:3000` pada `location /`
+- [ ] SSL Let's Encrypt aktif di CloudPanel
+- [ ] `curl https://api.domain.com/` mengembalikan respon JSON `{"message":"Domain Dashboard API"}`
