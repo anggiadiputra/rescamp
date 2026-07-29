@@ -15,11 +15,6 @@ const PUBLIC_SETTINGS_FIELDS = [
   "header_color",
   "sidebar_color",
   "theme_preset",
-  "turnstile_enabled",
-  "turnstile_site_key",   // site key aman (bukan secret key)
-  "tax_enabled",
-  "tax_rate",
-  "tax_label",
   "email_provider",
 ] as const;
 
