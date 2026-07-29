@@ -81,7 +81,7 @@ export async function list(ctx: any) {
 
 export async function detail(ctx: any) {
   const user = await getUser(ctx);
-  const domain = await svc.getDomain(user.id, parseInt(ctx.params.id));
+  const domain = await svc.getDomain(user, parseInt(ctx.params.id));
   return { data: domain };
 }
 
@@ -116,7 +116,7 @@ export async function updateNs(ctx: any) {
 
 export async function getNs(ctx: any) {
   const user = await getUser(ctx);
-  const domain = await svc.getDomain(user.id, parseInt(ctx.params.id));
+  const domain = await svc.getDomain(user, parseInt(ctx.params.id));
   return { data: { domain_id: domain.id, nameservers: domain.nameservers || [] } };
 }
 

@@ -3,6 +3,7 @@ import { db } from "../../db";
 import { users } from "../../db/schema";
 import { eq } from "drizzle-orm";
 import { AppError } from "../../lib/error";
+import { verifyTurnstileToken } from "../../lib/turnstile";
 
 async function getUser(ctx: any) {
   const userId = Number(ctx.store?.user?.sub);
@@ -12,6 +13,7 @@ async function getUser(ctx: any) {
 }
 
 export async function create(ctx: any) {
+  await verifyTurnstileToken(ctx.body?.cfTurnstileResponse || ctx.headers?.["cf-turnstile-response"]);
   const user = await getUser(ctx);
   const cust = await svc.createCustomer(user, ctx.body);
   ctx.set.status = 201;
@@ -33,7 +35,8 @@ export async function detail(ctx: any) {
 
 export async function update(ctx: any) {
   const user = await getUser(ctx);
-  const cust = await svc.updateCustomer(user.id, parseInt(ctx.params.id), ctx.body);
+  const creds = { resellerId: user.resellerId, apiKey: user.apiKey };
+  const cust = await svc.updateCustomer(creds, user.id, parseInt(ctx.params.id), ctx.body);
   return { data: cust };
 }
 

@@ -36,13 +36,20 @@ export class SumopodClient {
    * Create payment link via Sumopod API
    */
   async createPayment(options: CreatePaymentOptions): Promise<SumopodPaymentResponse> {
+    let validAppUrl = (env.APP_URL || env.CORS_ORIGIN || "https://localhost:5173").trim().replace(/\/$/, "");
+    if (validAppUrl.startsWith("http://")) {
+      validAppUrl = validAppUrl.replace(/^http:\/\//, "https://");
+    } else if (!validAppUrl.startsWith("https://")) {
+      validAppUrl = `https://${validAppUrl}`;
+    }
+
     const payload = {
       order_id: options.orderId,
       amount: Math.round(options.amount),
       currency: options.currency || "IDR",
       expires_in_hours: options.expiresInHours || 24,
-      success_return_url: options.successReturnUrl || `${env.APP_URL}/billing?status=success&order_id=${options.orderId}`,
-      cancel_return_url: options.cancelReturnUrl || `${env.APP_URL}/billing?status=cancel&order_id=${options.orderId}`,
+      success_return_url: options.successReturnUrl || `${validAppUrl}/billing?status=success&order_id=${options.orderId}`,
+      cancel_return_url: options.cancelReturnUrl || `${validAppUrl}/billing?status=cancel&order_id=${options.orderId}`,
       ...(options.paymentMethodTypeCode ? { payment_method_type_code: options.paymentMethodTypeCode } : {}),
     };
 

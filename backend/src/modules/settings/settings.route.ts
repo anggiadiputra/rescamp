@@ -1,7 +1,7 @@
 import { Elysia } from "elysia";
 import { getSystemSettings, updateSystemSettings, testKirisanConnection } from "./settings.service";
 import { AppError } from "../../lib/error";
-import { authGuard } from "../../middleware/auth";
+import { authGuard, resellerGuard } from "../../middleware/auth";
 
 async function handleGetSettings() {
   const settings = await getSystemSettings();
@@ -25,9 +25,12 @@ async function handleTestKirisan({ body }: any) {
 }
 
 export const settingsRoutes = new Elysia({ prefix: "/settings" })
-  .get("/", handleGetSettings as any, { beforeHandle: authGuard })
-  .get("", handleGetSettings as any, { beforeHandle: authGuard })
-  .put("/", handlePutSettings as any, { beforeHandle: authGuard })
-  .put("", handlePutSettings as any, { beforeHandle: authGuard })
-  .post("/test-kirisan", handleTestKirisan as any, { beforeHandle: authGuard });
+  .get("/", handleGetSettings as any)
+  .get("", handleGetSettings as any)
+  .guard({ beforeHandle: [authGuard, resellerGuard] }, (app) =>
+    app
+      .put("/", handlePutSettings as any)
+      .put("", handlePutSettings as any)
+      .post("/test-kirisan", handleTestKirisan as any)
+  );
 

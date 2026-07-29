@@ -57,25 +57,37 @@ export async function orderRegisterDomain(
   const liquid = getLiquid(user);
   const fullDomain = `${data.domain_name}.${data.tld}`;
   
-  // Resolve price
-  let unitPrice = 150000; // default fallback IDR price
+  const years = data.years || 1;
+  const tldKey = data.tld.toLowerCase();
+  let unitPrice = 150000;
+  let privacyPrice = 70000;
+  let totalAmount = 0;
+
   try {
     const rawCustPrices = await liquid.getCustomerPrices();
     const prices = formatCustomerPrices(rawCustPrices);
-    const pInfo = prices[data.tld.toLowerCase()];
-    if (pInfo && (pInfo.price_new || pInfo.price_register)) {
+    const pInfo = prices[tldKey];
+
+    if (pInfo && pInfo.create_years && pInfo.create_years[years]) {
+      totalAmount = pInfo.create_years[years];
+    } else if (pInfo && (pInfo.price_new || pInfo.price_register)) {
       const p = Number(pInfo.price_new || pInfo.price_register);
-      unitPrice = p < 10000 ? p * 1000 : p;
+      unitPrice = p < 1000 ? p * 1000 : p;
+      totalAmount = unitPrice * years;
+    } else {
+      totalAmount = unitPrice * years;
+    }
+
+    if (pInfo && pInfo.privacy_protect) {
+      const pp = Number(pInfo.privacy_protect);
+      privacyPrice = pp < 1000 ? pp * 1000 : pp;
     }
   } catch (e) {
-    console.warn("Failed to fetch customer prices, using default unit price:", e);
+    totalAmount = unitPrice * years;
   }
 
-  const years = data.years || 1;
-  let totalAmount = unitPrice * years;
-
-  if (data.privacy_protection && !data.tld.toLowerCase().endsWith("id")) {
-    totalAmount += 70000; // Privacy protection addon fee in IDR
+  if (data.privacy_protection && !tldKey.endsWith("id")) {
+    totalAmount += privacyPrice * years;
   }
 
   return createDomainOrderPayment({
@@ -106,7 +118,7 @@ export async function orderTransferDomain(
     const pInfo = prices[tld];
     if (pInfo && (pInfo.price_transfer || pInfo.price_renew)) {
       const p = Number(pInfo.price_transfer || pInfo.price_renew);
-      unitPrice = p < 10000 ? p * 1000 : p;
+      unitPrice = p < 1000 ? p * 1000 : p;
     }
   } catch (e) {}
 
@@ -139,7 +151,7 @@ export async function orderRenewDomain(
     const pInfo = prices[domain.tld.toLowerCase()];
     if (pInfo && pInfo.price_renew) {
       const p = Number(pInfo.price_renew);
-      unitPrice = p < 10000 ? p * 1000 : p;
+      unitPrice = p < 1000 ? p * 1000 : p;
     }
   } catch (e) {}
 
@@ -199,13 +211,14 @@ export async function listDomains(
   const perPage = params?.per_page || 20;
   const offset = (page - 1) * perPage;
 
-  const conditions: any[] = [];
-  // Customer: only see their own domains (by customerId if linked)
-  if (user.role === "customer") {
-    conditions.push(eq(domains.userId, user.id));
-  } else {
-    conditions.push(eq(domains.userId, user.id));
+  let allowedUserIds = [user.id];
+  if (user.role === "reseller") {
+    const { users } = await import("../../db/schema");
+    const childUsers = await db.select({ id: users.id }).from(users).where(eq(users.parentResellerId, user.id));
+    allowedUserIds = [user.id, ...childUsers.map((c) => c.id)];
   }
+
+  const conditions: any[] = [inArray(domains.userId, allowedUserIds)];
   if (params?.search) conditions.push(like(domains.domainName, `%${params.search}%`));
   if (params?.status) conditions.push(eq(domains.status, params.status as any));
 
@@ -217,14 +230,24 @@ export async function listDomains(
   return { data: rows, meta: { total, page, perPage } };
 }
 
-export async function getDomain(userId: number, domainId: number) {
-  const [domain] = await db.select().from(domains).where(and(eq(domains.id, domainId), eq(domains.userId, userId)));
+export async function getDomain(userParam: any, domainId: number) {
+  const userId = typeof userParam === "object" ? userParam.id : Number(userParam);
+  const userRole = typeof userParam === "object" ? userParam.role : "reseller";
+
+  let allowedUserIds = [userId];
+  if (userRole === "reseller") {
+    const { users } = await import("../../db/schema");
+    const childUsers = await db.select({ id: users.id }).from(users).where(eq(users.parentResellerId, userId));
+    allowedUserIds = [userId, ...childUsers.map((c) => c.id)];
+  }
+
+  const [domain] = await db.select().from(domains).where(and(eq(domains.id, domainId), inArray(domains.userId, allowedUserIds)));
   if (!domain) throw new AppError("Domain not found", 404);
   return domain;
 }
 
 export async function renewDomain(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, years: number) {
-  const domain = await getDomain(userId, domainId);
+  const domain = await getDomain({id: userId, role: "customer"}, domainId);
   const liquidRes = await getLiquid(user).renewDomain(String(domain.liquidOrderId || domain.domainName), years);
   await db.update(domains).set({ years: (domain.years || 1) + years }).where(eq(domains.id, domainId));
   return { domain_id: domain.id, domain_name: domain.domainName, years_added: years, previous_expiry: domain.expiryDate, new_expiry: liquidRes?.expiry_date || null };
@@ -318,6 +341,8 @@ export async function bulkAvailability(user: { resellerId: string; apiKey: strin
           price: tldPrice.price_new || tldPrice.price_register || null,
           renew_price: tldPrice.price_renew || null,
           transfer_price: tldPrice.price_transfer || tldPrice.price_renew || null,
+          create_years: tldPrice.create_years || null,
+          renew_years: tldPrice.renew_years || null,
           privacy_protect: tldPrice.privacy_protect || "70.00",
           currency: tldPrice.currency || "IDR",
         };

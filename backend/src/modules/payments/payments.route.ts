@@ -70,16 +70,35 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
           return { error: "Transaction not found" };
         }
 
+        let metaObj: any = {};
+        if (tx.metadata) {
+          try { metaObj = JSON.parse(tx.metadata); } catch (e) {}
+        }
+
+        const createdAtTime = tx.createdAt ? new Date(tx.createdAt).getTime() : Date.now();
+        const expiresAt = metaObj.expiresAt || new Date(createdAtTime + 60 * 60 * 1000).toISOString();
+        const isPastExpiry = Date.now() > new Date(expiresAt).getTime();
+
+        let currentStatus = tx.status;
+        let currentPaymentStatus = tx.paymentStatus;
+
+        if (isPastExpiry && (currentStatus === "pending_payment" || currentPaymentStatus === "pending")) {
+          currentStatus = "expired";
+          currentPaymentStatus = "expired";
+          await db.update(transactions).set({ status: "expired", paymentStatus: "expired" }).where(eq(transactions.id, tx.id));
+        }
+
         return {
           data: {
             id: tx.id,
-            status: tx.status,
-            paymentStatus: tx.paymentStatus,
+            status: currentStatus,
+            paymentStatus: currentPaymentStatus,
             paymentId: tx.paymentId,
             paymentLinkUrl: tx.paymentLinkUrl,
             amount: tx.amount,
             currency: tx.currency,
             createdAt: tx.createdAt,
+            expiresAt,
           },
         };
       },

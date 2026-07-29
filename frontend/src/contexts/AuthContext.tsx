@@ -8,7 +8,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, cfTurnstileResponse?: string) => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => void;
 }
@@ -23,17 +23,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const t = localStorage.getItem("token");
     if (!t) { setLoading(false); return; }
     setToken(t);
-    api.get<{ user: User }>("/auth/me").then((res) => setUser(res.user))
-      .catch(() => clearToken()).finally(() => setLoading(false));
+    const controller = new AbortController();
+    api.get<{ user: User }>("/auth/me", { signal: controller.signal })
+      .then((res) => {
+        setUser(res.user);
+      })
+      .catch((err: any) => {
+        if (err?.name === "AbortError" || err?.message?.includes("aborted")) return;
+        clearToken();
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      });
+    return () => controller.abort();
   }, []);
 
-  async function login(email: string, password: string) {
-    const res = await api.post<{ user: User; token: string }>("/auth/login", { email, password });
+  async function login(email: string, password: string, cfTurnstileResponse?: string) {
+    const res = await api.post<{ user: User; token: string }>("/auth/login", { email, password, cfTurnstileResponse });
     setToken(res.token); setUser(res.user);
   }
 
-  async function register(data: { email: string; password: string; name: string; reseller_id: string; api_key?: string }) {
-    const body: any = { email: data.email, password: data.password, name: data.name, reseller_id: data.reseller_id };
+  async function register(data: { email: string; password: string; name: string; reseller_id?: string; api_key?: string; cfTurnstileResponse?: string; company?: string; address?: string; city?: string; state?: string; country?: string; zipcode?: string; phone_cc?: string; phone?: string; code?: string }) {
+    const body: any = {
+      email: data.email, password: data.password, name: data.name,
+      reseller_id: data.reseller_id, cfTurnstileResponse: data.cfTurnstileResponse,
+      company: data.company, address: data.address,
+      city: data.city, state: data.state, country: data.country,
+      zipcode: data.zipcode, phone_cc: data.phone_cc, phone: data.phone,
+      code: data.code,
+    };
     if (data.api_key) body.api_key = data.api_key;
     const res = await api.post<{ user: User; token: string }>("/auth/register", body);
     setToken(res.token); setUser(res.user);

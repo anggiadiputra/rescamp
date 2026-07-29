@@ -5,6 +5,8 @@ import { DashboardLayout } from "./components/layout/DashboardLayout";
 import { PublicLayout } from "./components/layout/PublicLayout";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import DashboardPage from "./pages/DashboardPage";
 import DomainsPage from "./pages/DomainsPage";
 import DomainDetailPage from "./pages/DomainDetailPage";
@@ -29,6 +31,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <DashboardLayout>{children}</DashboardLayout>;
 }
 
+function ResellerRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="flex items-center justify-center py-16"><div className="animate-spin w-6 h-6 border-2 border-gray-300 border-t-black rounded-full" /></div>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role === "customer" && !user.hasProfile) return <Navigate to="/complete-profile" replace />;
+  if (user.role !== "reseller") return <Navigate to="/dashboard" replace />;
+  return <DashboardLayout>{children}</DashboardLayout>;
+}
+
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return null;
@@ -45,6 +56,8 @@ export default function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
             <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+            <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+            <Route path="/reset-password" element={<PublicRoute><ResetPasswordPage /></PublicRoute>} />
             <Route path="/register-reseller" element={<PublicRoute><RegisterResellerPage /></PublicRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
             <Route path="/domains" element={<ProtectedRoute><DomainsPage /></ProtectedRoute>} />
@@ -53,11 +66,11 @@ export default function App() {
             <Route path="/domains/:id/dns" element={<ProtectedRoute><DnsManagePage /></ProtectedRoute>} />
             <Route path="/domains/:id/forwarding" element={<ProtectedRoute><ForwardingPage /></ProtectedRoute>} />
             <Route path="/domains/transfer" element={<ProtectedRoute><DomainTransferPage /></ProtectedRoute>} />
-            <Route path="/customers" element={<ProtectedRoute><CustomersPage /></ProtectedRoute>} />
+            <Route path="/customers" element={<ResellerRoute><CustomersPage /></ResellerRoute>} />
             <Route path="/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
             <Route path="/prices" element={<ProtectedRoute><PricesPage /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            <Route path="/settings" element={<ResellerRoute><SettingsPage /></ResellerRoute>} />
             <Route path="/complete-profile" element={<CompleteProfilePage />} />
             <Route path="*" element={<PublicLayout><div className="text-center py-16"><p className="text-lg text-gray-500">404 — Page not found</p></div></PublicLayout>} />
           </Routes>

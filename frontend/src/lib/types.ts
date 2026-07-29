@@ -29,7 +29,12 @@ export interface Customer {
   name: string;
   email: string;
   company: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
   country: string;
+  zipcode: string | null;
+  phone_cc?: string | null;
   phone: string | null;
   createdAt: string;
 }

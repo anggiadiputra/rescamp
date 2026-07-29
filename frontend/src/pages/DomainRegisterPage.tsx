@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Globe, Search, Shield, ArrowRight, ArrowLeft, Check, Sparkles, RefreshCw, CheckCircle2 } from "lucide-react";
+import { Globe, Search, Shield, ArrowRight, Check, Sparkles, RefreshCw, CheckCircle2 } from "lucide-react";
 import { Card, Button, InfoBanner, LoadingSpinner, toast, PaymentModal } from "../components/ui";
+import { useAuth } from "../contexts/AuthContext";
 import { api } from "../lib/api";
 import type { Customer } from "../lib/types";
 
@@ -9,11 +10,13 @@ function fmtPrice(amount: any): string {
   if (!amount) return "";
   const num = Number(amount);
   if (isNaN(num)) return "";
-  const actual = num < 10000 ? num * 1000 : num;
+  const actual = num < 1000 ? num * 1000 : num;
   return `Rp ${Math.round(actual).toLocaleString("id-ID")}`;
 }
 
 export default function DomainRegisterPage() {
+  const { user } = useAuth();
+  const isCustomer = user?.role === "customer";
   const nav = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get("tab") === "transfer" ? "transfer" : "register";
@@ -33,8 +36,10 @@ export default function DomainRegisterPage() {
     orderId: string;
     paymentLinkUrl: string;
     amount: number;
+    fee: number;
+    expiresAt?: string;
     domainName: string;
-  }>({ open: false, orderId: "", paymentLinkUrl: "", amount: 0, domainName: "" });
+  }>({ open: false, orderId: "", paymentLinkUrl: "", amount: 0, fee: 0, expiresAt: "", domainName: "" });
 
   // Register form state
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -42,7 +47,7 @@ export default function DomainRegisterPage() {
   const [years, setYears] = useState(1);
   const [ns1, setNs1] = useState("");
   const [ns2, setNs2] = useState("");
-  const [privacy, setPrivacy] = useState(true);
+  const [privacy, setPrivacy] = useState(false);
   const [autoRenew, setAutoRenew] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -50,6 +55,11 @@ export default function DomainRegisterPage() {
   const [transferDomain, setTransferDomain] = useState(searchParams.get("search") || searchParams.get("domain") || "");
   const [authCode, setAuthCode] = useState("");
   const [transferSubmitting, setTransferSubmitting] = useState(false);
+  const [priceList, setPriceList] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    api.get<any>("/billing/prices").then((data) => setPriceList(data || {})).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -142,7 +152,7 @@ export default function DomainRegisterPage() {
 
   async function submit() {
     if (submitting) return;
-    if (!customerId) { setError("Please select a customer contact"); return; }
+    if (!customerId && user?.role !== "customer") { setError("Please select a customer contact"); return; }
     const domainToRegister = selectedDomain?.domain || search;
     if (!domainToRegister.includes(".")) { setError("Invalid domain name"); return; }
 
@@ -157,7 +167,7 @@ export default function DomainRegisterPage() {
         domain_name: name,
         tld,
         years,
-        customer_id: Number(customerId),
+        customer_id: customerId ? Number(customerId) : undefined,
         nameservers: ns.length >= 2 ? ns : undefined,
         privacy_protection: isIdDomain ? false : privacy,
         auto_renew: autoRenew,
@@ -170,6 +180,8 @@ export default function DomainRegisterPage() {
           orderId: paymentInfo.orderId,
           paymentLinkUrl: paymentInfo.paymentLinkUrl,
           amount: paymentInfo.amount,
+          fee: paymentInfo.fee || 0,
+          expiresAt: paymentInfo.expiresAt,
           domainName: domainToRegister,
         });
         window.open(paymentInfo.paymentLinkUrl, "_blank");
@@ -184,7 +196,7 @@ export default function DomainRegisterPage() {
   async function submitTransfer() {
     if (transferSubmitting) return;
     if (!transferDomain.includes(".")) { setError("Sila masukkan nama domain lengkap (misal: bisnisku.com)"); return; }
-    if (!customerId) { setError("Sila pilih kontak pemilik domain"); return; }
+    if (!customerId && user?.role !== "customer") { setError("Sila pilih kontak pemilik domain"); return; }
 
     setTransferSubmitting(true);
     setError("");
@@ -192,7 +204,7 @@ export default function DomainRegisterPage() {
       const res: any = await api.post("/domains/transfer", {
         domain_name: transferDomain.trim(),
         auth_code: authCode.trim() || undefined,
-        customer_id: Number(customerId),
+        customer_id: customerId ? Number(customerId) : undefined,
       });
 
       const paymentInfo = res?.data || res;
@@ -202,6 +214,8 @@ export default function DomainRegisterPage() {
           orderId: paymentInfo.orderId,
           paymentLinkUrl: paymentInfo.paymentLinkUrl,
           amount: paymentInfo.amount,
+          fee: paymentInfo.fee || 0,
+          expiresAt: paymentInfo.expiresAt,
           domainName: transferDomain.trim(),
         });
         window.open(paymentInfo.paymentLinkUrl, "_blank");
@@ -219,8 +233,19 @@ export default function DomainRegisterPage() {
 
   // Price calculations
   const unitPriceNum = Number(selectedDomain?.price || "180");
-  const actualUnitPrice = unitPriceNum < 10000 ? unitPriceNum * 1000 : unitPriceNum;
-  const totalPrice = actualUnitPrice * years;
+  const actualUnitPrice = unitPriceNum < 1000 ? unitPriceNum * 1000 : unitPriceNum;
+  const domainRegistrationTotal = selectedDomain?.create_years?.[years] ? Number(selectedDomain.create_years[years]) : (actualUnitPrice * years);
+
+  const rawPrivacyPrice = Number(selectedDomain?.privacy_protect || selectedDomain?.privacy_price || "70");
+  const actualPrivacyUnitPrice = rawPrivacyPrice < 1000 ? rawPrivacyPrice * 1000 : rawPrivacyPrice;
+  const privacyTotalPrice = activePrivacy ? (actualPrivacyUnitPrice * years) : 0;
+
+  const totalPrice = domainRegistrationTotal + privacyTotalPrice;
+
+  const transferTld = transferDomain.includes(".") ? transferDomain.trim().split(".").slice(1).join(".").toLowerCase() : "";
+  const transferPriceInfo = priceList[transferTld];
+  const rawTransferPrice = transferPriceInfo?.price_transfer || transferPriceInfo?.price_renew;
+  const actualTransferPriceVal = rawTransferPrice ? (Number(rawTransferPrice) < 1000 ? Number(rawTransferPrice) * 1000 : Number(rawTransferPrice)) : 0;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto pb-12">
@@ -233,11 +258,6 @@ export default function DomainRegisterPage() {
           </h1>
           <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Daftarkan domain baru atau pindahkan domain Anda dari registrar lain.</p>
         </div>
-        <Link to="/domains">
-          <Button variant="secondary" className="text-xs">
-            <ArrowLeft className="w-3.5 h-3.5 mr-1 inline" /> Kembali ke Daftar Domain
-          </Button>
-        </Link>
       </div>
 
       {/* Tab Switcher */}
@@ -252,7 +272,7 @@ export default function DomainRegisterPage() {
           }`}
         >
           <Search className="w-4 h-4" />
-          <span>Cari & Daftar Domain</span>
+          <span>Cari Domain</span>
         </button>
         <button
           type="button"
@@ -274,24 +294,26 @@ export default function DomainRegisterPage() {
       <Card className="p-5 bg-white border border-gray-200 shadow-sm rounded-xl">
         <div className="space-y-3">
           <label className="text-xs font-semibold text-gray-700 block">Domain Name or Keyword</label>
-          <div className="relative flex items-center w-full">
-            <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none z-10" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && check()}
-              className="w-full pl-10 pr-28 h-11 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black font-mono shadow-xs"
-              placeholder="e.g. sepertibiasa or sepertibiasa.com"
-            />
+          <div className="flex flex-col sm:flex-row gap-2 w-full">
+            <div className="relative flex-grow">
+              <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none z-10" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && check()}
+                className="w-full pl-10 h-11 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black font-mono shadow-xs"
+                placeholder="e.g. sepertibiasa or sepertibiasa.com"
+              />
+            </div>
             <button
               type="button"
               onClick={() => check()}
               disabled={bulkLoading}
-              className="absolute right-1 top-1/2 -translate-y-1/2 h-9 px-4 bg-black hover:bg-gray-800 active:bg-gray-900 text-white font-bold text-xs sm:text-sm rounded-lg transition-colors shadow-xs disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed z-10"
+              className="h-11 px-5 bg-black hover:bg-gray-800 active:bg-gray-900 text-white font-bold text-sm rounded-xl transition-colors shadow-xs disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed shrink-0"
             >
               {bulkLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              <span>Cek Domain</span>
+              <span>Cari Domain</span>
             </button>
           </div>
         </div>
@@ -379,8 +401,8 @@ export default function DomainRegisterPage() {
                 <h2 className="text-xl font-bold text-gray-900 mt-1">{selectedDomain.domain}</h2>
               </div>
               <div className="text-right">
-                <p className="text-xl font-bold text-gray-900">{fmtPrice(selectedDomain.price)}</p>
-                <p className="text-xs text-gray-500">Per 1 Year Registration</p>
+                <p className="text-xl font-bold text-gray-900">{fmtPrice(domainRegistrationTotal)}</p>
+                <p className="text-xs text-gray-500">Per {years} Year{years > 1 ? "s" : ""} Registration</p>
               </div>
             </div>
 
@@ -389,12 +411,22 @@ export default function DomainRegisterPage() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-700">1. Customer Contact *</label>
-                  <Link to="/customers" className="text-xs text-gray-900 font-semibold hover:underline">
-                    + Add New Contact
-                  </Link>
+                  {!isCustomer && (
+                    <Link to="/customers" className="text-xs text-gray-900 font-semibold hover:underline">
+                      + Add New Contact
+                    </Link>
+                  )}
                 </div>
 
-                {customers.length === 0 ? (
+                {isCustomer ? (
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 flex items-center justify-between">
+                    <div>
+                      <span className="font-semibold text-gray-500">Pemilik Domain: </span>
+                      <span className="font-bold text-gray-900">{user?.name} ({user?.email})</span>
+                    </div>
+                    <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">Terverifikasi</span>
+                  </div>
+                ) : customers.length === 0 ? (
                   <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
                     No customer contacts found. You must create a contact first.{" "}
                     <Link to="/customers" className="font-bold underline">Create Contact Now →</Link>
@@ -421,11 +453,14 @@ export default function DomainRegisterPage() {
                   onChange={(e) => setYears(Number(e.target.value))}
                   className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white font-medium shadow-xs font-mono"
                 >
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((y) => (
-                    <option key={y} value={y}>
-                      {y} Year{y > 1 ? "s" : ""} - {fmtPrice(actualUnitPrice * y)}
-                    </option>
-                  ))}
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((y) => {
+                    const yPrice = selectedDomain?.create_years?.[y] ? Number(selectedDomain.create_years[y]) : (actualUnitPrice * y);
+                    return (
+                      <option key={y} value={y}>
+                        {y} Year{y > 1 ? "s" : ""} - {fmtPrice(yPrice)}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -433,44 +468,32 @@ export default function DomainRegisterPage() {
               <div className="space-y-2.5 pt-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-700 block">3. Protection & Renewals</label>
 
-                {isIdDomain ? (
-                  <div className="p-3.5 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-between opacity-75">
+                {!isIdDomain && (
+                  <div className={`p-3.5 rounded-lg border flex items-center justify-between cursor-pointer transition-all ${privacy ? "border-black bg-gray-50/80 shadow-xs" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                    onClick={() => setPrivacy(!privacy)}>
                     <div className="flex items-center gap-3">
-                      <div className="p-1.5 rounded bg-gray-200 text-gray-500">
+                      <div className={`p-1.5 rounded ${privacy ? "bg-black text-white" : "bg-gray-100 text-gray-900"}`}>
                         <Shield className="w-4 h-4" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="text-xs font-bold text-gray-700">WHOIS Privacy Guard Protection</p>
-                          <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                            NOT APPLICABLE FOR .ID
+                          <p className="text-xs font-bold text-gray-900">WHOIS Privacy Guard Protection</p>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                            OPSIONAL / ADD-ON
                           </span>
                         </div>
-                        <p className="text-[11px] text-gray-500 mt-0.5">
-                          WHOIS Privacy Protection is not supported for .ID domains per PANDI registry policy.
-                        </p>
+                        <p className="text-[11px] text-gray-500">Sembunyikan informasi kontak pemilik domain dari direktori WHOIS publik</p>
                       </div>
                     </div>
-                    <input type="checkbox" disabled checked={false} className="w-4 h-4 rounded border-gray-300 text-gray-400 cursor-not-allowed opacity-50" />
-                  </div>
-                ) : (
-                  <div className="p-3.5 rounded-lg border border-gray-200 bg-white flex items-center justify-between cursor-pointer hover:border-gray-300 transition-colors"
-                    onClick={() => setPrivacy(!privacy)}>
                     <div className="flex items-center gap-3">
-                      <div className="p-1.5 rounded bg-gray-100 text-gray-900">
-                        <Shield className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-gray-900">WHOIS Privacy Guard Protection</p>
-                        <p className="text-[11px] text-gray-500">Hide registrant contact information from public WHOIS directory</p>
-                      </div>
+                      <span className="text-xs font-bold text-gray-900 font-mono">+ {fmtPrice(actualPrivacyUnitPrice)} / thn</span>
+                      <input
+                        type="checkbox"
+                        checked={privacy}
+                        onChange={(e) => setPrivacy(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black cursor-pointer"
+                      />
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={privacy}
-                      onChange={(e) => setPrivacy(e.target.checked)}
-                      className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black cursor-pointer"
-                    />
                   </div>
                 )}
 
@@ -518,12 +541,16 @@ export default function DomainRegisterPage() {
               <div className="p-4 bg-gray-900 text-white rounded-xl space-y-2.5 mt-4">
                 <div className="flex justify-between items-center text-xs text-gray-300">
                   <span>Domain Registration ({selectedDomain.domain} &times; {years} yr)</span>
-                  <span className="font-mono font-semibold">{fmtPrice(totalPrice)}</span>
+                  <span className="font-mono font-semibold">{fmtPrice(domainRegistrationTotal)}</span>
                 </div>
-                <div className="flex justify-between items-center text-xs text-gray-300">
-                  <span>WHOIS Privacy Protection</span>
-                  <span className="text-emerald-400 font-semibold">{activePrivacy ? "Included" : (isIdDomain ? "Not Applicable (.ID)" : "Disabled")}</span>
-                </div>
+                {!isIdDomain && (
+                  <div className="flex justify-between items-center text-xs text-gray-300">
+                    <span>WHOIS Privacy Protection ({activePrivacy ? `${years} yr` : "Add-on"})</span>
+                    <span className={`font-mono font-semibold ${activePrivacy ? "text-amber-400" : "text-gray-400"}`}>
+                      {activePrivacy ? `+ ${fmtPrice(privacyTotalPrice)}` : "Tidak dipilih (Rp 0)"}
+                    </span>
+                  </div>
+                )}
                 <div className="pt-2.5 border-t border-gray-800 flex justify-between items-center">
                   <span className="text-sm font-bold text-white">Estimated Total</span>
                   <span className="text-lg font-bold text-amber-400 font-mono">{fmtPrice(totalPrice)}</span>
@@ -533,7 +560,7 @@ export default function DomainRegisterPage() {
               {/* Submit CTA Button */}
               <Button
                 onClick={submit}
-                disabled={submitting || customers.length === 0}
+                disabled={submitting || (!isCustomer && customers.length === 0)}
                 className="w-full py-3.5 text-sm font-bold bg-black hover:bg-gray-800 text-white rounded-lg transition-all active:scale-98 flex items-center justify-center gap-2 shadow-xs"
               >
                 {submitting ? (
@@ -587,7 +614,15 @@ export default function DomainRegisterPage() {
 
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-gray-700 block mb-1.5">3. Kontak Pemilik Domain *</label>
-              {customers.length === 0 ? (
+              {isCustomer ? (
+                <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 flex items-center justify-between">
+                  <div>
+                    <span className="font-semibold text-gray-500">Pemilik Domain: </span>
+                    <span className="font-bold text-gray-900">{user?.name} ({user?.email})</span>
+                  </div>
+                  <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">Terverifikasi</span>
+                </div>
+              ) : customers.length === 0 ? (
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
                   Belum ada kontak customer. Sila buat kontak terlebih dahulu.{" "}
                   <Link to="/customers" className="font-bold underline">Buat Kontak →</Link>
@@ -606,9 +641,26 @@ export default function DomainRegisterPage() {
               )}
             </div>
 
+            {transferTld && actualTransferPriceVal > 0 && (
+              <div className="p-4 bg-gray-900 text-white rounded-xl space-y-2.5">
+                <div className="flex justify-between items-center text-xs text-gray-300">
+                  <span>Biaya Transfer Domain (.{transferTld.toUpperCase()} +1 Thn Masa Aktif)</span>
+                  <span className="font-mono font-bold text-amber-400">{fmtPrice(actualTransferPriceVal)}</span>
+                </div>
+                <div className="pt-2 border-t border-gray-800 text-[11px] text-gray-400 space-y-1">
+                  <p>ℹ️ Transfer domain otomatis memperpanjang masa aktif domain Anda 1 tahun dari tanggal expired saat ini.</p>
+                  {(transferTld === "biz.id" || transferTld === "my.id" || transferTld === "web.id") && (
+                    <p className="text-amber-300 font-medium">
+                      * Catatan: Harga promo pendaftaran Rp 5.000 hanya berlaku untuk registrasi domain baru. Biaya transfer/perpanjangan berlaku tarif normal registry PANDI ({fmtPrice(actualTransferPriceVal)}).
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             <Button
               onClick={submitTransfer}
-              disabled={transferSubmitting || customers.length === 0}
+              disabled={transferSubmitting || (!isCustomer && customers.length === 0)}
               className="w-full py-3.5 text-sm font-bold bg-black hover:bg-gray-800 text-white rounded-lg transition-all active:scale-98 flex items-center justify-center gap-2 shadow-xs mt-2"
             >
               {transferSubmitting ? (
@@ -632,6 +684,8 @@ export default function DomainRegisterPage() {
         orderId={paymentData.orderId}
         paymentLinkUrl={paymentData.paymentLinkUrl}
         amount={paymentData.amount}
+        fee={paymentData.fee}
+        expiresAt={paymentData.expiresAt}
         currency="IDR"
         domainName={paymentData.domainName}
         onSuccess={() => nav("/domains")}

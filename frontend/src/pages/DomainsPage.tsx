@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Search, RefreshCw } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Search, RefreshCw, ArrowRightLeft, Plus } from "lucide-react";
 import { Card, Button, Badge, LoadingSpinner, EmptyState, SearchBar, Pagination } from "../components/ui";
 import { api } from "../lib/api";
 import type { Domain, PaginatedResponse } from "../lib/types";
 
 export default function DomainsPage() {
+  const nav = useNavigate();
   const [domains, setDomains] = useState<Domain[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -36,12 +37,10 @@ export default function DomainsPage() {
         <h1 className="text-xl font-bold text-gray-900">Domains</h1>
         <div className="flex items-center gap-2">
           <Link to="/domains/register?tab=transfer">
-            <Button variant="outline" className="border-amber-200 text-amber-800 hover:bg-amber-50">
-              🔄 Transfer Domain
-            </Button>
+            <Button><ArrowRightLeft className="w-3.5 h-3.5 mr-1 inline" /> Transfer Domain</Button>
           </Link>
           <Link to="/domains/register">
-            <Button>+ Register Domain</Button>
+            <Button><Plus className="w-3.5 h-3.5 mr-1 inline" /> Register Domain</Button>
           </Link>
         </div>
       </div>
@@ -59,7 +58,7 @@ export default function DomainsPage() {
       </div>
 
       {domains.length === 0 ? (
-        <EmptyState icon={Search} title="No domains found" description="Register your first domain to get started" action={{ label: "Register Domain", onClick: () => window.location.href = "/domains/register" }} />
+        <EmptyState icon={Search} title="No domains found" description="Register your first domain to get started" action={{ label: "Register Domain", onClick: () => nav("/domains/register") }} />
       ) : (
         <Card className="p-0">
           <div className="hidden md:block overflow-x-auto">

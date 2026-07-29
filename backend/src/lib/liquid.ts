@@ -26,7 +26,10 @@ export class LiquidClient {
       const text = await res.text();
       let data: any;
       try { data = JSON.parse(text); } catch { data = { message: text }; }
-      if (!res.ok) throw new AppError(data.message || "LIQUID API error", res.status);
+      if (!res.ok) {
+        const status = res.status === 401 || res.status === 403 ? 502 : res.status;
+        throw new AppError(data.message || "LIQUID API error", status);
+      }
       return data;
     } finally {
       clearTimeout(timeout);
@@ -172,18 +175,31 @@ export class LiquidClient {
 
   // --- Customers ---
   createCustomer(data: Record<string, any>) {
+    const phone = data.phone || "";
+    let tel_cc_no = data.phone_cc || data.tel_cc_no || "62";
+    let tel_no = phone;
+    if (phone.startsWith("+")) {
+      tel_cc_no = phone.substring(1, 3);
+      tel_no = phone.substring(3);
+    } else if (phone.startsWith("62")) {
+      tel_cc_no = "62";
+      tel_no = phone.substring(2);
+    } else if (phone.startsWith("0")) {
+      tel_no = phone.substring(1);
+    }
+
     return this.request<any>("POST", "/customers", {
       name: data.name,
       email: data.email,
-      password: data.password || "Pass@123",
-      company: data.company || "N/A",
-      address_line_1: data.address || "N/A",
-      city: data.city || "N/A",
-      state: data.state || "Not Applicable",
-      country_code: data.country,
-      zipcode: data.zipcode || "00000",
-      tel_cc_no: data.tel_cc_no || "62",
-      tel_no: data.phone || "0000000000",
+      password: data.password || "Pass@123!",
+      company: data.company || "",
+      address_line_1: data.address || data.address_line_1 || "",
+      city: data.city || "",
+      state: data.state || "",
+      country_code: data.country || data.country_code || "ID",
+      zipcode: data.zipcode || "",
+      tel_cc_no,
+      tel_no,
     });
   }
   listCustomers() {
@@ -200,6 +216,12 @@ export class LiquidClient {
   }
 
   // --- Account / Billing ---
+  getReseller(resellerId: string) {
+    return this.request<any>("GET", `/resellers/${resellerId}`);
+  }
+  updateReseller(resellerId: string, data: Record<string, any>) {
+    return this.request<any>("PUT", `/resellers/${resellerId}`, data);
+  }
   getBalance() {
     return this.request<any>("GET", "/account/balance");
   }
@@ -221,6 +243,18 @@ export function formatCustomerPrices(raw: Record<string, any>): Record<string, a
   const result: Record<string, any> = {};
   if (!raw || typeof raw !== "object") return result;
 
+  const formatYearsMap = (yearsMap: Record<string, any> | undefined) => {
+    if (!yearsMap || typeof yearsMap !== "object") return undefined;
+    const res: Record<number, number> = {};
+    for (const [yr, val] of Object.entries(yearsMap)) {
+      if (val) {
+        const numVal = Number(val);
+        res[Number(yr)] = numVal < 1000 ? numVal * 1000 : numVal;
+      }
+    }
+    return res;
+  };
+
   for (const item of Object.values(raw)) {
     if (!item || typeof item !== "object" || !item.tld_label) continue;
     const tld = item.tld_label.replace(/^\./, "").toLowerCase();
@@ -235,6 +269,8 @@ export function formatCustomerPrices(raw: Record<string, any>): Record<string, a
       price_renew: renewPrice,
       price_transfer: transferPrice,
       price_restore: restorePrice,
+      create_years: formatYearsMap(item.create),
+      renew_years: formatYearsMap(item.renew),
       privacy_protect: item.privacy_protect || null,
       currency: "IDR",
     };

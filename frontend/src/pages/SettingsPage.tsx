@@ -2,18 +2,25 @@ import { useState, useEffect } from "react";
 import { Card, Button, InfoBanner, LoadingSpinner, toast, SecretInput } from "../components/ui";
 import { api } from "../lib/api";
 import {
-  Globe, Mail, Palette, MessageSquare, CreditCard, HardDrive, Send, Save, Key
+  Globe, Mail, Palette, MessageSquare, CreditCard, HardDrive, Send, Save, Key, RefreshCw, ShieldCheck, Receipt, Percent
 } from "lucide-react";
 
 import { useSettings } from "../contexts/SettingsContext";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function SettingsPage() {
   const { refreshSettings } = useSettings();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingKirisan, setTestingKirisan] = useState(false);
   const [msg, setMsg] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
+
+  // Reseller sync
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<any>(null);
+  const [syncError, setSyncError] = useState("");
 
   const [form, setForm] = useState<Record<string, any>>({
     // Brand & SEO
@@ -66,6 +73,16 @@ export default function SettingsPage() {
     s3_secret_key: "",
     s3_bucket: "",
     s3_public_url: "",
+
+    // Cloudflare Turnstile Security
+    turnstile_enabled: false,
+    turnstile_site_key: "",
+    turnstile_secret_key: "",
+
+    // Tax / PPN Configuration
+    tax_enabled: false,
+    tax_rate: "11",
+    tax_label: "PPN",
   });
 
   useEffect(() => {
@@ -82,6 +99,10 @@ export default function SettingsPage() {
         ...data,
         fonnte_notify_order: data.fonnte_notify_order === "true" || data.fonnte_notify_order === true,
         fonnte_notify_expiry: data.fonnte_notify_expiry === "true" || data.fonnte_notify_expiry === true,
+        turnstile_enabled: data.turnstile_enabled === "true" || data.turnstile_enabled === true,
+        tax_enabled: data.tax_enabled === "true" || data.tax_enabled === true,
+        tax_rate: data.tax_rate ?? "11",
+        tax_label: data.tax_label ?? "PPN",
       }));
     } catch (e: any) {
       setMsg(e.message || "Gagal memuat konfigurasi sistem");
@@ -124,6 +145,20 @@ export default function SettingsPage() {
     setTestingKirisan(false);
   }
 
+  async function handleSyncReseller() {
+    setSyncing(true);
+    setSyncError("");
+    setSyncResult(null);
+    try {
+      const res = await api.get<any>("/auth/reseller-data");
+      setSyncResult(res.data || res);
+      toast("Data reseller berhasil disinkronkan!");
+    } catch (e: any) {
+      setSyncError(e.message || "Gagal sinkronisasi data reseller");
+    }
+    setSyncing(false);
+  }
+
   if (loading) return <LoadingSpinner />;
 
   return (
@@ -141,7 +176,7 @@ export default function SettingsPage() {
         <Button
           onClick={() => handleSave()}
           disabled={saving}
-          className="px-6 py-2.5 bg-black hover:bg-gray-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-2"
+          className="px-4 sm:px-6 py-2.5 bg-black hover:bg-gray-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-2"
         >
           <Save className="w-4 h-4" />
           {saving ? "Saving..." : "Simpan Semua Konfigurasi"}
@@ -650,6 +685,183 @@ export default function SettingsPage() {
               </div>
             </Card>
 
+            {/* 7. Cloudflare Turnstile Bot Protection */}
+            <Card className="p-6 bg-white border border-gray-200 shadow-xs rounded-xl space-y-4">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                  <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">7. Keamanan & Cloudflare Turnstile</h2>
+                </div>
+                <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded ${form.turnstile_enabled ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-500"}`}>
+                  {form.turnstile_enabled ? "Aktif" : "Non-Aktif"}
+                </span>
+              </div>
+
+              <p className="text-xs text-gray-500">
+                Cloudflare Turnstile melindungi portal web dari bot dan serangan spam tanpa mengganggu kenyamanan pengguna (tanpa CAPTCHA teka-teki).
+              </p>
+
+              <div className="space-y-4">
+                <label className="flex items-center gap-3 cursor-pointer p-3 border border-gray-100 rounded-lg hover:bg-gray-50/50 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={!!form.turnstile_enabled}
+                    onChange={(e) => setForm({ ...form, turnstile_enabled: e.target.checked })}
+                    className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black"
+                  />
+                  <div>
+                    <p className="text-xs font-bold text-gray-900">Aktifkan Cloudflare Turnstile Bot Protection</p>
+                    <p className="text-[11px] text-gray-500">Mencegah pendaftaran otomatis dan spam brute-force pada formulir sistem</p>
+                  </div>
+                </label>
+
+                {form.turnstile_enabled && (
+                  <div className="space-y-3.5 pt-2 border-t border-gray-100">
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Turnstile Site Key (Public Key)</label>
+                      <input
+                        type="text"
+                        value={form.turnstile_site_key || ""}
+                        onChange={(e) => setForm({ ...form, turnstile_site_key: e.target.value })}
+                        className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white font-mono text-xs"
+                        placeholder="0x4AAAAAA..."
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1">Key publik yang digunakan pada widget Turnstile di frontend.</p>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Turnstile Secret Key (Private Key)</label>
+                      <SecretInput
+                        value={form.turnstile_secret_key || ""}
+                        onChange={(e) => setForm({ ...form, turnstile_secret_key: e.target.value })}
+                        className="px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white font-mono text-xs"
+                        placeholder="0x4AAAAAA..."
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1">Key rahasia untuk verifikasi token CAPTCHA pada server backend Cloudflare siteverify API.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Konfigurasi Pajak (PPN) */}
+            <Card className="p-6 bg-white border border-gray-200 shadow-xs rounded-xl space-y-4">
+              <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                <Receipt className="w-5 h-5 text-gray-700" />
+                <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Konfigurasi Pajak (PPN)</h2>
+              </div>
+              <p className="text-xs text-gray-500">
+                Aktifkan pajak (PPN) pada invoice. Persentase dan label pajak dapat disesuaikan sesuai ketentuan bisnis Anda.
+              </p>
+
+              {/* Toggle Aktifkan PPN */}
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2">
+                  <Percent className="w-4 h-4 text-gray-600" />
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">Aktifkan Pajak</p>
+                    <p className="text-[11px] text-gray-500">Tampilkan baris pajak pada faktur tagihan</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, tax_enabled: !form.tax_enabled })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                    form.tax_enabled ? "bg-emerald-500" : "bg-gray-300"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      form.tax_enabled ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {form.tax_enabled && (
+                <div className="space-y-3.5">
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">
+                      Label Pajak
+                    </label>
+                    <input
+                      type="text"
+                      value={form.tax_label || "PPN"}
+                      onChange={(e) => setForm({ ...form, tax_label: e.target.value })}
+                      className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white"
+                      placeholder="PPN"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">Label yang ditampilkan pada baris pajak di faktur (misal: PPN, GST, VAT).</p>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">
+                      Persentase Pajak (%)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={form.tax_rate || "11"}
+                        onChange={(e) => setForm({ ...form, tax_rate: e.target.value })}
+                        className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white pr-10"
+                        placeholder="11"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">%</span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1">Besaran persentase pajak yang diterapkan pada setiap tagihan. Contoh: 11 untuk PPN 11%.</p>
+                  </div>
+
+                  <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                    <p className="text-xs font-semibold text-blue-700">Preview Kalkulasi:</p>
+                    <p className="text-[11px] text-blue-600 mt-1">
+                      Subtotal: <span className="font-mono">IDR 100.000</span>&nbsp;→&nbsp;
+                      {form.tax_label || "PPN"} {form.tax_rate || "11"}%: <span className="font-mono">IDR {(100000 * (parseFloat(form.tax_rate) || 11) / 100).toLocaleString("id-ID")}</span>&nbsp;→&nbsp;
+                      Total: <span className="font-mono font-bold">IDR {(100000 * (1 + (parseFloat(form.tax_rate) || 11) / 100)).toLocaleString("id-ID")}</span>
+                    </p>
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {/* Reseller API Sync — only for reseller role */}
+            {user?.role === "reseller" && (
+              <Card className="p-6 bg-white border border-gray-200 shadow-xs rounded-xl space-y-4">
+                <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                  <RefreshCw className="w-5 h-5 text-indigo-600" />
+                  <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Reseller API Sync</h2>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Sinkronkan data reseller Anda dari LIQUID API. Data yang diperoleh akan ditampilkan di halaman My Profile.
+                </p>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <Button
+                    type="button"
+                    onClick={handleSyncReseller}
+                    disabled={syncing}
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-all flex items-center gap-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+                    {syncing ? "Syncing..." : "Sync Sekarang"}
+                  </Button>
+                  {syncResult && (
+                    <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 space-y-1">
+                      <p><strong>Status:</strong> {syncResult.synced ? "✅ Data profil berhasil disinkronkan" : "⚠️ Gagal mengambil data profil"}</p>
+                      <p><strong>Reseller ID:</strong> {syncResult.reseller_id}</p>
+                      {syncResult.account?.company && <p><strong>Perusahaan:</strong> {syncResult.account.company}</p>}
+                      {syncResult.account?.email && <p><strong>Email LIQUID:</strong> {syncResult.account.email}</p>}
+                      <p><strong>Balance:</strong> {typeof syncResult.balance === "number" ? `Rp ${syncResult.balance.toLocaleString("id-ID")}` : syncResult.balance?.available || syncResult.balance?.balance || "—"}</p>
+                    </div>
+                  )}
+                  {syncError && (
+                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{syncError}</p>
+                  )}
+                </div>
+              </Card>
+            )}
+
           </div>
         </div>
 
@@ -658,7 +870,7 @@ export default function SettingsPage() {
           <Button
             type="submit"
             disabled={saving}
-            className="px-8 py-3 bg-black hover:bg-gray-800 text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center gap-2"
+            className="px-5 sm:px-8 py-3 bg-black hover:bg-gray-800 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center gap-2"
           >
             <Save className="w-4 h-4" />
             {saving ? "Saving Configuration..." : "Simpan Semua Konfigurasi"}

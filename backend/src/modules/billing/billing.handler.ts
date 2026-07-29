@@ -36,12 +36,12 @@ export async function prices(ctx: any) {
 
 export async function transactions(ctx: any) {
   const user = await getUser(ctx);
-  const result = await svc.listTransactions(user.id, ctx.query);
+  const result = await svc.listTransactions(user, ctx.query);
   return result;
 }
 
 export async function transactionDetail(ctx: any) {
   const user = await getUser(ctx);
-  const txn = await svc.getTransaction(user.id, parseInt(ctx.params.id));
+  const txn = await svc.getTransaction(user, parseInt(ctx.params.id));
   return { data: txn };
 }

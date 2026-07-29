@@ -121,35 +121,59 @@ export default function DnsManagePage() {
         {loading ? <LoadingSpinner size="sm" /> : current.length === 0 ? (
           <div className="text-center py-8 text-xs text-gray-400">No {activeType.toUpperCase()} records.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Hostname</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Value</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">TTL</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {current.map((r: any, i: number) => (
-                  <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-4 py-3 text-xs text-gray-800 font-mono">{r.hostname}</td>
-                    <td className="px-4 py-3 text-xs text-gray-600 font-mono break-all">{r.value}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{r.ttl || 3600}</td>
-                    <td className="px-4 py-3 text-right space-x-1">
-                      <button onClick={() => openEdit(r, i)} className="p-1.5 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg transition-colors">
-                        <RefreshCw className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => deleteRecord(r)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                      </button>
-                    </td>
+          <>
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Hostname</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Value</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">TTL</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {current.map((r: any, i: number) => (
+                    <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-4 py-3 text-xs text-gray-800 font-mono">{r.hostname}</td>
+                      <td className="px-4 py-3 text-xs text-gray-600 font-mono break-all">{r.value}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500">{r.ttl || 3600}</td>
+                      <td className="px-4 py-3 text-right space-x-1">
+                        <button onClick={() => openEdit(r, i)} className="p-1.5 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg transition-colors">
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => deleteRecord(r)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile card fallback */}
+            <div className="md:hidden space-y-2">
+              {current.map((r: any, i: number) => (
+                <div key={i} className="rounded-lg border border-gray-200 bg-white p-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono font-bold text-gray-900 truncate max-w-[60%]">{r.hostname || "@"}</span>
+                    <span className="text-[10px] text-gray-400 font-mono">TTL: {r.ttl || 3600}</span>
+                  </div>
+                  <p className="text-xs font-mono text-gray-600 break-all">{r.value}</p>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button onClick={() => openEdit(r, i)} className="flex-1 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                      Edit
+                    </button>
+                    <button onClick={() => deleteRecord(r)} className="px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </Card>
 

@@ -54,6 +54,16 @@ export interface SettingsData {
   s3_secret_key?: string;
   s3_bucket?: string;
   s3_public_url?: string;
+
+  // Cloudflare Turnstile Security
+  turnstile_enabled?: boolean;
+  turnstile_site_key?: string;
+  turnstile_secret_key?: string;
+
+  // Tax / PPN Configuration
+  tax_enabled?: boolean;
+  tax_rate?: string; // percent, e.g. "11" for 11%
+  tax_label?: string; // e.g. "PPN"
 }
 
 const DEFAULT_SETTINGS: Record<string, string> = {
@@ -101,6 +111,14 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   s3_secret_key: "",
   s3_bucket: "",
   s3_public_url: "",
+
+  turnstile_enabled: "false",
+  turnstile_site_key: "",
+  turnstile_secret_key: "",
+
+  tax_enabled: "false",
+  tax_rate: "11",
+  tax_label: "PPN",
 };
 
 let isTableInitialized = false;
@@ -165,6 +183,7 @@ function getCategoryForKey(key: string): string {
   if (key.startsWith("s3_")) return "s3";
   if (key.includes("color") || key.includes("theme")) return "theme";
   if (key.startsWith("seo_") || key.startsWith("brand_") || key.startsWith("site_") || key === "og_image_url") return "brand_seo";
+  if (key.startsWith("tax_")) return "tax";
   return "general";
 }
 

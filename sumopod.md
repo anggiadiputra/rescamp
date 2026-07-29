@@ -106,3 +106,5 @@ app.post("/webhook", express.json(), (req, res) => {
   console.log("Verified webhook:", req.body.event_type);
   res.sendStatus(200);
 });
+
+Fee: 0.7% + Rp 300

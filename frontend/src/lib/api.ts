@@ -22,18 +22,16 @@ async function request<T>(method: string, path: string, body?: unknown, options?
     signal: options?.signal,
   });
 
-  if (res.status === 401) {
-    clearToken();
-    if (!isRedirectingToLogin && window.location.pathname !== "/login" && window.location.pathname !== "/") {
-      isRedirectingToLogin = true;
-      window.location.href = "/login";
-    }
-    throw new Error("Unauthorized");
-  }
-
   const json = await res.json().catch(() => ({}));
 
   if (!res.ok) {
+    if (res.status === 401) {
+      clearToken();
+      if (!isRedirectingToLogin && window.location.pathname !== "/login" && window.location.pathname !== "/") {
+        isRedirectingToLogin = true;
+        window.location.href = "/login";
+      }
+    }
     throw new Error(json.error || json.message || "Request failed");
   }
 

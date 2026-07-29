@@ -9,7 +9,7 @@ import type { Domain, PaginatedResponse } from "../lib/types";
 function fmtBalance(amount: any, currency: string = "IDR"): string {
   const num = Number(amount || 0);
   if (isNaN(num)) return `${currency} 0`;
-  const actual = num < 10000 && currency === "IDR" ? num * 1000 : num;
+  const actual = num < 1000 && currency === "IDR" ? num * 1000 : num;
   return `${currency} ${Math.round(actual).toLocaleString("id-ID")}`;
 }
 
@@ -25,11 +25,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const promises: Promise<any>[] = [
-      api.get<PaginatedResponse<Domain>>("/domains?per_page=5"),
+      api.get<PaginatedResponse<Domain>>("/domains?per_page=5").catch(() => ({ data: [] })),
     ];
 
     if (!isCustomer) {
-      promises.push(api.get<any>("/billing/balance"));
+      promises.push(api.get<any>("/billing/balance").catch(() => ({ balance: "0.00", currency: "IDR" })));
     }
 
     Promise.all(promises).then(([d, b]) => {

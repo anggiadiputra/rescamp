@@ -6,7 +6,7 @@ function fmtPrice(amount: any, currency: string = "IDR"): string {
   if (!amount) return "-";
   const num = Number(amount);
   if (isNaN(num)) return "-";
-  const actual = num < 10000 ? num * 1000 : num;
+  const actual = num < 1000 ? num * 1000 : num;
   return `${currency} ${Math.round(actual).toLocaleString("id-ID")}`;
 }
 
@@ -32,7 +32,8 @@ export default function PricesPage() {
       <h1 className="text-xl font-bold text-gray-900">Price List</h1>
 
       <Card className="p-0">
-        <div className="overflow-x-auto">
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
@@ -53,6 +54,19 @@ export default function PricesPage() {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile card fallback */}
+        <div className="md:hidden divide-y divide-gray-100">
+          {entries.map(([tld, info]: [string, any]) => (
+            <div key={tld} className="px-4 py-3 flex items-center justify-between">
+              <span className="text-sm font-bold text-gray-900">.{tld}</span>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="text-gray-500">Reg: <span className="font-semibold text-gray-800">{fmtPrice(info.price_new || info.price_register, info.currency)}</span></span>
+                <span className="text-gray-500">Renew: <span className="font-semibold text-gray-800">{fmtPrice(info.price_renew, info.currency)}</span></span>
+              </div>
+            </div>
+          ))}
         </div>
       </Card>
     </div>

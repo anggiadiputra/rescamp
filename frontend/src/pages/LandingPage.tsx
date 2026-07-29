@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Globe, Search, ShieldCheck, Zap, Server, Lock, HelpCircle, ArrowRight, CheckCircle2,
-  Sliders, FileText, Check, ChevronRight, Award, BarChart3, RefreshCw
+  Sliders, FileText, Check, ChevronRight, Award, BarChart3, RefreshCw, Menu, X
 } from "lucide-react";
 import { api } from "../lib/api";
 import { Modal } from "../components/ui";
@@ -80,6 +80,7 @@ export default function LandingPage() {
   const [searchResult, setSearchResult] = useState<any[] | null>(null);
   const [popularDomains, setPopularDomains] = useState<any[]>(POPULAR_DOMAINS);
   const [authModal, setAuthModal] = useState<{ domain: string; transferPrice: string } | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -90,11 +91,11 @@ export default function LandingPage() {
           const mapped = list.map((item: any) => {
             const tldUpper = `.${(item.tld || item.domain?.split(".")?.slice(1)?.join(".") || "").toUpperCase()}`;
             const priceNum = Number(item.price || 0);
-            const actualPrice = priceNum < 10000 ? priceNum * 1000 : priceNum;
+            const actualPrice = priceNum < 1000 ? priceNum * 1000 : priceNum;
             const formattedPrice = `Rp ${Math.round(actualPrice).toLocaleString("id-ID")}`;
 
             const renewNum = Number(item.renew_price || item.price || 0);
-            const actualRenewPrice = renewNum < 10000 ? renewNum * 1000 : renewNum;
+            const actualRenewPrice = renewNum < 1000 ? renewNum * 1000 : renewNum;
             const formattedRenew = `Rp ${Math.round(actualRenewPrice).toLocaleString("id-ID")}`;
 
             const foundDefault = POPULAR_DOMAINS.find(d => d.tld.toLowerCase() === tldUpper.toLowerCase());
@@ -207,6 +208,13 @@ export default function LandingPage() {
           </nav>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
             <Link to="/login" className="text-xs sm:text-sm font-semibold text-gray-700 hover:text-black px-3 py-2 transition-colors">
               Sign In
             </Link>
@@ -215,6 +223,15 @@ export default function LandingPage() {
             </Link>
           </div>
         </div>
+
+        {/* Mobile nav dropdown */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-gray-100 bg-white px-4 py-3 space-y-2">
+            <a href="#why-us" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 rounded-lg">Why Us</a>
+            <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 rounded-lg">Features</a>
+            <Link to="/prices" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 rounded-lg">Prices</Link>
+          </div>
+        )}
       </header>
 
       {/* Hero Section */}
@@ -251,7 +268,7 @@ export default function LandingPage() {
                 className="px-6 py-3.5 bg-black hover:bg-gray-800 text-white font-bold text-sm rounded-xl transition-all shadow-md flex items-center gap-2 shrink-0 disabled:opacity-60"
               >
                 {isSearching ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                <span>Cek Domain</span>
+                <span>Cari Domain</span>
               </button>
             </form>
 
@@ -267,11 +284,11 @@ export default function LandingPage() {
                     const dName = res.domain || res.domainName || `${keyword}.com`;
                     const isAvail = res.available !== false;
                     const priceNum = Number(res.price || "180");
-                    const actualPrice = priceNum < 10000 ? priceNum * 1000 : priceNum;
+                    const actualPrice = priceNum < 1000 ? priceNum * 1000 : priceNum;
                     const formattedPrice = `Rp ${Math.round(actualPrice).toLocaleString("id-ID")}`;
 
                     const transferNum = Number(res.transfer_price || res.renew_price || res.price || "209");
-                    const actualTransferPrice = transferNum < 10000 ? transferNum * 1000 : transferNum;
+                    const actualTransferPrice = transferNum < 1000 ? transferNum * 1000 : transferNum;
                     const formattedTransferPrice = `Rp ${Math.round(actualTransferPrice).toLocaleString("id-ID")}`;
 
                     return (
@@ -298,7 +315,7 @@ export default function LandingPage() {
                               onClick={() => handleRegisterClick(dName)}
                               className="px-3.5 py-1.5 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
                             >
-                              Daftar <ChevronRight className="w-3.5 h-3.5" />
+                              Cari Domain <ChevronRight className="w-3.5 h-3.5" />
                             </button>
                           ) : (
                             <button
@@ -401,7 +418,7 @@ export default function LandingPage() {
             </Link>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-gray-800 bg-gray-800/50 backdrop-blur-sm">
+          <div className="hidden md:block overflow-x-auto rounded-2xl border border-gray-800 bg-gray-800/50 backdrop-blur-sm">
             <table className="w-full text-xs sm:text-sm text-left">
               <thead>
                 <tr className="bg-gray-800 text-gray-400 border-b border-gray-700 font-bold uppercase tracking-wider">
@@ -432,13 +449,50 @@ export default function LandingPage() {
                         onClick={() => handleRegisterClick(`brandku${item.tld.toLowerCase()}`)}
                         className="px-3.5 py-1.5 bg-white hover:bg-gray-200 text-black font-bold text-xs rounded-lg transition-colors"
                       >
-                        Daftar
+                        Cari Domain
                       </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile card fallback */}
+          <div className="md:hidden space-y-3">
+            {POPULAR_DOMAINS.map((item) => (
+              <div key={item.tld} className="rounded-xl border border-gray-700 bg-gray-800/60 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-bold text-white text-lg">{item.tld}</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-gray-700 text-gray-300 font-sans">{item.badge}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-gray-400">Registrasi</span>
+                    <p className="font-mono font-bold text-emerald-400">{item.price}/thn</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Renewal</span>
+                    <p className="font-mono text-gray-300">{item.renew}/thn</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-xs">
+                    {item.privacy ? (
+                      <span className="text-emerald-400 font-semibold flex items-center gap-1"><Check className="w-3 h-3" /> WHOIS Protection</span>
+                    ) : (
+                      <span className="text-gray-500 text-[11px]">Tanpa WHOIS Protection</span>
+                    )}
+                  </span>
+                  <button
+                    onClick={() => handleRegisterClick(`brandku${item.tld.toLowerCase()}`)}
+                    className="px-3.5 py-1.5 bg-white hover:bg-gray-200 text-black font-bold text-xs rounded-lg transition-colors"
+                  >
+                    Cari Domain
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>

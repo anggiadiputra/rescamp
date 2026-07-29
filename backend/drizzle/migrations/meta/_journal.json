@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1785306058821,
+      "tag": "0000_sudden_gorilla_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1785320494032,
+      "tag": "0001_violet_gwen_stacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1785343825083,
+      "tag": "0002_flashy_the_watchers",
+      "breakpoints": true
+    }
+  ]
+}

@@ -43,10 +43,13 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
   });
 
   // Insert local transaction record
+  const validCustomerId = (payload.customerId && Number(payload.customerId) > 0) ? Number(payload.customerId) : null;
+  const validDomainId = (payload.domainId && Number(payload.domainId) > 0) ? Number(payload.domainId) : null;
+
   const result: any = await db.insert(transactions).values({
     userId: payload.userId,
-    customerId: payload.customerId || null,
-    domainId: payload.domainId || null,
+    customerId: validCustomerId,
+    domainId: validDomainId,
     type: payload.type,
     amount: String(payload.amount),
     currency: "IDR",
@@ -59,18 +62,30 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
 
   const transactionId = Number(result[0]?.insertId || result.insertId);
 
-  // Call Sumopod API to generate payment link
+  // Call Sumopod API to generate payment link with 1 hour expiration
   const sumopodRes = await sumopodClient.createPayment({
     orderId,
     amount: payload.amount,
     currency: "IDR",
-    expiresInHours: 24,
+    expiresInHours: 1,
   });
 
-  // Update transaction record with payment ID & URL
+  const expiresAt = sumopodRes.expires_at || new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+  // Update transaction record with payment ID & URL & enriched metadata
+  let updatedMeta = metadataJson;
+  try {
+    const metaObj = JSON.parse(metadataJson);
+    metaObj.fee = sumopodRes.fee || Math.round(payload.amount * 0.007 + 300);
+    metaObj.paymentLinkUrl = sumopodRes.payment_link_url;
+    metaObj.expiresAt = expiresAt;
+    updatedMeta = JSON.stringify(metaObj);
+  } catch (e) {}
+
   await db.update(transactions).set({
     paymentId: sumopodRes.payment_id,
     paymentLinkUrl: sumopodRes.payment_link_url,
+    metadata: updatedMeta,
   }).where(eq(transactions.id, transactionId));
 
   return {
@@ -79,10 +94,12 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     paymentId: sumopodRes.payment_id,
     paymentLinkUrl: sumopodRes.payment_link_url,
     amount: payload.amount,
+    fee: sumopodRes.fee || 0,
+    netAmount: sumopodRes.net_amount || payload.amount,
     currency: "IDR",
     status: "pending_payment",
     domain: fullDomain,
-    expiresAt: sumopodRes.expires_at,
+    expiresAt,
   };
 }
 
@@ -195,14 +212,66 @@ export async function processWebhookPayload(event: any) {
 
   const liquid = new LiquidClient(resellerId, apiKey);
 
+  // Resolve Liquid Customer ID string for Liquid API (convert local integer ID to Resellercamp string ID)
+  let targetLiquidCustomerId: string | undefined = undefined;
+  let targetLocalCustomerId: number | null = meta.customerId || tx.customerId || null;
+
+  let custRecord: any = null;
+  if (targetLocalCustomerId) {
+    const [c] = await db.select().from(customers).where(eq(customers.id, targetLocalCustomerId));
+    custRecord = c || null;
+  }
+  if (!custRecord && tx.userId) {
+    const [c] = await db.select().from(customers).where(eq(customers.userId, tx.userId));
+    custRecord = c || null;
+    if (custRecord) targetLocalCustomerId = custRecord.id;
+  }
+
+  if (custRecord) {
+    if (custRecord.liquidCustomerId) {
+      targetLiquidCustomerId = custRecord.liquidCustomerId;
+    } else {
+      // Auto-create or find existing customer on Resellercamp Liquid API
+      try {
+        const liquidRes = await liquid.createCustomer({
+          name: custRecord.name,
+          email: custRecord.email,
+          company: custRecord.company || undefined,
+          address: custRecord.address || undefined,
+          city: custRecord.city || undefined,
+          state: custRecord.state || undefined,
+          country: custRecord.country || "ID",
+          zipcode: custRecord.zipcode || undefined,
+          phone: custRecord.phone || undefined,
+        });
+        const newId = String(liquidRes?.customer_id || liquidRes?.id || "");
+        if (newId) {
+          targetLiquidCustomerId = newId;
+          await db.update(customers).set({ liquidCustomerId: newId }).where(eq(customers.id, custRecord.id));
+        }
+      } catch (e: any) {
+        console.warn("[sumopod webhook] Liquid create customer failed, searching by email:", e);
+        try {
+          const listRes = await liquid.listCustomers();
+          const list = Array.isArray(listRes) ? listRes : listRes?.data || listRes?.customers || [];
+          const match = list.find((c: any) => (c.email || c.customer_email)?.toLowerCase() === custRecord.email.toLowerCase());
+          if (match) {
+            targetLiquidCustomerId = String(match.customer_id || match.id || "");
+            await db.update(customers).set({ liquidCustomerId: targetLiquidCustomerId }).where(eq(customers.id, custRecord.id));
+          }
+        } catch {}
+      }
+    }
+  }
+
   try {
     if (meta.type === "register") {
-      console.log(`[sumopod webhook] Executing LIQUID domain registration for ${meta.domainName}`);
+      console.log(`[sumopod webhook] Executing LIQUID domain registration for ${meta.domainName} with reseller ${resellerId} & liquidCustId ${targetLiquidCustomerId}`);
       const liquidRes = await liquid.registerDomain({
         domain_name: meta.domainName,
         years: meta.years || 1,
         ns: meta.nameservers?.join(",") || "",
-        customer_id: meta.customerId,
+        customer_id: targetLiquidCustomerId || meta.customerId,
         privacy_protection: meta.privacyProtection,
       });
 
@@ -213,7 +282,7 @@ export async function processWebhookPayload(event: any) {
       if (!existingDomain) {
         await db.insert(domains).values({
           userId: tx.userId,
-          customerId: meta.customerId || null,
+          customerId: targetLocalCustomerId,
           domainName: meta.domainName,
           tld: meta.tld || meta.domainName.split(".").slice(1).join("."),
           years: meta.years || 1,
@@ -226,14 +295,14 @@ export async function processWebhookPayload(event: any) {
       }
 
       await db.update(transactions).set({ status: "completed" }).where(eq(transactions.id, tx.id));
-      console.log(`[sumopod webhook] Domain ${meta.domainName} registered successfully`);
+      console.log(`[sumopod webhook] Domain ${meta.domainName} registered successfully on Resellercamp`);
 
     } else if (meta.type === "transfer") {
       console.log(`[sumopod webhook] Executing LIQUID domain transfer for ${meta.domainName}`);
       const liquidRes = await liquid.transferDomain({
         domain_name: meta.domainName,
         auth_code: meta.authCode || "",
-        customer_id: meta.customerId,
+        customer_id: targetLiquidCustomerId || meta.customerId,
         ns: meta.nameservers?.join(",") || "",
       });
 
@@ -243,7 +312,7 @@ export async function processWebhookPayload(event: any) {
       if (!existingDomain) {
         await db.insert(domains).values({
           userId: tx.userId,
-          customerId: meta.customerId || null,
+          customerId: targetLocalCustomerId,
           domainName: meta.domainName,
           tld: meta.tld || meta.domainName.split(".").slice(1).join("."),
           years: meta.years || 1,
@@ -256,7 +325,7 @@ export async function processWebhookPayload(event: any) {
       }
 
       await db.update(transactions).set({ status: "completed" }).where(eq(transactions.id, tx.id));
-      console.log(`[sumopod webhook] Domain transfer for ${meta.domainName} initialized successfully`);
+      console.log(`[sumopod webhook] Domain transfer for ${meta.domainName} initialized successfully on Resellercamp`);
 
     } else if (meta.type === "renew") {
       console.log(`[sumopod webhook] Executing LIQUID domain renewal for ${meta.domainName}`);

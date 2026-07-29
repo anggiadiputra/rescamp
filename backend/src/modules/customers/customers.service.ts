@@ -13,27 +13,51 @@ export async function createCustomer(
   user: { resellerId: string | null; apiKey: string | null; id: number; parentResellerId?: number | null },
   data: { name: string; email: string; company?: string; address?: string; city?: string; state?: string; country: string; zipcode?: string; phone?: string },
 ) {
-  // Create in LIQUID first
-  let liquidId = "";
-  try {
-    const liquidRes = await getLiquid(user).createCustomer(data);
-    liquidId = liquidRes?.id || liquidRes?.customer_id || "";
-  } catch {
-    // LIQUID may fail, still save locally
+  // Resolve reseller liquid credentials if user is linked to a parent reseller
+  let creds = { resellerId: user.resellerId, apiKey: user.apiKey };
+  if (!creds.resellerId || !creds.apiKey) {
+    if (user.parentResellerId) {
+      const [reseller] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
+      if (reseller?.resellerId && reseller?.apiKey) {
+        creds = { resellerId: reseller.resellerId, apiKey: reseller.apiKey };
+      }
+    }
+  }
+
+  // Create in LIQUID API first
+  let liquidCustomerId = "";
+  if (creds.resellerId && creds.apiKey) {
+    try {
+      const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
+      const liquidRes = await liquid.createCustomer(data);
+      liquidCustomerId = String(liquidRes?.customer_id || liquidRes?.id || "");
+    } catch (err: any) {
+      console.error("[customer-create] LIQUID create customer error:", err);
+      // Fallback: search existing customer in LIQUID if email already registered
+      try {
+        const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
+        const listRes = await liquid.listCustomers();
+        const list = Array.isArray(listRes) ? listRes : listRes?.data || listRes?.customers || [];
+        const match = list.find((c: any) => (c.email || c.customer_email)?.toLowerCase() === data.email.toLowerCase());
+        if (match) {
+          liquidCustomerId = String(match.customer_id || match.id || "");
+        }
+      } catch {}
+    }
   }
 
   const insertResult: any = await db.insert(customers).values({
     userId: user.id,
-    liquidCustomerId: liquidId || null,
+    liquidCustomerId: liquidCustomerId || null,
     name: data.name,
     email: data.email,
-    company: data.company,
-    address: data.address,
-    city: data.city,
-    state: data.state,
-    country: data.country,
-    zipcode: data.zipcode,
-    phone: data.phone,
+    company: data.company || null,
+    address: data.address || null,
+    city: data.city || null,
+    state: data.state || null,
+    country: data.country || "ID",
+    zipcode: data.zipcode || null,
+    phone: data.phone || null,
   });
   const custId = Number(insertResult[0]?.insertId || insertResult.insertId);
   const [cust] = await db.select().from(customers).where(eq(customers.id, custId));
@@ -53,11 +77,38 @@ export async function getCustomer(userId: number, customerId: number) {
   return cust;
 }
 
-export async function updateCustomer(userId: number, customerId: number, data: Partial<{
-  name: string; email: string; company: string; address: string; city: string; state: string; country: string; zipcode: string; phone: string;
-}>) {
-  await getCustomer(userId, customerId);
+export async function updateCustomer(
+  creds: { resellerId: string | null; apiKey: string | null },
+  userId: number,
+  customerId: number,
+  data: Partial<{
+    name: string; email: string; company: string; address: string; city: string; state: string; country: string; zipcode: string; phone: string;
+  }>,
+) {
+  const cust = await getCustomer(userId, customerId);
   await db.update(customers).set(data).where(eq(customers.id, customerId));
+
+  // Sync to LIQUID
+  if (cust.liquidCustomerId && creds.resellerId && creds.apiKey) {
+    (async () => {
+      try {
+        const liquid = new LiquidClient(creds.resellerId!, creds.apiKey!);
+        await liquid.updateCustomer(cust.liquidCustomerId!, {
+          name: data.name ?? cust.name,
+          email: data.email ?? cust.email,
+          company: data.company ?? cust.company ?? "",
+          address_line_1: data.address ?? cust.address ?? "",
+          city: data.city ?? cust.city ?? "",
+          state: data.state ?? cust.state ?? "",
+          country_code: (data.country ?? cust.country ?? "ID").slice(0, 2).toUpperCase(),
+          zipcode: data.zipcode ?? cust.zipcode ?? "",
+          tel_cc_no: cust.phone_cc || "62",
+          tel_no: data.phone ?? cust.phone ?? "",
+        });
+      } catch (e) { console.error("[customer] LIQUID update failed:", e); }
+    })();
+  }
+
   const [updated] = await db.select().from(customers).where(eq(customers.id, customerId));
   return updated!;
 }
@@ -84,6 +135,9 @@ export async function deleteCustomer(creds: { resellerId: string | null; apiKey:
   if (recheck) throw new AppError("Customer has active domains. Cannot delete.", 409);
 
   await db.delete(customers).where(eq(customers.id, customerId));
+  if (cust.email) {
+    await db.delete(users).where(and(eq(users.email, cust.email), eq(users.role, "customer")));
+  }
 }
 
 export async function completeProfile(

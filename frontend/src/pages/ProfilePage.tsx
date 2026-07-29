@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { Card, Button, InfoBanner, LoadingSpinner, toast } from "../components/ui";
+import { Card, Button, InfoBanner, LoadingSpinner, toast, WaBadge } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
-import { User, Lock, Building, MapPin, Mail, Phone, ShieldCheck } from "lucide-react";
+import { User, Lock, Building, MapPin, Mail, ShieldCheck, CreditCard, EyeOff } from "lucide-react";
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -13,6 +13,7 @@ export default function ProfilePage() {
   const [form, setForm] = useState({
     name: "",
     email: "",
+    phone_cc: "62",
     phone: "",
     company: "",
     address: "",
@@ -22,8 +23,12 @@ export default function ProfilePage() {
     zipcode: "",
   });
 
+  // Reseller data
+  const [resellerData, setResellerData] = useState<any>(null);
+
   useEffect(() => {
     fetchProfile();
+    if (user?.role === "reseller") fetchResellerData();
   }, []);
 
   async function fetchProfile() {
@@ -34,6 +39,7 @@ export default function ProfilePage() {
       setForm({
         name: data.name || user?.name || "",
         email: data.email || user?.email || "",
+        phone_cc: data.phone_cc || "62",
         phone: data.phone || "",
         company: data.company || "",
         address: data.address || "",
@@ -46,6 +52,13 @@ export default function ProfilePage() {
       setMsg(e.message || "Gagal memuat informasi profil");
     }
     setLoading(false);
+  }
+
+  async function fetchResellerData() {
+    try {
+      const res = await api.get<any>("/auth/reseller-data");
+      setResellerData(res.data || res);
+    } catch { /* silently fail — not critical for profile view */ }
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -62,6 +75,8 @@ export default function ProfilePage() {
         state: form.state,
         country: form.country,
         zipcode: form.zipcode,
+        phone_cc: form.phone_cc,
+        phone: form.phone,
       });
       toast("Profil berhasil diperbarui!");
     } catch (e: any) {
@@ -80,7 +95,7 @@ export default function ProfilePage() {
           Profil Saya
         </h1>
         <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-          Kelola informasi kontak dan profil akun Anda. Email dan nomor telepon dikunci untuk alasan keamanan.
+          Kelola informasi kontak dan profil akun Anda. Email dikunci untuk alasan keamanan.
         </p>
       </div>
 
@@ -106,23 +121,64 @@ export default function ProfilePage() {
                 className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-100 text-gray-500 font-medium cursor-not-allowed select-none"
               />
             </div>
-            <div>
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
-                <Phone className="w-3.5 h-3.5 text-gray-400" /> Nomor Telepon (Terkunci)
-                <Lock className="w-3 h-3 text-amber-500 ml-auto" />
-              </label>
-              <input
-                type="text"
-                value={form.phone || "Tidak terdaftar"}
-                disabled
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-100 text-gray-500 font-medium cursor-not-allowed select-none"
-              />
-            </div>
           </div>
           <p className="text-[11px] text-gray-400 italic">
-            * Untuk mengubah Alamat Email atau Nomor Telepon utama, silakan hubungi tim bantuan/support.
+            * Untuk mengubah Alamat Email utama, silakan hubungi tim bantuan/support.
           </p>
         </Card>
+
+        {/* Reseller Information — only for reseller role */}
+        {user?.role === "reseller" && (
+          <Card className="p-6 bg-white border border-indigo-200 shadow-xs rounded-xl space-y-4">
+            <div className="flex items-center gap-2 border-b border-indigo-100 pb-3">
+              <CreditCard className="w-5 h-5 text-indigo-600" />
+              <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Informasi Reseller</h2>
+            </div>
+            {resellerData ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Reseller ID</label>
+                    <p className="text-sm font-mono font-medium text-gray-900 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                      {resellerData.reseller_id}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <EyeOff className="w-3 h-3" /> API Key
+                    </label>
+                    <p className="text-sm font-mono font-medium text-gray-500 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
+                      {resellerData.api_key_masked || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Balance</label>
+                    <p className="text-sm font-bold text-indigo-700 bg-indigo-50 px-3 py-2 rounded-lg border border-indigo-200">
+                      {(() => {
+                        const b = resellerData.balance;
+                        if (typeof b === "number") return `Rp ${b.toLocaleString("id-ID")}`;
+                        if (b?.available !== undefined) return `Rp ${Number(b.available).toLocaleString("id-ID")}`;
+                        if (b?.balance !== undefined) return `Rp ${Number(b.balance).toLocaleString("id-ID")}`;
+                        if (b?.error) return "Gagal memuat";
+                        return "—";
+                      })()}
+                    </p>
+                  </div>
+                </div>
+                {!resellerData.synced && (
+                  <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    ⚠️ Data profil belum disinkronkan dengan LIQUID. Silakan sync dari halaman{" "}
+                    <a href="/settings" className="font-semibold underline">Settings</a>.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-gray-400 italic">
+                Data reseller belum tersedia. Silakan sync dari halaman Settings.
+              </p>
+            )}
+          </Card>
+        )}
 
         {/* Editable Personal & Address Information */}
         <Card className="p-6 bg-white border border-gray-200 shadow-xs rounded-xl space-y-4">
@@ -161,11 +217,11 @@ export default function ProfilePage() {
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
                 <MapPin className="w-3.5 h-3.5 text-gray-400" /> Alamat Jalan
               </label>
-              <textarea
-                rows={2}
+              <input
+                type="text"
                 value={form.address}
                 onChange={(e) => setForm({ ...form, address: e.target.value })}
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white resize-none"
+                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white"
                 placeholder="Alamat domisili lengkap..."
               />
             </div>
@@ -208,6 +264,8 @@ export default function ProfilePage() {
                   <option value="MY">Malaysia (MY)</option>
                   <option value="AU">Australia (AU)</option>
                   <option value="GB">United Kingdom (GB)</option>
+                  <option value="JP">Japan (JP)</option>
+                  <option value="KR">South Korea (KR)</option>
                 </select>
               </div>
 
@@ -220,6 +278,37 @@ export default function ProfilePage() {
                   className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white font-mono"
                   placeholder="12345"
                 />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Kode Negara</label>
+                <select
+                  value={form.phone_cc}
+                  onChange={(e) => setForm({ ...form, phone_cc: e.target.value })}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white"
+                >
+                  <option value="62">+62</option>
+                  <option value="1">+1</option>
+                  <option value="65">+65</option>
+                  <option value="60">+60</option>
+                  <option value="61">+61</option>
+                  <option value="44">+44</option>
+                  <option value="81">+81</option>
+                  <option value="82">+82</option>
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Nomor Telepon</label>
+                <input
+                  type="text"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white"
+                  placeholder="812345678"
+                />
+                <div className="mt-1"><WaBadge phone={`+${form.phone_cc}${form.phone}`} /></div>
               </div>
             </div>
           </div>

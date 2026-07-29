@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { Card, Button, Badge, LoadingSpinner, Modal, InfoBanner, ConfirmDialog, toast, PaymentModal } from "../components/ui";
 import { api } from "../lib/api";
 import type { Domain } from "../lib/types";
 
 export default function DomainDetailPage() {
+  const nav = useNavigate();
   const { id } = useParams();
   const [domain, setDomain] = useState<Domain | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,8 +22,10 @@ export default function DomainDetailPage() {
     orderId: string;
     paymentLinkUrl: string;
     amount: number;
+    fee: number;
+    expiresAt?: string;
     domainName: string;
-  }>({ open: false, orderId: "", paymentLinkUrl: "", amount: 0, domainName: "" });
+  }>({ open: false, orderId: "", paymentLinkUrl: "", amount: 0, fee: 0, expiresAt: "", domainName: "" });
 
   const [nsOpen, setNsOpen] = useState(false);
   const [nsForm, setNsForm] = useState(["", ""]);
@@ -67,6 +70,8 @@ export default function DomainDetailPage() {
           orderId: paymentInfo.orderId,
           paymentLinkUrl: paymentInfo.paymentLinkUrl,
           amount: paymentInfo.amount,
+          fee: paymentInfo.fee || 0,
+          expiresAt: paymentInfo.expiresAt,
           domainName: domain?.domainName || "",
         });
         window.open(paymentInfo.paymentLinkUrl, "_blank");
@@ -132,7 +137,7 @@ export default function DomainDetailPage() {
     try {
       await api.delete(`/domains/${id}`);
       toast("Domain deleted");
-      window.location.href = "/domains";
+      nav("/domains");
     } catch (e: any) { toast(e.message, "error"); setDeleteOpen(false); }
     setDeleteLoading(false);
   }
@@ -199,8 +204,6 @@ export default function DomainDetailPage() {
         </div>
       </Card>
 
-      <Link to="/domains" className="text-xs text-gray-500 hover:text-black inline-block">← Back to domains</Link>
-
       {/* Renew Modal */}
       <Modal open={renewOpen} onClose={() => setRenewOpen(false)} title="Renew Domain">
         <div className="space-y-4">
@@ -254,6 +257,8 @@ export default function DomainDetailPage() {
         orderId={paymentData.orderId}
         paymentLinkUrl={paymentData.paymentLinkUrl}
         amount={paymentData.amount}
+        fee={paymentData.fee}
+        expiresAt={paymentData.expiresAt}
         currency="IDR"
         domainName={paymentData.domainName}
         onSuccess={() => fetchDomain()}

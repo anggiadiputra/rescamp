@@ -17,7 +17,7 @@ export function PublicLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="flex-1">{children}</main>
+      <main className="flex-1 px-4 sm:px-6">{children}</main>
       <footer className="py-6 text-center text-xs text-gray-400">
         &copy; {new Date().getFullYear()} Domain Dashboard
       </footer>

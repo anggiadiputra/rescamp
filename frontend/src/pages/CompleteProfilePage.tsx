@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, Button, InfoBanner, toast } from "../components/ui";
 import { useAuth } from "../contexts/AuthContext";
@@ -43,8 +43,13 @@ export default function CompleteProfilePage() {
     setLoading(false);
   }
 
-  if (user?.role !== "customer") {
-    nav("/dashboard");
+  useEffect(() => {
+    if (user && (user.role !== "customer" || user.hasProfile)) {
+      nav("/dashboard");
+    }
+  }, [user, nav]);
+
+  if (user?.role !== "customer" || user?.hasProfile) {
     return null;
   }
 
