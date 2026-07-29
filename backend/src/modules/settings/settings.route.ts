@@ -3,6 +3,37 @@ import { getSystemSettings, updateSystemSettings, testKirisanConnection } from "
 import { AppError } from "../../lib/error";
 import { authGuard, resellerGuard } from "../../middleware/auth";
 
+// Field yang aman untuk publik (tidak ada secret/API key)
+const PUBLIC_SETTINGS_FIELDS = [
+  "brand_name",
+  "site_tagline",
+  "seo_title",
+  "seo_description",
+  "seo_keywords",
+  "og_image_url",
+  "primary_color",
+  "header_color",
+  "sidebar_color",
+  "theme_preset",
+  "turnstile_enabled",
+  "turnstile_site_key",   // site key aman (bukan secret key)
+  "tax_enabled",
+  "tax_rate",
+  "tax_label",
+  "email_provider",
+] as const;
+
+// Endpoint PUBLIK — hanya field aman, tanpa auth
+async function handleGetPublicSettings() {
+  const all = await getSystemSettings();
+  const pub: Record<string, string> = {};
+  for (const key of PUBLIC_SETTINGS_FIELDS) {
+    if (key in all) pub[key] = all[key];
+  }
+  return { data: pub };
+}
+
+// Endpoint ADMIN — semua field, wajib auth
 async function handleGetSettings() {
   const settings = await getSystemSettings();
   return { data: settings };
@@ -25,10 +56,13 @@ async function handleTestKirisan({ body }: any) {
 }
 
 export const settingsRoutes = new Elysia({ prefix: "/settings" })
-  .get("/", handleGetSettings as any)
-  .get("", handleGetSettings as any)
+  // Endpoint publik — tidak butuh login
+  .get("/public", handleGetPublicSettings as any)
+  // Semua endpoint lain wajib auth reseller
   .guard({ beforeHandle: [authGuard, resellerGuard] }, (app) =>
     app
+      .get("/", handleGetSettings as any)
+      .get("", handleGetSettings as any)
       .put("/", handlePutSettings as any)
       .put("", handlePutSettings as any)
       .post("/test-kirisan", handleTestKirisan as any)

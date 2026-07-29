@@ -42,7 +42,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   async function fetchSettings() {
     try {
-      const res = await api.get<any>("/settings");
+      const res = await api.get<any>("/settings/public");
       const data = res?.data || res;
       if (data && typeof data === "object") {
         setSettings((prev) => ({
