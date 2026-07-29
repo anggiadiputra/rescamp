@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { Card, Button, Badge, LoadingSpinner, Modal, InfoBanner, ConfirmDialog, toast, PaymentModal } from "../components/ui";
 import { api } from "../lib/api";
@@ -39,13 +39,13 @@ export default function DomainDetailPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [suspendLoading, setSuspendLoading] = useState(false);
 
-  useEffect(() => { fetchDomain(); }, [id]);
-
-  async function fetchDomain() {
+  const fetchDomain = useCallback(async () => {
     setLoading(true);
     try { const d = await api.get<Domain>(`/domains/${id}`); setDomain(d); } catch { /* 404 */ }
     setLoading(false);
-  }
+  }, [id]);
+
+  useEffect(() => { fetchDomain(); }, [fetchDomain]);
 
   async function toggleLock() {
     if (!domain) return;

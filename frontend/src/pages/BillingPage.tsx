@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Card, LoadingSpinner, EmptyState, Modal, Pagination, Button, PaymentModal } from "../components/ui";
 import { api } from "../lib/api";
@@ -163,7 +163,7 @@ export default function BillingPage() {
     domainName: string;
   }>({ open: false, orderId: "", paymentLinkUrl: "", amount: 0, fee: 0, expiresAt: "", domainName: "" });
 
-  const fetchTxns = () => {
+  const fetchTxns = useCallback(() => {
     setLoading(true);
     const promises: Promise<any>[] = [
       api.get<PaginatedResponse<Transaction>>(`/billing/transactions?page=${page}&per_page=${perPage}`).catch(() => ({ data: [], meta: { total: 0 } })),
@@ -181,11 +181,11 @@ export default function BillingPage() {
         setBalance(b);
       }
     }).finally(() => setLoading(false));
-  };
+  }, [page, isCustomer, perPage]);
 
   useEffect(() => {
     fetchTxns();
-  }, [page, isCustomer, returnStatus]);
+  }, [fetchTxns, returnStatus]);
 
   function clearReturnStatus() {
     searchParams.delete("status");

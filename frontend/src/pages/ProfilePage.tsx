@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, Button, InfoBanner, LoadingSpinner, toast, WaBadge } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
@@ -26,12 +26,7 @@ export default function ProfilePage() {
   // Reseller data
   const [resellerData, setResellerData] = useState<any>(null);
 
-  useEffect(() => {
-    fetchProfile();
-    if (user?.role === "reseller") fetchResellerData();
-  }, []);
-
-  async function fetchProfile() {
+  const fetchProfile = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get<any>("/auth/profile");
@@ -52,14 +47,19 @@ export default function ProfilePage() {
       setMsg(e.message || "Gagal memuat informasi profil");
     }
     setLoading(false);
-  }
+  }, [user?.name, user?.email]);
 
-  async function fetchResellerData() {
+  const fetchResellerData = useCallback(async () => {
     try {
       const res = await api.get<any>("/auth/reseller-data");
       setResellerData(res.data || res);
     } catch { /* silently fail — not critical for profile view */ }
-  }
+  }, []);
+
+  useEffect(() => {
+    fetchProfile();
+    if (user?.role === "reseller") fetchResellerData();
+  }, [fetchProfile, fetchResellerData, user?.role]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Card, Button, InfoBanner, TurnstileWidget } from "../components/ui";
-import { api } from "../lib/api";
+import { api, setToken } from "../lib/api";
 import { Mail, Lock, KeyRound } from "lucide-react";
 
 export default function LoginPage() {
@@ -37,8 +37,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await api.post<{ user: any; token: string }>("/auth/verify-otp", { email, code: otp });
-      const { setToken: st } = await import("../lib/api");
-      st(res.token);
+      setToken(res.token);
       window.location.href = redirect;
     } catch (err: any) {
       setError(err.message || "OTP tidak valid");

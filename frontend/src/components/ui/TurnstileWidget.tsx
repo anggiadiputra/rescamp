@@ -35,6 +35,16 @@ export function TurnstileWidget({ onVerify, onError, onExpire, className }: Turn
   const isEnabled = settings.turnstile_enabled === true || settings.turnstile_enabled === "true";
   const siteKey = settings.turnstile_site_key?.trim();
 
+  const onVerifyRef = useRef(onVerify);
+  const onErrorRef = useRef(onError);
+  const onExpireRef = useRef(onExpire);
+
+  useEffect(() => {
+    onVerifyRef.current = onVerify;
+    onErrorRef.current = onError;
+    onExpireRef.current = onExpire;
+  });
+
   useEffect(() => {
     if (!isEnabled || !siteKey || !containerRef.current) return;
 
@@ -50,13 +60,13 @@ export function TurnstileWidget({ onVerify, onError, onExpire, className }: Turn
         widgetIdRef.current = window.turnstile.render(containerRef.current, {
           sitekey: siteKey,
           callback: (token: string) => {
-            if (isMounted) onVerify(token);
+            if (isMounted) onVerifyRef.current(token);
           },
           "error-callback": () => {
-            if (isMounted && onError) onError();
+            if (isMounted && onErrorRef.current) onErrorRef.current();
           },
           "expired-callback": () => {
-            if (isMounted && onExpire) onExpire();
+            if (isMounted && onExpireRef.current) onExpireRef.current();
           },
           theme: "light",
         });

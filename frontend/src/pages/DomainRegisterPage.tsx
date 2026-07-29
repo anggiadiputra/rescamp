@@ -81,8 +81,8 @@ export default function DomainRegisterPage() {
       const list = res?.data || res || [];
       const custArr = Array.isArray(list) ? list : [];
       setCustomers(custArr);
-      if (custArr.length > 0 && !customerId) {
-        setCustomerId(String(custArr[0].id));
+      if (custArr.length > 0) {
+        setCustomerId((prev) => prev || String(custArr[0].id));
       }
     }).catch(() => {});
     return () => controller.abort();
