@@ -503,8 +503,8 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
       }
     }
 
-    const regDate: string | null = (item.creation_time || item.creation_date) ? new Date(item.creation_time || item.creation_date).toISOString().split("T")[0] : null;
-    const expDate: string | null = item.expiry_date ? new Date(item.expiry_date).toISOString().split("T")[0] : null;
+    const regDate = ((item.creation_time || item.creation_date) ? new Date(item.creation_time || item.creation_date).toISOString().split("T")[0] : null) as string | null;
+    const expDate = (item.expiry_date ? new Date(item.expiry_date).toISOString().split("T")[0] : null) as string | null;
 
     const [existing] = await db.select().from(domains).where(eq(domains.domainName, fullDomainName)).limit(1);
 
