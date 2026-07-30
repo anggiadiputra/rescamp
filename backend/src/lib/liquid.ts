@@ -197,9 +197,10 @@ export class LiquidClient {
       city: data.city || "",
       state: data.state || "",
       country_code: data.country || data.country_code || "ID",
-      zipcode: data.zipcode || "",
       tel_cc_no,
       tel_no,
+      send_welcome_email: data.send_welcome_email || "true",
+      notify: "true",
     });
   }
   listCustomers() {
