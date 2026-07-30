@@ -74,9 +74,9 @@ export async function listCustomers(userId: number, search?: string) {
     }
     return rows;
   }
-  let where = eq(customers.userId, userId);
-  if (search) where = and(where, like(customers.name, `%${search}%`)) as any;
-  return db.select().from(customers).where(where);
+  let where: any = undefined;
+  if (search) where = like(customers.name, `%${search}%`);
+  return db.select().from(customers).where(where).orderBy(sql`${customers.createdAt} desc`);
 }
 
 export async function getCustomer(userId: number, customerId: number) {
@@ -215,32 +215,42 @@ export async function syncFromLiquid(creds: { resellerId: string | null; apiKey:
     if (!email) continue;
     
     // Check if already exists
-    const [existing] = await db.select({ id: customers.id }).from(customers)
+    const [existingByLiquid] = await db.select({ id: customers.id }).from(customers)
       .where(eq(customers.liquidCustomerId, liquidId));
     
-    if (!existing) {
-      try {
-        await db.insert(customers).values({
-          userId,
-          liquidCustomerId: liquidId,
-          name: c.name || c.customer_name || "",
-          email,
-          company: c.company || "",
-          address: c.address_line_1 || c.address || "",
-          city: c.city || "",
-          state: c.state || "",
-          country: c.country_code || c.country || "",
-          zipcode: c.zipcode || "",
-          phone: c.tel_no || c.phone || "",
-        });
-        count++;
-      } catch (err: any) {
-        // Handle duplicate insert gracefully if inserted concurrently
-        if (err.code === "ER_DUP_ENTRY" || err.errno === 1062 || err.message?.includes("Duplicate entry")) {
-          console.warn(`[customer-sync] Skipped duplicate liquid_customer_id: ${liquidId}`);
-        } else {
-          throw err;
-        }
+    if (existingByLiquid) {
+      continue;
+    }
+
+    const [existingByEmail] = await db.select({ id: customers.id }).from(customers)
+      .where(eq(customers.email, email));
+    
+    if (existingByEmail) {
+      await db.update(customers).set({ liquidCustomerId: liquidId }).where(eq(customers.id, existingByEmail.id));
+      count++;
+      continue;
+    }
+
+    try {
+      await db.insert(customers).values({
+        userId,
+        liquidCustomerId: liquidId,
+        name: c.name || c.customer_name || email.split("@")[0],
+        email,
+        company: c.company || "",
+        address: c.address_line_1 || c.address || "",
+        city: c.city || "",
+        state: c.state || "",
+        country: c.country_code || c.country || "ID",
+        zipcode: c.zipcode || "",
+        phone: c.tel_no || c.phone || "",
+      });
+      count++;
+    } catch (err: any) {
+      if (err.code === "ER_DUP_ENTRY" || err.errno === 1062 || err.message?.includes("Duplicate entry")) {
+        console.warn(`[customer-sync] Skipped duplicate liquid_customer_id: ${liquidId}`);
+      } else {
+        throw err;
       }
     }
   }
