@@ -1,5 +1,5 @@
 import { db } from "../../db";
-import { domains } from "../../db/schema";
+import { domains, users } from "../../db/schema";
 import { eq, and, like, inArray } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
@@ -355,7 +355,7 @@ export async function bulkAvailability(user: { resellerId: string; apiKey: strin
   return results;
 }
 
-export async function syncDomainsFromLiquid(userParam: { id: number; role?: string; resellerId?: string | null; apiKey?: string | null }) {
+export async function syncDomainsFromLiquid(userParam: { id: number; role?: string | null; resellerId?: string | null; apiKey?: string | null }) {
   const userId = typeof userParam === "object" ? userParam.id : userParam;
   const [u] = await db.select().from(users).where(eq(users.id, userId));
   if (!u) throw new AppError("User not found", 404);

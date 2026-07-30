@@ -40,7 +40,7 @@ export default function DomainsPage() {
       toast(`🎉 ${msg}`);
       fetchDomains();
     } catch (err: any) {
-      toast.error(err.message || "Gagal sinkronisasi domain");
+      toast(err.message || "Gagal sinkronisasi domain", "error");
     }
     setSyncing(false);
   }
