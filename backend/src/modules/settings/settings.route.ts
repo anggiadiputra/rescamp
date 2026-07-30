@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { getSystemSettings, updateSystemSettings, testKirisanConnection } from "./settings.service";
+import { getSystemSettings, updateSystemSettings, testKirisanConnection, testLiquidConnection } from "./settings.service";
 import { AppError } from "../../lib/error";
 import { authGuard, resellerGuard } from "../../middleware/auth";
 
@@ -51,8 +51,6 @@ async function handleTestKirisan({ body }: any) {
   const res = await testKirisanConnection(body);
   return res;
 }
-
-import { getSystemSettings, updateSystemSettings, testKirisanConnection, testLiquidConnection } from "./settings.service";
 
 async function handleTestLiquid() {
   const res = await testLiquidConnection();
