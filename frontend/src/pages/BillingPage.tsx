@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Card, LoadingSpinner, EmptyState, Modal, Pagination, Button, PaymentModal } from "../components/ui";
+import { Card, LoadingSpinner, EmptyState, Modal, Pagination, Button, PaymentModal, SearchBar } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import { useSettings } from "../contexts/SettingsContext";
@@ -148,6 +148,8 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const perPage = 20;
 
   const [detailOpen, setDetailOpen] = useState(false);
@@ -165,8 +167,10 @@ export default function BillingPage() {
 
   const fetchTxns = useCallback(() => {
     setLoading(true);
+    const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
+    if (statusFilter) params.set("status", statusFilter);
     const promises: Promise<any>[] = [
-      api.get<PaginatedResponse<Transaction>>(`/billing/transactions?page=${page}&per_page=${perPage}`).catch(() => ({ data: [], meta: { total: 0 } })),
+      api.get<PaginatedResponse<Transaction>>(`/billing/transactions?${params}`).catch(() => ({ data: [], meta: { total: 0 } })),
     ];
 
     if (!isCustomer) {
@@ -181,7 +185,7 @@ export default function BillingPage() {
         setBalance(b);
       }
     }).finally(() => setLoading(false));
-  }, [page, isCustomer, perPage]);
+  }, [page, statusFilter, isCustomer, perPage]);
 
   useEffect(() => {
     if (returnOrderId && returnStatus === "success") {
@@ -223,16 +227,19 @@ export default function BillingPage() {
     });
   }
 
-  const totalSpent = transactions.reduce((acc, t) => {
-    const amt = Number(t.amount || 0);
-    const actual = amt < 1000 ? amt * 1000 : amt;
-    return acc + actual;
-  }, 0);
-
   if (loading) return <LoadingSpinner />;
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h1 className="text-xl font-bold text-gray-900">Billing & Transaksi</h1>
+        {!isCustomer && balance.balance !== "0.00" && (
+          <div className="text-xs font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200">
+            Saldo Deposit Resellercamp: <span className="font-bold text-black font-mono">{balance.currency} {Number(balance.balance).toLocaleString("id-ID")}</span>
+          </div>
+        )}
+      </div>
+
       {returnStatus === "success" && (
         <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl shadow-sm space-y-3 animate-fade-in text-emerald-950">
           <div className="flex items-start justify-between gap-3">
@@ -291,24 +298,19 @@ export default function BillingPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {!isCustomer && (
-          <Card className="p-5 bg-white border border-gray-200 rounded-2xl shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Reseller Balance</p>
-            <p className="text-2xl font-black text-gray-900 font-mono tracking-tight">{fmtPrice(balance.balance, balance.currency)}</p>
-            <p className="text-[11px] text-gray-400 mt-1">Sisa saldo deposit reseller Anda di Liquid API</p>
-          </Card>
-        )}
-        <Card className="p-5 bg-white border border-gray-200 rounded-2xl shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">{isCustomer ? "Total Spent" : "Total Transactions"}</p>
-          <p className="text-2xl font-black text-gray-900 font-mono tracking-tight">{fmtPrice(totalSpent)}</p>
-          <p className="text-[11px] text-gray-400 mt-1">Akumulasi total transaksi domain di akun Anda</p>
-        </Card>
-        <Card className="p-5 bg-white border border-gray-200 rounded-2xl shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Total Invoices</p>
-          <p className="text-2xl font-black text-gray-900 font-mono tracking-tight">{total}</p>
-          <p className="text-[11px] text-gray-400 mt-1">Jumlah riwayat invoice transaksi</p>
-        </Card>
+      {/* Filter & Search Bar */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col sm:flex-row items-center gap-3">
+        <SearchBar value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Cari invoice..." />
+        <div className="flex gap-1.5 flex-wrap">
+          {["", "pending_payment", "completed", "expired", "cancelled", "failed"].map((s) => (
+            <button key={s} onClick={() => { setStatusFilter(s); setPage(1); }}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-colors ${
+                statusFilter === s ? "bg-black text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}>
+              {s === "" ? "all" : s === "pending_payment" ? "pending" : s}
+            </button>
+          ))}
+        </div>
       </div>
 
       <Card className="p-6 bg-white border border-gray-200 rounded-2xl shadow-sm space-y-4">
@@ -319,7 +321,14 @@ export default function BillingPage() {
           </div>
         </div>
 
-        {transactions.length === 0 ? (
+        {(() => {
+          const filtered = search
+            ? transactions.filter((t) =>
+                (t.description || "").toLowerCase().includes(search.toLowerCase())
+              )
+            : transactions;
+
+          return filtered.length === 0 ? (
           <div className="py-12">
             <EmptyState
               icon={Receipt}
@@ -342,7 +351,7 @@ export default function BillingPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
-                  {transactions.map((t) => (
+                  {filtered.map((t) => (
                     <tr key={t.id} className="hover:bg-gray-50/60 transition-colors">
                       <td className="px-5 py-3.5 text-xs font-mono font-bold text-gray-900">
                         #{getInvoiceNumber(t)}
@@ -383,7 +392,7 @@ export default function BillingPage() {
             </div>
 
             <div className="md:hidden space-y-3">
-              {transactions.map((t) => (
+              {filtered.map((t) => (
                 <div key={t.id} className="rounded-xl border border-gray-200 bg-white p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-mono font-bold text-gray-900">#{getInvoiceNumber(t)}</span>
@@ -419,7 +428,7 @@ export default function BillingPage() {
               </div>
             )}
           </>
-        )}
+        );})()}
       </Card>
 
       <Modal open={detailOpen} onClose={() => setDetailOpen(false)} title="Official Tax Invoice & Receipt" size="2xl">
