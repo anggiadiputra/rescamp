@@ -177,26 +177,40 @@ export async function registerDomain(
     domain_name: `${data.domain_name}.${data.tld}`,
     years: data.years,
     ns: data.nameservers?.join(",") || "",
-    customer_id: data.customer_id,
+  user: { resellerId: string | null; apiKey: string | null },
+  data: Record<string, any>
+) {
+  const liquid = getLiquid(user);
+  const years = data.years || 1;
+  const fullDomain = data.tld ? `${data.domain_name}.${data.tld}` : data.domain_name;
+
+  const res = await liquid.registerDomain({
+    domain_name: fullDomain,
+    years,
+    ns: data.nameservers?.join(",") || "",
+    customer_id: String(data.customer_id),
     privacy_protection: data.privacy_protection,
   });
 
-  let saved: any;
+  const liquidOrderId = typeof res === "string" ? res : res?.order_id || res?.id || null;
+
+  let saved: any = null;
   try {
-    const result: any = await db.insert(domains).values({
-      userId: user.id,
-      customerId: data.customer_id ?? null,
-      domainName: `${data.domain_name}.${data.tld}`,
-      tld: data.tld,
-      years: data.years,
-      status: "pending",
+    const [inserted] = await db.insert(domains).values({
+      userId: Number(data.user_id || 1),
+      customerId: data.customer_id ? Number(data.customer_id) : null,
+      domainName: fullDomain,
+      tld: data.tld || fullDomain.split(".").slice(1).join("."),
+      years,
+      status: "active",
       autoRenew: data.auto_renew ? 1 : 0,
       privacyProtection: data.privacy_protection ? 1 : 0,
-      liquidOrderId: typeof liquidRes === "string" ? liquidRes : liquidRes?.order_id || liquidRes?.id,
-      nameservers: data.nameservers ?? [],
+      liquidOrderId: liquidOrderId ? String(liquidOrderId) : null,
+      nameservers: data.nameservers || [],
     });
-    const id = Number(result[0]?.insertId || result.insertId);
-    [saved] = await db.select().from(domains).where(eq(domains.id, id));
+
+    const [row] = await db.select().from(domains).where(eq(domains.id, inserted.insertId));
+    saved = row;
   } catch (err) {
     console.error("[domain] LIQUID register ok, local cache failed:", err);
   }
@@ -212,13 +226,21 @@ export async function listDomains(
   const offset = (page - 1) * perPage;
 
   let allowedUserIds = [user.id];
-  if (user.role === "reseller") {
-    const { users } = await import("../../db/schema");
+  let allowedCustomerIds: number[] = [];
+
+  if (user.role === "customer") {
+    const custs = await db.select({ id: customers.id }).from(customers).where(or(eq(customers.userId, user.id), eq(customers.email, user.email || "")));
+    allowedCustomerIds = custs.map((c) => c.id);
+  } else if (user.role === "reseller") {
     const childUsers = await db.select({ id: users.id }).from(users).where(eq(users.parentResellerId, user.id));
     allowedUserIds = [user.id, ...childUsers.map((c) => c.id)];
   }
 
-  const conditions: any[] = [inArray(domains.userId, allowedUserIds)];
+  const accessCondition = allowedCustomerIds.length > 0
+    ? or(inArray(domains.userId, allowedUserIds), inArray(domains.customerId, allowedCustomerIds))
+    : inArray(domains.userId, allowedUserIds);
+
+  const conditions: any[] = [accessCondition];
   if (params?.search) conditions.push(like(domains.domainName, `%${params.search}%`));
   if (params?.status) conditions.push(eq(domains.status, params.status as any));
 
@@ -231,17 +253,26 @@ export async function listDomains(
 }
 
 export async function getDomain(userParam: any, domainId: number) {
-  const userId = typeof userParam === "object" ? userParam.id : Number(userParam);
-  const userRole = typeof userParam === "object" ? userParam.role : "reseller";
+  const user = typeof userParam === "object" ? userParam : { id: Number(userParam), role: "reseller", email: "" };
+  const userId = user.id;
+  const userRole = user.role || "reseller";
 
   let allowedUserIds = [userId];
-  if (userRole === "reseller") {
-    const { users } = await import("../../db/schema");
+  let allowedCustomerIds: number[] = [];
+
+  if (userRole === "customer") {
+    const custs = await db.select({ id: customers.id }).from(customers).where(or(eq(customers.userId, userId), eq(customers.email, user.email || "")));
+    allowedCustomerIds = custs.map((c) => c.id);
+  } else if (userRole === "reseller") {
     const childUsers = await db.select({ id: users.id }).from(users).where(eq(users.parentResellerId, userId));
     allowedUserIds = [userId, ...childUsers.map((c) => c.id)];
   }
 
-  const [domain] = await db.select().from(domains).where(and(eq(domains.id, domainId), inArray(domains.userId, allowedUserIds)));
+  const accessCondition = allowedCustomerIds.length > 0
+    ? or(inArray(domains.userId, allowedUserIds), inArray(domains.customerId, allowedCustomerIds))
+    : inArray(domains.userId, allowedUserIds);
+
+  const [domain] = await db.select().from(domains).where(and(eq(domains.id, domainId), accessCondition));
   if (!domain) throw new AppError("Domain not found", 404);
   return domain;
 }
