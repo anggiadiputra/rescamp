@@ -53,7 +53,7 @@ export class LiquidClient {
       years: data.years || 1,
       ns: data.ns || "",
       purchase_privacy_protection: data.purchase_privacy_protection || data.privacy_protection ? "true" : "false",
-      invoice_option: data.invoice_option || "PayInvoice",
+      invoice_option: data.invoice_option || "KeepInvoice",
     });
   }
   getDomain(domainId: string) {
@@ -63,7 +63,7 @@ export class LiquidClient {
     const qs = params ? "?" + new URLSearchParams(params).toString() : "";
     return this.request<any>("GET", `/domains${qs}`);
   }
-  renewDomain(domainId: string, years: number, invoiceOption: string = "PayInvoice") {
+  renewDomain(domainId: string, years: number, invoiceOption: string = "KeepInvoice") {
     return this.request<any>("POST", `/domains/${domainId}/renew`, {
       years,
       current_date: new Date().toISOString().split("T")[0],
@@ -79,7 +79,7 @@ export class LiquidClient {
       admin_contact_id: data.customer_id || "",
       billing_contact_id: data.customer_id || "",
       tech_contact_id: data.customer_id || "",
-      invoice_option: data.invoice_option || "PayInvoice",
+      invoice_option: data.invoice_option || "KeepInvoice",
     });
   }
   deleteDomain(domainId: string) {
@@ -118,7 +118,7 @@ export class LiquidClient {
     if (tld) qs.set("tld", tld);
     return this.request<any>("GET", `/domains/suggestion?${qs.toString()}`);
   }
-  restoreDomain(domainId: string, invoiceOption: string = "PayInvoice") {
+  restoreDomain(domainId: string, invoiceOption: string = "KeepInvoice") {
     return this.request<any>("POST", `/domains/${domainId}/restore`, { invoice_option: invoiceOption });
   }
   suspendDomain(domainId: string) {
@@ -214,6 +214,33 @@ export class LiquidClient {
   }
   deleteCustomer(customerId: string) {
     return this.request<any>("DELETE", `/customers/${customerId}`);
+  }
+
+  // --- Customer Transactions / Invoices ---
+  /** List customer transactions (invoices). Set only_pending=true for pending only. */
+  listCustomerTransactions(customerId: string, onlyPending: boolean = false) {
+    const qs = onlyPending ? "?only_pending=true" : "";
+    return this.request<any>("GET", `/customers/${customerId}/transactions${qs}`);
+  }
+  /** Pay a keep_invoice transaction → triggers domain creation + deducts reseller balance */
+  payCustomerTransaction(customerId: string, transactionId: string, subtractBalance: boolean = false) {
+    return this.request<any>("POST", `/customers/${customerId}/transactions/pay`, {
+      transaction_id: transactionId,
+      subtract_balance: subtractBalance ? "true" : "false",
+    });
+  }
+  /** Cancel a pending invoice */
+  cancelCustomerTransaction(customerId: string, transactionId: string) {
+    return this.request<any>("POST", `/customers/${customerId}/transactions/cancel`, {
+      transaction_id: transactionId,
+    });
+  }
+  /** Execute a pending order-only transaction */
+  executeCustomerTransaction(customerId: string, transactionId: string, cancelInvoice: boolean = false) {
+    return this.request<any>("POST", `/customers/${customerId}/transactions/execute`, {
+      transaction_id: transactionId,
+      cancel_invoice: cancelInvoice ? "true" : "false",
+    });
   }
 
   // --- Account / Billing (with In-Memory Caching & Graceful Fallback) ---
