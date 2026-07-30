@@ -53,7 +53,7 @@ export class LiquidClient {
       years: data.years || 1,
       ns: data.ns || "",
       purchase_privacy_protection: data.purchase_privacy_protection || data.privacy_protection ? "true" : "false",
-      invoice_option: data.invoice_option || "NoInvoice",
+      invoice_option: data.invoice_option || "PayInvoice",
     });
   }
   getDomain(domainId: string) {
@@ -63,11 +63,11 @@ export class LiquidClient {
     const qs = params ? "?" + new URLSearchParams(params).toString() : "";
     return this.request<any>("GET", `/domains${qs}`);
   }
-  renewDomain(domainId: string, years: number) {
+  renewDomain(domainId: string, years: number, invoiceOption: string = "PayInvoice") {
     return this.request<any>("POST", `/domains/${domainId}/renew`, {
       years,
       current_date: new Date().toISOString().split("T")[0],
-      invoice_option: "NoInvoice",
+      invoice_option: invoiceOption,
     });
   }
   transferDomain(data: Record<string, any>) {
@@ -79,7 +79,7 @@ export class LiquidClient {
       admin_contact_id: data.customer_id || "",
       billing_contact_id: data.customer_id || "",
       tech_contact_id: data.customer_id || "",
-      invoice_option: "NoInvoice",
+      invoice_option: data.invoice_option || "PayInvoice",
     });
   }
   deleteDomain(domainId: string) {
@@ -118,8 +118,8 @@ export class LiquidClient {
     if (tld) qs.set("tld", tld);
     return this.request<any>("GET", `/domains/suggestion?${qs.toString()}`);
   }
-  restoreDomain(domainId: string) {
-    return this.request<any>("POST", `/domains/${domainId}/restore`, { invoice_option: "NoInvoice" });
+  restoreDomain(domainId: string, invoiceOption: string = "PayInvoice") {
+    return this.request<any>("POST", `/domains/${domainId}/restore`, { invoice_option: invoiceOption });
   }
   suspendDomain(domainId: string) {
     return this.request<any>("PUT", `/domains/${domainId}/suspended`);
