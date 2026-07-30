@@ -170,13 +170,6 @@ export async function orderRenewDomain(
 }
 
 export async function registerDomain(
-  user: { id: number; resellerId: string | null; apiKey: string | null },
-  data: { domain_name: string; tld: string; years: number; customer_id?: number; nameservers?: string[]; auto_renew?: boolean; privacy_protection?: boolean },
-) {
-  const liquidRes = await getLiquid(user).registerDomain({
-    domain_name: `${data.domain_name}.${data.tld}`,
-    years: data.years,
-    ns: data.nameservers?.join(",") || "",
   user: { resellerId: string | null; apiKey: string | null },
   data: Record<string, any>
 ) {
