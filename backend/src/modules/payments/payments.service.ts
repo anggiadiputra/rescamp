@@ -96,7 +96,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
         ns: payload.nameservers?.join(",") || "",
         customer_id: targetLiquidCustomerId,
         privacy_protection: payload.privacyProtection,
-        invoice_option: "KeepInvoice",
+        invoice_option: "keep_invoice",
       });
       liquidOrderId = typeof liquidRes === "string" ? liquidRes : liquidRes?.order_id || liquidRes?.id || null;
       // Get the pending transaction ID from Resellercamp
@@ -117,7 +117,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
         domain_name: fullDomain,
         auth_code: payload.authCode || "",
         customer_id: targetLiquidCustomerId,
-        invoice_option: "KeepInvoice",
+        invoice_option: "keep_invoice",
       });
       liquidOrderId = typeof liquidRes === "string" ? liquidRes : liquidRes?.order_id || liquidRes?.id || null;
       liquidTransactionId = liquidRes?.transaction_id || null;
@@ -137,7 +137,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
       if (!targetDomain) throw new AppError(`Domain ID ${domainId} not found`, 404);
 
       const liquidRes = await liquid.renewDomain(
-        String(targetDomain.liquidOrderId || targetDomain.domainName), years, "KeepInvoice"
+        String(targetDomain.liquidOrderId || targetDomain.domainName), years, "keep_invoice"
       );
       liquidOrderId = typeof liquidRes === "string" ? liquidRes : liquidRes?.order_id || liquidRes?.id || null;
       liquidTransactionId = liquidRes?.transaction_id || null;
