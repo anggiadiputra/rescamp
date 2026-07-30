@@ -11,57 +11,69 @@ async function getUser(ctx: any) {
   return user;
 }
 
+async function getResellerCreds(ctx: any) {
+  const u = await getUser(ctx);
+  if (u.role === "customer") {
+    let r: any = null;
+    if (u.parentResellerId) [r] = await db.select().from(users).where(eq(users.id, u.parentResellerId));
+    if (!r) [r] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
+    if (!r || !r.apiKey) throw new AppError("Reseller not configured", 500);
+    return { user: u, creds: { resellerId: r.resellerId || "", apiKey: r.apiKey } };
+  }
+  return { user: u, creds: { resellerId: u.resellerId || "", apiKey: u.apiKey || "" } };
+}
+
 export async function getDomainFwd(ctx: any) {
-  const user = await getUser(ctx);
-  const result = await svc.getDomainForwarding(user, user.id, parseInt(ctx.params.id));
+  const { user, creds } = await getResellerCreds(ctx);
+  const result = await svc.getDomainForwarding(creds, user.id, parseInt(ctx.params.id));
   return { data: result };
 }
 
 export async function updateDomainFwd(ctx: any) {
-  const user = await getUser(ctx);
-  const result = await svc.updateDomainForwarding(user, user.id, parseInt(ctx.params.id), ctx.body);
+  const { user, creds } = await getResellerCreds(ctx);
+  const result = await svc.updateDomainForwarding(creds, user.id, parseInt(ctx.params.id), ctx.body);
   return { data: result };
 }
 
 export async function getEmailFwd(ctx: any) {
-  const user = await getUser(ctx);
-  const result = await svc.getEmailForwarding(user, user.id, parseInt(ctx.params.id));
+  const { user, creds } = await getResellerCreds(ctx);
+  const result = await svc.getEmailForwarding(creds, user.id, parseInt(ctx.params.id));
   return { data: Array.isArray(result) ? result : [] };
 }
 
 export async function createEmailFwd(ctx: any) {
-  const user = await getUser(ctx);
-  const result = await svc.createEmailForwarding(user, user.id, parseInt(ctx.params.id), ctx.body);
+  const { user, creds } = await getResellerCreds(ctx);
+  const result = await svc.createEmailForwarding(creds, user.id, parseInt(ctx.params.id), ctx.body);
   ctx.set.status = 201;
   return { data: result };
 }
 
 export async function deleteEmailFwd(ctx: any) {
-  const user = await getUser(ctx);
-  await svc.deleteEmailForwarding(user, user.id, parseInt(ctx.params.id), ctx.params.email);
+  const { user, creds } = await getResellerCreds(ctx);
+  await svc.deleteEmailForwarding(creds, user.id, parseInt(ctx.params.id), ctx.params.email);
   return new Response(null, { status: 204 });
 }
 
 export async function getPrivacy(ctx: any) {
-  const user = await getUser(ctx);
-  const result = await svc.getPrivacy(user, user.id, parseInt(ctx.params.id));
+  const { user, creds } = await getResellerCreds(ctx);
+  const result = await svc.getPrivacy(creds, user.id, parseInt(ctx.params.id));
   return { data: result };
 }
 
 export async function enablePrivacy(ctx: any) {
-  const user = await getUser(ctx);
-  const result = await svc.enablePrivacy(user, user.id, parseInt(ctx.params.id));
+  const { user, creds } = await getResellerCreds(ctx);
+  const result = await svc.enablePrivacy(creds, user.id, parseInt(ctx.params.id));
   return { data: result };
 }
 
 export async function disablePrivacy(ctx: any) {
-  const user = await getUser(ctx);
-  await svc.disablePrivacy(user, user.id, parseInt(ctx.params.id));
+  const { user, creds } = await getResellerCreds(ctx);
+  await svc.disablePrivacy(creds, user.id, parseInt(ctx.params.id));
   return new Response(null, { status: 204 });
 }
 
 export async function buyPrivacy(ctx: any) {
-  const user = await getUser(ctx);
-  const result = await svc.buyPrivacy(user, user.id, parseInt(ctx.params.id));
+  const { user, creds } = await getResellerCreds(ctx);
+  const result = await svc.buyPrivacy(creds, user.id, parseInt(ctx.params.id));
   return { data: result };
 }

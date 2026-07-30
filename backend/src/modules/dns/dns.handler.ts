@@ -11,30 +11,42 @@ async function getUser(ctx: any) {
   return user;
 }
 
+async function getResellerCreds(ctx: any) {
+  const u = await getUser(ctx);
+  if (u.role === "customer") {
+    let r: any = null;
+    if (u.parentResellerId) [r] = await db.select().from(users).where(eq(users.id, u.parentResellerId));
+    if (!r) [r] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
+    if (!r || !r.apiKey) throw new AppError("Reseller not configured", 500);
+    return { user: u, creds: { resellerId: r.resellerId || "", apiKey: r.apiKey } };
+  }
+  return { user: u, creds: { resellerId: u.resellerId || "", apiKey: u.apiKey || "" } };
+}
+
 export async function list(ctx: any) {
-  const user = await getUser(ctx);
-  const records = await svc.listRecords(user, user.id, parseInt(ctx.params.id), ctx.params.type);
+  const { user, creds } = await getResellerCreds(ctx);
+  const records = await svc.listRecords(creds, user.id, parseInt(ctx.params.id), ctx.params.type);
   return { data: records };
 }
 
 export async function add(ctx: any) {
-  const user = await getUser(ctx);
-  const record = await svc.addRecord(user, user.id, parseInt(ctx.params.id), ctx.params.type, ctx.body);
+  const { user, creds } = await getResellerCreds(ctx);
+  const record = await svc.addRecord(creds, user.id, parseInt(ctx.params.id), ctx.params.type, ctx.body);
   ctx.set.status = 201;
   return { data: record };
 }
 
 export async function update(ctx: any) {
-  const user = await getUser(ctx);
+  const { user, creds } = await getResellerCreds(ctx);
   const record = await svc.updateRecord(
-    user, user.id, parseInt(ctx.params.id), ctx.params.type,
+    creds, user.id, parseInt(ctx.params.id), ctx.params.type,
     ctx.params.oldHost, ctx.params.oldValue, ctx.body,
   );
   return { data: record };
 }
 
 export async function remove(ctx: any) {
-  const user = await getUser(ctx);
-  await svc.deleteRecord(user, user.id, parseInt(ctx.params.id), ctx.params.type, ctx.params.hostname, ctx.params.value);
+  const { user, creds } = await getResellerCreds(ctx);
+  await svc.deleteRecord(creds, user.id, parseInt(ctx.params.id), ctx.params.type, ctx.params.hostname, ctx.params.value);
   return new Response(null, { status: 204 });
 }
