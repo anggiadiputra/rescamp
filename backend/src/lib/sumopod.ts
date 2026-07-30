@@ -54,6 +54,9 @@ export class SumopodClient {
       ...(options.paymentMethodTypeCode ? { payment_method_type_code: options.paymentMethodTypeCode } : {}),
     };
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
     try {
       const response = await fetch(`${this.baseUrl}/payments`, {
         method: "POST",
@@ -62,6 +65,7 @@ export class SumopodClient {
           "X-Api-Key": this.apiKey,
         },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -74,8 +78,14 @@ export class SumopodClient {
       return data;
     } catch (err: any) {
       if (err instanceof AppError) throw err;
+      if (err.name === "AbortError") {
+        console.error("Sumopod Payment Gateway request timed out after 30s");
+        throw new AppError("Payment Gateway request timed out. Silakan coba lagi.", 504);
+      }
       console.error("Failed to connect to Sumopod Payment Gateway:", err);
       throw new AppError(`Payment Gateway Connection Failed: ${err.message}`, 503);
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 

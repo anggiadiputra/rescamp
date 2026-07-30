@@ -34,6 +34,14 @@ export class LiquidClient {
         throw new AppError(data.message || "LIQUID API error", status);
       }
       return data;
+    } catch (err: any) {
+      if (err instanceof AppError) throw err;
+      if (err.name === "AbortError") {
+        console.error(`[LiquidClient] Timeout on ${method} ${path}`);
+        throw new AppError("Resellercamp API request timed out (30s)", 504);
+      }
+      console.error(`[LiquidClient] Connection error on ${method} ${path}:`, err);
+      throw new AppError(`Gagal terhubung ke Resellercamp API: ${err.message || "Network Error"}`, 502);
     } finally {
       clearTimeout(timeout);
     }

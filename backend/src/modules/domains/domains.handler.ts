@@ -105,13 +105,15 @@ export async function lock(ctx: any) {
   const user = await getUser(ctx);
   const creds = user.role === "customer" ? await getResellerCreds(ctx) : user;
   await svc.updateLock(creds as any, user.id, parseInt(ctx.params.id), true);
-  return new Response(null, { status: 204 });
+  ctx.set.status = 204;
+  return;
 }
 export async function unlock(ctx: any) {
   const user = await getUser(ctx);
   const creds = user.role === "customer" ? await getResellerCreds(ctx) : user;
   await svc.updateLock(creds as any, user.id, parseInt(ctx.params.id), false);
-  return new Response(null, { status: 204 });
+  ctx.set.status = 204;
+  return;
 }
 
 export async function updateNs(ctx: any) {
@@ -143,8 +145,18 @@ export async function updateAuth(ctx: any) {
   return { data: result };
 }
 
-export async function enableTheft(ctx: any) { const u = await getUser(ctx); await svc.toggleTheftProtection(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), true); return new Response(null, { status: 204 }); }
-export async function disableTheft(ctx: any) { const u = await getUser(ctx); await svc.toggleTheftProtection(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), false); return new Response(null, { status: 204 }); }
+export async function enableTheft(ctx: any) {
+  const u = await getUser(ctx);
+  await svc.toggleTheftProtection(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), true);
+  ctx.set.status = 204;
+  return;
+}
+export async function disableTheft(ctx: any) {
+  const u = await getUser(ctx);
+  await svc.toggleTheftProtection(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), false);
+  ctx.set.status = 204;
+  return;
+}
 
 export async function restore(ctx: any) {
   const user = await getUser(ctx);
@@ -153,13 +165,24 @@ export async function restore(ctx: any) {
   return { data: result };
 }
 
-export async function suspend(ctx: any) { const u = await getUser(ctx); await svc.toggleSuspend(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), true); return new Response(null, { status: 204 }); }
-export async function unsuspend(ctx: any) { const u = await getUser(ctx); await svc.toggleSuspend(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), false); return new Response(null, { status: 204 }); }
+export async function suspend(ctx: any) {
+  const u = await getUser(ctx);
+  await svc.toggleSuspend(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), true);
+  ctx.set.status = 204;
+  return;
+}
+export async function unsuspend(ctx: any) {
+  const u = await getUser(ctx);
+  await svc.toggleSuspend(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), false);
+  ctx.set.status = 204;
+  return;
+}
 
 export async function remove(ctx: any) {
   const user = await getUser(ctx);
   await svc.deleteDomainRecord(user.id, parseInt(ctx.params.id));
-  return new Response(null, { status: 204 });
+  ctx.set.status = 204;
+  return;
 }
 
 // For customer: auto-resolve or auto-create their LIQUID customer_id
