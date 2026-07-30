@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, RefreshCw, ArrowRightLeft, Plus } from "lucide-react";
-import { Card, Button, Badge, LoadingSpinner, EmptyState, SearchBar, Pagination } from "../components/ui";
+import { Card, Button, Badge, LoadingSpinner, EmptyState, SearchBar, Pagination, toast } from "../components/ui";
 import { api } from "../lib/api";
 import type { Domain, PaginatedResponse } from "../lib/types";
 
@@ -12,30 +12,50 @@ export default function DomainsPage() {
   const [page, setPage] = useState(1);
   const perPage = 20;
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
-  useEffect(() => {
-    const controller = new AbortController();
+  const fetchDomains = () => {
     setLoading(true);
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
     if (search) params.set("search", search);
     if (statusFilter) params.set("status", statusFilter);
-    api.get<PaginatedResponse<Domain>>(`/domains?${params}`, { signal: controller.signal })
+    api.get<PaginatedResponse<Domain>>(`/domains?${params}`)
       .then((res) => { setDomains(res.data); setTotal(res.meta.total); })
-      .catch((err: any) => { if (err.name !== "AbortError") console.error(err); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+      .catch((err: any) => { console.error(err); })
+      .finally(() => { setLoading(false); });
+  };
 
-    return () => controller.abort();
+  useEffect(() => {
+    fetchDomains();
   }, [search, page, statusFilter]);
 
-  if (loading) return <LoadingSpinner />;
+  async function handleSync() {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const res: any = await api.post("/domains/sync");
+      const msg = res?.message || "Berhasil sinkronisasi domain dari Resellercamp";
+      toast(`🎉 ${msg}`);
+      fetchDomains();
+    } catch (err: any) {
+      toast.error(err.message || "Gagal sinkronisasi domain");
+    }
+    setSyncing(false);
+  }
+
+  if (loading && !syncing) return <LoadingSpinner />;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h1 className="text-xl font-bold text-gray-900">Domains</h1>
         <div className="flex items-center gap-2">
+          <Button onClick={handleSync} disabled={syncing} variant="outline" className="bg-white border-gray-200 hover:bg-gray-50 text-gray-700">
+            <RefreshCw className={`w-3.5 h-3.5 mr-1 inline ${syncing ? "animate-spin text-black" : ""}`} />
+            {syncing ? "Syncing..." : "Sync dari Resellercamp"}
+          </Button>
           <Link to="/domains/register?tab=transfer">
             <Button><ArrowRightLeft className="w-3.5 h-3.5 mr-1 inline" /> Transfer Domain</Button>
           </Link>

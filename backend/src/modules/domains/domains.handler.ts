@@ -212,3 +212,9 @@ export async function bulkAvailability(ctx: any) {
   const results = await svc.bulkAvailability(creds, keyword);
   return { data: results };
 }
+
+export async function sync(ctx: any) {
+  const user = await getUser(ctx);
+  const result = await svc.syncDomainsFromLiquid(user);
+  return { message: "Berhasil sinkronisasi domain dari Resellercamp", data: result };
+}

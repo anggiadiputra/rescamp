@@ -13,6 +13,7 @@ export const domainRoutes = new Elysia({ prefix: "/domains" })
     app
       .post("/", h.register as any, { body: domainRegisterSchema, detail: { tags: ["Domains"], summary: "Register domain" } })
       .post("/transfer", h.transfer as any, { detail: { tags: ["Domains"], summary: "Transfer domain" } })
+      .post("/sync", h.sync as any, { detail: { tags: ["Domains"], summary: "Sync domains from Resellercamp" } })
       .get("/", h.list as any, { detail: { tags: ["Domains"], summary: "List domains" } })
       .get("/:id", h.detail as any, { detail: { tags: ["Domains"], summary: "Get domain" } })
       .post("/:id/renew", h.renew as any, { body: domainRenewSchema, detail: { tags: ["Domains"], summary: "Renew domain" } })

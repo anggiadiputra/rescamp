@@ -354,3 +354,77 @@ export async function bulkAvailability(user: { resellerId: string; apiKey: strin
 
   return results;
 }
+
+export async function syncDomainsFromLiquid(userParam: { id: number; role?: string; resellerId?: string | null; apiKey?: string | null }) {
+  const userId = typeof userParam === "object" ? userParam.id : userParam;
+  const [u] = await db.select().from(users).where(eq(users.id, userId));
+  if (!u) throw new AppError("User not found", 404);
+
+  let resellerId = u.resellerId || "";
+  let apiKey = u.apiKey || "";
+
+  if (u.role === "customer" && u.parentResellerId) {
+    const [reseller] = await db.select().from(users).where(eq(users.id, u.parentResellerId));
+    if (reseller) {
+      resellerId = reseller.resellerId || "";
+      apiKey = reseller.apiKey || "";
+    }
+  }
+
+  if (!resellerId || !apiKey) {
+    const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
+    if (defaultReseller) {
+      resellerId = defaultReseller.resellerId || "";
+      apiKey = defaultReseller.apiKey || "";
+    }
+  }
+
+  if (!resellerId || !apiKey) {
+    throw new AppError("Resellercamp credentials not configured", 400);
+  }
+
+  const liquid = new LiquidClient(resellerId, apiKey);
+  const rawDomains = await liquid.listDomains({ limit: "100" });
+  const domainList = Array.isArray(rawDomains) ? rawDomains : rawDomains?.data || rawDomains?.domains || [];
+
+  let syncedCount = 0;
+  let newAddedCount = 0;
+
+  for (const item of domainList) {
+    const fullDomainName = (item.domain_name || item.name || item.domain || "").toLowerCase().trim();
+    if (!fullDomainName) continue;
+
+    const orderIdStr = String(item.domain_id || item.order_id || item.id || "");
+    const parts = fullDomainName.split(".");
+    const tld = parts.slice(1).join(".");
+
+    let status = "active";
+    const rawStatus = (item.status || "").toLowerCase();
+    if (rawStatus.includes("expir")) status = "expired";
+    else if (rawStatus.includes("pend")) status = "pending";
+    else if (rawStatus.includes("cancel")) status = "cancelled";
+
+    const [existing] = await db.select().from(domains).where(eq(domains.domainName, fullDomainName)).limit(1);
+
+    if (existing) {
+      await db.update(domains).set({
+        liquidOrderId: orderIdStr || existing.liquidOrderId,
+        status: status as any,
+      }).where(eq(domains.id, existing.id));
+      syncedCount++;
+    } else {
+      await db.insert(domains).values({
+        userId: u.id,
+        domainName: fullDomainName,
+        tld,
+        years: 1,
+        status: status as any,
+        liquidOrderId: orderIdStr || null,
+      });
+      newAddedCount++;
+      syncedCount++;
+    }
+  }
+
+  return { syncedCount, newAddedCount, total: domainList.length };
+}
