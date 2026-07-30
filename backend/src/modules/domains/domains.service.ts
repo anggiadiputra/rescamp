@@ -513,8 +513,8 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
         liquidOrderId: orderIdStr || existing.liquidOrderId,
         customerId: matchedCustomerId || existing.customerId,
         status: status as any,
-        registrationDate: regDate || existing.registrationDate,
-        expiryDate: expDate || existing.expiryDate,
+        registrationDate: regDate || existing.registrationDate || null,
+        expiryDate: expDate || existing.expiryDate || null,
       }).where(eq(domains.id, existing.id));
       syncedCount++;
     } else {
