@@ -18,15 +18,23 @@ async function getResellerCreds(ctx: any) {
   if (!userId || isNaN(userId)) {
     const [reseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
     if (!reseller || !reseller.apiKey) throw new AppError("Reseller not configured", 500);
-    return { id: reseller.id, resellerId: reseller.resellerId || "", apiKey: reseller.apiKey, role: reseller.role || "reseller" };
+    return { id: 0, resellerId: reseller.resellerId || "", apiKey: reseller.apiKey, role: "visitor" };
   }
   const u = await getUser(ctx);
-  if (u.role === "customer" && u.parentResellerId) {
-    const [reseller] = await db.select().from(users).where(eq(users.id, u.parentResellerId));
+  if (u.role === "customer") {
+    let reseller: any = null;
+    if (u.parentResellerId) {
+      [reseller] = await db.select().from(users).where(eq(users.id, u.parentResellerId));
+    }
+    if (!reseller) {
+      [reseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
+    }
     if (!reseller || !reseller.apiKey) throw new AppError("Reseller not configured", 500);
-    return { id: u.id, resellerId: reseller.resellerId || "", apiKey: reseller.apiKey, role: u.role || "customer" };
+    return { id: u.id, resellerId: reseller.resellerId || "", apiKey: reseller.apiKey, role: u.role };
   }
-  if (u.role === "reseller") return { id: u.id, resellerId: u.resellerId || "", apiKey: u.apiKey || "", role: u.role || "reseller" };
+  if (u.role === "reseller" || u.role === "admin") {
+    return { id: u.id, resellerId: u.resellerId || "", apiKey: u.apiKey || "", role: u.role };
+  }
   throw new AppError("Invalid user role", 403);
 }
 

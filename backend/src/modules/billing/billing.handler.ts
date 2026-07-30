@@ -13,12 +13,18 @@ async function getUser(ctx: any) {
 
 async function getResellerCreds(ctx: any) {
   const u = await getUser(ctx);
-  if (u.role === "customer" && u.parentResellerId) {
-    const [r] = await db.select().from(users).where(eq(users.id, u.parentResellerId));
+  if (u.role === "customer") {
+    let r: any = null;
+    if (u.parentResellerId) {
+      [r] = await db.select().from(users).where(eq(users.id, u.parentResellerId));
+    }
+    if (!r) {
+      [r] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
+    }
     if (!r || !r.apiKey) throw new AppError("Reseller not configured", 500);
     return { id: u.id, resellerId: r.resellerId || "", apiKey: r.apiKey, role: u.role };
   }
-  if (u.role === "reseller") return { id: u.id, resellerId: u.resellerId || "", apiKey: u.apiKey || "", role: u.role };
+  if (u.role === "reseller" || u.role === "admin") return { id: u.id, resellerId: u.resellerId || "", apiKey: u.apiKey || "", role: u.role };
   throw new AppError("Invalid user role", 403);
 }
 
