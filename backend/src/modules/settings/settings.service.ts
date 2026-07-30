@@ -245,3 +245,28 @@ export async function testKirisanConnection(payload: {
     data: json,
   };
 }
+
+export async function testLiquidConnection(resellerId?: string, apiKey?: string) {
+  let rId = resellerId;
+  let key = apiKey;
+
+  if (!rId || !key) {
+    const [reseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
+    rId = reseller?.resellerId || "";
+    key = reseller?.apiKey || "";
+  }
+
+  if (!rId || !key) {
+    throw new Error("Reseller ID dan API Key Resellercamp belum dikonfigurasi.");
+  }
+
+  const { LiquidClient } = await import("../../lib/liquid");
+  const liquid = new LiquidClient(rId, key);
+  const balance = await liquid.getBalance();
+  return {
+    success: true,
+    message: "Koneksi Resellercamp Liquid API Berhasil!",
+    resellerId: rId,
+    balance,
+  };
+}

@@ -52,6 +52,13 @@ async function handleTestKirisan({ body }: any) {
   return res;
 }
 
+import { getSystemSettings, updateSystemSettings, testKirisanConnection, testLiquidConnection } from "./settings.service";
+
+async function handleTestLiquid() {
+  const res = await testLiquidConnection();
+  return res;
+}
+
 export const settingsRoutes = new Elysia({ prefix: "/settings" })
   // Endpoint publik — tidak butuh login
   .get("/public", handleGetPublicSettings as any)
@@ -63,5 +70,6 @@ export const settingsRoutes = new Elysia({ prefix: "/settings" })
       .put("/", handlePutSettings as any)
       .put("", handlePutSettings as any)
       .post("/test-kirisan", handleTestKirisan as any)
+      .get("/test-liquid", handleTestLiquid as any)
   );
 
