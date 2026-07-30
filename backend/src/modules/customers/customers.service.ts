@@ -66,6 +66,14 @@ export async function createCustomer(
 }
 
 export async function listCustomers(userId: number, search?: string) {
+  const [user] = await db.select({ role: users.role, email: users.email }).from(users).where(eq(users.id, userId));
+  if (user?.role === "customer") {
+    let rows = await db.select().from(customers).where(eq(customers.email, user.email));
+    if (rows.length === 0) {
+      rows = await db.select().from(customers).where(eq(customers.userId, userId));
+    }
+    return rows;
+  }
   let where = eq(customers.userId, userId);
   if (search) where = and(where, like(customers.name, `%${search}%`)) as any;
   return db.select().from(customers).where(where);
