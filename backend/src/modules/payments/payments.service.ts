@@ -22,11 +22,10 @@ export interface CreateDomainOrderPayload {
 
 export async function createDomainOrderPayment(payload: CreateDomainOrderPayload) {
   const years = payload.years || 1;
+  const tld = payload.tld || payload.domainName.split(".").slice(1).join(".") || "com";
   const fullDomain = payload.domainName.includes(".") 
     ? payload.domainName 
-    : `${payload.domainName}.${payload.tld || "com"}`;
-  
-  const orderId = `INV-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    : `${payload.domainName}.${tld}`;
 
   // --- Step 1: Resolve Liquid credentials & customer ---
   const [user] = await db.select().from(users).where(eq(users.id, payload.userId));
@@ -187,7 +186,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
   // --- Step 4: Save Transaction to Local DB ---
   const [insertRes] = await db.insert(transactions).values({
     userId: payload.userId,
-    customerId: targetLocalCustomerId,
+    customerId: validCustomerId,
     type: payload.type,
     amount: String(payload.amount),
     currency: "IDR",
@@ -209,7 +208,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
       liquidOrderId,
       liquidTransactionId,
       liquidCustomerId: targetLiquidCustomerId,
-      customerId: targetLocalCustomerId,
+      customerId: validCustomerId,
       domainId: payload.domainId,
     }),
   });
