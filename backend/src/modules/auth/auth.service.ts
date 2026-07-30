@@ -413,7 +413,25 @@ function generateResetToken(): string {
 }
 
 export async function sendLoginOtp(email: string, password: string) {
-  const [user] = await db.select().from(users).where(eq(users.email, email));
+  let [user] = await db.select().from(users).where(eq(users.email, email));
+
+  // If not found in users table, check if customer exists in customers table
+  if (!user) {
+    const [cust] = await db.select().from(customers).where(eq(customers.email, email));
+    if (cust) {
+      const passwordHash = await hashPassword(password);
+      const [res] = await db.insert(users).values({
+        email: cust.email,
+        name: cust.name,
+        passwordHash,
+        role: "customer",
+      });
+      const newUserId = Number(res.insertId);
+      await db.update(customers).set({ userId: newUserId }).where(eq(customers.id, cust.id));
+      [user] = await db.select().from(users).where(eq(users.id, newUserId));
+    }
+  }
+
   if (!user) throw new AppError("Email tidak ditemukan. Silakan daftar terlebih dahulu.", 400);
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) throw new AppError("Password salah", 401);
