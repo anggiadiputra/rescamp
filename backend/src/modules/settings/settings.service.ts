@@ -1,5 +1,5 @@
 import { db } from "../../db";
-import { appSettings } from "../../db/schema";
+import { appSettings, users } from "../../db/schema";
 import { eq, sql } from "drizzle-orm";
 import { env } from "../../config/env";
 
