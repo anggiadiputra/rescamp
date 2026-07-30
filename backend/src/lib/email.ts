@@ -16,9 +16,16 @@ async function getKirisanConfig() {
 }
 
 export async function sendEmail(to: string, type: "login_otp" | "register_otp" | "reset_password", variables: Record<string, any>) {
+  // Always log email dispatch details to console for development visibility
+  console.log(`\n=================================================`);
+  console.log(`[EMAIL DISPATCH] Type: ${type} | To: ${to}`);
+  if (variables.reset_link) console.log(`🔗 RESET LINK: ${variables.reset_link}`);
+  if (variables.code || variables.otp) console.log(`🔑 OTP CODE  : ${variables.code || variables.otp}`);
+  console.log(`=================================================\n`);
+
   const cfg = await getKirisanConfig();
   if (!cfg.token || !cfg.channelKey) {
-    console.warn("[email] Kirisan not configured, skipping send to", to);
+    console.warn("[email] Kirisan not configured, skipped external API send to", to);
     return;
   }
 

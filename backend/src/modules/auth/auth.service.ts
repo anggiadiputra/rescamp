@@ -473,31 +473,59 @@ export async function verifyLoginOtp(email: string, code: string) {
 }
 
 export async function forgotPassword(email: string) {
-  const [user] = await db.select().from(users).where(eq(users.email, email));
-  if (!user) return { message: "Jika email terdaftar, link reset password telah dikirim" };
+  const cleanEmail = (email || "").trim();
+  const [user] = await db.select().from(users).where(eq(users.email, cleanEmail));
+  if (!user) throw new AppError("Email tidak terdaftar dalam sistem", 404);
 
   const token = generateResetToken();
+  const otpCode = generateOtp();
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 menit
 
-  await db.insert(otpCodes).values({ email, code: token, purpose: "reset", expiresAt });
+  // Invalidate previous unused reset tokens for this email
+  await db.update(otpCodes).set({ used: true }).where(
+    and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "reset"), eq(otpCodes.used, false))
+  );
 
-  const resetLink = `${process.env.CORS_ORIGIN || "http://localhost:5173"}/reset-password?token=${token}`;
-  await sendEmail(email, "reset_password", { token, reset_link: resetLink, code: token, expiry_minutes: 30 });
+  // Insert both token and 6-digit OTP code so user can reset via link OR OTP code
+  await db.insert(otpCodes).values({ email: cleanEmail, code: token, purpose: "reset", expiresAt });
+  await db.insert(otpCodes).values({ email: cleanEmail, code: otpCode, purpose: "reset", expiresAt });
 
-  return { message: "Jika email terdaftar, link reset password telah dikirim" };
+  const frontendUrl = process.env.CORS_ORIGIN || process.env.APP_URL || "http://localhost:5173";
+  const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+
+  await sendEmail(cleanEmail, "reset_password", {
+    token,
+    code: otpCode,
+    otp: otpCode,
+    reset_link: resetLink,
+    expiry_minutes: 30,
+  });
+
+  return {
+    message: "Link & Kode OTP reset password telah berhasil dikirim",
+    resetLink,
+    otpCode,
+  };
 }
 
-export async function resetPassword(token: string, newPassword: string) {
-  const [record] = await db.select().from(otpCodes).where(
-    and(eq(otpCodes.code, token), eq(otpCodes.purpose, "reset"), eq(otpCodes.used, false))
-  );
-  if (!record) throw new AppError("Token reset tidak valid atau sudah digunakan", 401);
-  if (new Date() > record.expiresAt) throw new AppError("Token reset sudah kadaluarsa", 401);
+export async function resetPassword(tokenOrCode: string, newPassword: string) {
+  const clean = (tokenOrCode || "").trim();
+  if (!clean) throw new AppError("Token atau Kode OTP reset tidak valid", 400);
 
-  await db.update(otpCodes).set({ used: true }).where(eq(otpCodes.id, record.id));
+  const [record] = await db.select().from(otpCodes).where(
+    and(eq(otpCodes.code, clean), eq(otpCodes.purpose, "reset"), eq(otpCodes.used, false))
+  );
+
+  if (!record) throw new AppError("Token atau Kode OTP reset tidak valid atau sudah digunakan", 401);
+  if (new Date() > record.expiresAt) throw new AppError("Token atau Kode OTP reset sudah kadaluarsa", 401);
+
+  // Invalidate all reset tokens for this email
+  await db.update(otpCodes).set({ used: true }).where(
+    and(eq(otpCodes.email, record.email), eq(otpCodes.purpose, "reset"))
+  );
 
   const passwordHash = await hashPassword(newPassword);
   await db.update(users).set({ passwordHash }).where(eq(users.email, record.email));
 
-  return { message: "Password berhasil diubah" };
+  return { message: "Password berhasil diubah. Silakan login." };
 }
