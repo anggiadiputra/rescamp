@@ -46,21 +46,48 @@ export class LiquidClient {
 
   async resolveContactIdForDomain(customerId: string, domainName: string): Promise<string> {
     const isIdTld = domainName.toLowerCase().endsWith(".id");
+    let custInfo: any = null;
+
     try {
       const list = await this.request<any>("GET", `/customers/${customerId}/contacts`);
       const arr = Array.isArray(list) ? list : list?.data || list?.contacts || [];
       if (arr.length > 0) {
         if (isIdTld) {
           const idContact = arr.find((c: any) => 
-            Array.isArray(c.eligibility_criteria) && c.eligibility_criteria.includes("co")
+            Array.isArray(c.eligibility_criteria) && (c.eligibility_criteria.includes("co") || c.eligibility_criteria.includes("id"))
           );
           if (idContact) return String(idContact.contact_id || idContact.id);
+        } else {
+          const activeContact = arr.find((c: any) => c.status === "Active" || !c.status);
+          if (activeContact) return String(activeContact.contact_id || activeContact.id);
+          return String(arr[0].contact_id || arr[0].id);
         }
-        const activeContact = arr.find((c: any) => c.status === "Active" || !c.status);
-        if (activeContact) return String(activeContact.contact_id || activeContact.id);
-        return String(arr[0].contact_id || arr[0].id);
       }
     } catch {}
+
+    // If domain is .id TLD and no valid .id contact found, auto-create one
+    if (isIdTld) {
+      try {
+        console.log(`[resolveContactIdForDomain] Creating new .id compatible contact for customer ${customerId}...`);
+        custInfo = await this.getCustomer(customerId).catch(() => null);
+        const newContact = await this.createCustomerContact(customerId, {
+          name: custInfo?.name || "Registrant",
+          email: custInfo?.email || "registrant@ekstensi.id",
+          company: custInfo?.company || "Personal",
+          address: custInfo?.address_line_1 || "Indonesia",
+          city: custInfo?.city || "Jakarta",
+          state: custInfo?.state || "DKI Jakarta",
+          zipcode: custInfo?.zipcode || "10110",
+          phone: custInfo?.tel_no || "8123456789",
+          domain_name: domainName,
+          eligibility_criteria: "co",
+        });
+        const newContactId = String(newContact?.contact_id || newContact?.id || "");
+        if (newContactId) return newContactId;
+      } catch (e: any) {
+        console.warn("[resolveContactIdForDomain] Auto-create .id contact failed:", e?.message || e);
+      }
+    }
 
     try {
       const defContact = await this.request<any>("GET", `/customers/${customerId}/contacts/default`);
@@ -102,9 +129,10 @@ export class LiquidClient {
 
   async registerDomain(data: Record<string, any>) {
     const customerId = String(data.customer_id || "");
+    const isIdTld = data.domain_name?.toLowerCase().endsWith(".id");
     let contactId = data.registrant_contact_id ? String(data.registrant_contact_id) : "";
     
-    if (!contactId || contactId === customerId) {
+    if (!contactId || contactId === customerId || isIdTld) {
       contactId = await this.resolveContactIdForDomain(customerId, data.domain_name);
     }
 
