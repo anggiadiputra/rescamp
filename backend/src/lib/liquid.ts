@@ -45,19 +45,38 @@ export class LiquidClient {
   }
 
   async resolveContactIdForDomain(customerId: string, domainName: string): Promise<string> {
-    const isIdTld = domainName.toLowerCase().endsWith(".id");
+    const domainLower = domainName.toLowerCase();
+    const isIdTld = domainLower.endsWith(".id");
     let custInfo: any = null;
 
+    // Check if contact has .id-specific eligibility (co, id types)
     const hasIdEligibility = (c: any) => {
       if (!c || !c.eligibility_criteria) return false;
-      if (Array.isArray(c.eligibility_criteria)) {
-        return c.eligibility_criteria.some((e: any) => {
+      const ec = c.eligibility_criteria;
+      if (Array.isArray(ec)) {
+        return ec.some((e: any) => {
           const s = String(e).toLowerCase();
           return s === "co" || s === "id" || s === "mn" || s === "name" || s === "biz";
         });
       }
-      const str = String(c.eligibility_criteria).toLowerCase();
-      return str.includes("co") || str.includes("id") || str.includes("biz");
+      const str = String(ec).toLowerCase();
+      return str.includes("co") || str.includes("biz");
+    };
+
+    // Check if contact is usable for com/net/org/generic TLDs (must NOT be .id-only)
+    const isComCompatible = (c: any) => {
+      if (!c) return false;
+      if (!c.eligibility_criteria) return true; // no restriction = generic = OK
+      const ec = c.eligibility_criteria;
+      if (Array.isArray(ec)) {
+        // OK if has "com" or empty
+        if (ec.length === 0) return true;
+        return ec.some((e: any) => String(e).toLowerCase() === "com");
+      }
+      const str = String(ec).toLowerCase();
+      // Pure .id-specific contacts cannot be used for .com
+      if (str === "co" || str === "biz") return false;
+      return true;
     };
 
     try {
@@ -65,47 +84,57 @@ export class LiquidClient {
       const arr = Array.isArray(list) ? list : list?.data || list?.contacts || [];
       if (arr.length > 0) {
         if (isIdTld) {
+          // For .id TLDs: must find contact with co/id eligibility
           const idContact = arr.find((c: any) => hasIdEligibility(c));
           if (idContact) {
             const resolvedId = String(idContact.contact_id || idContact.id || "");
             console.log(`[resolveContactIdForDomain] Found existing .id contact ${resolvedId} for customer ${customerId}`);
             return resolvedId;
           }
+          // No .id-compatible contact found — will auto-create below
         } else {
-          const activeContact = arr.find((c: any) => c.status === "Active" || !c.status);
-          if (activeContact) return String(activeContact.contact_id || activeContact.id);
-          return String(arr[0].contact_id || arr[0].id);
+          // For non-.id TLDs: must find contact that is NOT .id-only
+          const comContact = arr.find((c: any) => isComCompatible(c) && (c.status === "Active" || !c.status));
+          if (comContact) {
+            const resolvedId = String(comContact.contact_id || comContact.id || "");
+            console.log(`[resolveContactIdForDomain] Found compatible contact ${resolvedId} for ${domainName}`);
+            return resolvedId;
+          }
+          // Fallback: any non-.id contact
+          const fallback = arr.find((c: any) => isComCompatible(c));
+          if (fallback) return String(fallback.contact_id || fallback.id);
+          // All contacts are .id-only — auto-create a com contact below
+          console.warn(`[resolveContactIdForDomain] All contacts for customer ${customerId} are .id-only, auto-creating com contact...`);
         }
       }
     } catch (e: any) {
       console.warn("[resolveContactIdForDomain] Failed to list customer contacts:", e?.message || e);
     }
 
-    // If domain is .id TLD and no valid .id contact found, force auto-create one
-    if (isIdTld) {
-      try {
-        console.log(`[resolveContactIdForDomain] Auto-creating new .id compatible contact (co eligibility) for customer ${customerId}...`);
-        custInfo = await this.getCustomer(customerId).catch(() => null);
-        const newContact = await this.createCustomerContact(customerId, {
-          name: custInfo?.name || "Registrant",
-          email: custInfo?.email || "registrant@ekstensi.id",
-          company: custInfo?.company || "Personal",
-          address: custInfo?.address_line_1 || "Indonesia",
-          city: custInfo?.city || "Jakarta",
-          state: custInfo?.state || "DKI Jakarta",
-          zipcode: custInfo?.zipcode || "10110",
-          phone: custInfo?.tel_no || "8123456789",
-          domain_name: domainName,
-          eligibility_criteria: "co",
-        });
-        const newContactId = String(newContact?.contact_id || newContact?.id || "");
-        if (newContactId) {
-          console.log(`[resolveContactIdForDomain] Successfully created .id contact ${newContactId}`);
-          return newContactId;
-        }
-      } catch (e: any) {
-        console.warn("[resolveContactIdForDomain] Auto-create .id contact failed:", e?.message || e);
+    // Auto-create the right contact type when none found
+    try {
+      const eligibility = isIdTld ? "co" : "com";
+      console.log(`[resolveContactIdForDomain] Auto-creating new contact (${eligibility}) for customer ${customerId}...`);
+      custInfo = await this.getCustomer(customerId).catch(() => null);
+      const newContact = await this.createCustomerContact(customerId, {
+        name: custInfo?.name || "Registrant",
+        email: custInfo?.email || "registrant@ekstensi.id",
+        company: custInfo?.company || "Personal",
+        address: custInfo?.address_line_1 || "Indonesia",
+        city: custInfo?.city || "Jakarta",
+        state: custInfo?.state || "DKI Jakarta",
+        zipcode: custInfo?.zipcode || "10110",
+        phone: custInfo?.tel_no || "8123456789",
+        domain_name: domainName,
+        eligibility_criteria: eligibility,
+      });
+      const newContactId = String(newContact?.contact_id || newContact?.id || "");
+      if (newContactId) {
+        console.log(`[resolveContactIdForDomain] Successfully created contact ${newContactId} (${eligibility}) for ${domainName}`);
+        return newContactId;
       }
+    } catch (e: any) {
+      console.warn("[resolveContactIdForDomain] Auto-create contact failed:", e?.message || e);
     }
 
     try {
