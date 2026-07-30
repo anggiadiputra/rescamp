@@ -215,22 +215,62 @@ export class LiquidClient {
     return this.request<any>("DELETE", `/customers/${customerId}`);
   }
 
-  // --- Account / Billing ---
+  // --- Account / Billing (with In-Memory Caching & Graceful Fallback) ---
   getReseller(resellerId: string) {
     return this.request<any>("GET", `/resellers/${resellerId}`);
   }
   updateReseller(resellerId: string, data: Record<string, any>) {
     return this.request<any>("PUT", `/resellers/${resellerId}`, data);
   }
-  getBalance() {
-    return this.request<any>("GET", "/account/balance");
+
+  async getBalance() {
+    const cacheKey = `balance:${this.authHeader}`;
+    const cached = cacheStore.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.data;
+    }
+    try {
+      const data = await this.request<any>("GET", "/account/balance");
+      cacheStore.set(cacheKey, { data, expiresAt: Date.now() + 30_000 }); // 30s cache
+      return data;
+    } catch (err) {
+      if (cached) return cached.data; // Return stale cache if Liquid API is down/rate limited
+      throw err;
+    }
   }
-  getPrices() {
-    return this.request<any>("GET", "/account/prices");
+
+  async getPrices() {
+    const cacheKey = `prices:${this.authHeader}`;
+    const cached = cacheStore.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.data;
+    }
+    try {
+      const data = await this.request<any>("GET", "/account/prices");
+      cacheStore.set(cacheKey, { data, expiresAt: Date.now() + 15 * 60_000 }); // 15 mins cache
+      return data;
+    } catch (err) {
+      if (cached) return cached.data; // Return stale cache if Liquid API rate limited
+      throw err;
+    }
   }
-  getCustomerPrices() {
-    return this.request<any>("GET", "/customers/prices");
+
+  async getCustomerPrices() {
+    const cacheKey = `cust_prices:${this.authHeader}`;
+    const cached = cacheStore.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.data;
+    }
+    try {
+      const data = await this.request<any>("GET", "/customers/prices");
+      cacheStore.set(cacheKey, { data, expiresAt: Date.now() + 15 * 60_000 }); // 15 mins cache
+      return data;
+    } catch (err) {
+      if (cached) return cached.data; // Return stale cache if Liquid API rate limited
+      throw err;
+    }
   }
+
   getTransactions() {
     return this.request<any>("GET", "/account/transactions");
   }
@@ -238,6 +278,14 @@ export class LiquidClient {
     return this.request<any>("GET", `/account/transactions/${transactionId}`);
   }
 }
+
+// In-Memory Cache Store for Liquid API responses
+interface CacheItem {
+  data: any;
+  expiresAt: number;
+}
+const cacheStore = new Map<string, CacheItem>();
+
 
 export function formatCustomerPrices(raw: Record<string, any>): Record<string, any> {
   const result: Record<string, any> = {};
