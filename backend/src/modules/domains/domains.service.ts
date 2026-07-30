@@ -242,7 +242,38 @@ export async function listDomains(
   const rows = await db.select().from(domains).where(where).limit(perPage).offset(offset);
   const total = await db.$count(domains, where);
 
-  return { data: rows, meta: { total, page, perPage } };
+  const enriched = await Promise.all(rows.map(async (d) => {
+    let cust: any = null;
+    let reseller: any = null;
+
+    if (d.customerId) {
+      const [c] = await db.select().from(customers).where(eq(customers.id, d.customerId));
+      cust = c || null;
+    }
+    if (!cust && d.userId) {
+      const [c] = await db.select().from(customers).where(eq(customers.userId, d.userId));
+      cust = c || null;
+    }
+
+    if (d.userId) {
+      const [u] = await db.select({ id: users.id, resellerId: users.resellerId, name: users.name, email: users.email }).from(users).where(eq(users.id, d.userId));
+      reseller = u || null;
+    }
+
+    return {
+      ...d,
+      domainId: d.id,
+      liquidOrderId: d.liquidOrderId || null,
+      customerId: d.customerId || cust?.id || null,
+      liquidCustomerId: cust?.liquidCustomerId || null,
+      customerName: cust?.name || null,
+      customerEmail: cust?.email || null,
+      userId: d.userId,
+      resellerId: reseller?.resellerId || user.resellerId || null,
+    };
+  }));
+
+  return { data: enriched, meta: { total, page, perPage } };
 }
 
 export async function getDomain(userParam: any, domainId: number) {
@@ -267,11 +298,39 @@ export async function getDomain(userParam: any, domainId: number) {
 
   const [domain] = await db.select().from(domains).where(and(eq(domains.id, domainId), accessCondition));
   if (!domain) throw new AppError("Domain not found", 404);
-  return domain;
+
+  let cust: any = null;
+  let reseller: any = null;
+
+  if (domain.customerId) {
+    const [c] = await db.select().from(customers).where(eq(customers.id, domain.customerId));
+    cust = c || null;
+  }
+  if (!cust && domain.userId) {
+    const [c] = await db.select().from(customers).where(eq(customers.userId, domain.userId));
+    cust = c || null;
+  }
+
+  if (domain.userId) {
+    const [u] = await db.select({ id: users.id, resellerId: users.resellerId, name: users.name, email: users.email }).from(users).where(eq(users.id, domain.userId));
+    reseller = u || null;
+  }
+
+  return {
+    ...domain,
+    domainId: domain.id,
+    liquidOrderId: domain.liquidOrderId || null,
+    customerId: domain.customerId || cust?.id || null,
+    liquidCustomerId: cust?.liquidCustomerId || null,
+    customerName: cust?.name || null,
+    customerEmail: cust?.email || null,
+    userId: domain.userId,
+    resellerId: reseller?.resellerId || user.resellerId || null,
+  };
 }
 
 export async function renewDomain(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, years: number) {
-  const domain = await getDomain({id: userId, role: "customer"}, domainId);
+  const domain = await getDomain({ id: userId, role: "customer" }, domainId);
   const liquidRes = await getLiquid(user).renewDomain(String(domain.liquidOrderId || domain.domainName), years);
   await db.update(domains).set({ years: (domain.years || 1) + years }).where(eq(domains.id, domainId));
   return { domain_id: domain.id, domain_name: domain.domainName, years_added: years, previous_expiry: domain.expiryDate, new_expiry: liquidRes?.expiry_date || null };
@@ -333,12 +392,10 @@ export async function bulkAvailability(user: { resellerId: string; apiKey: strin
   const defaultTlds = ["com", "xyz", "id", "co.id", "web.id", "or.id", "ac.id", "sch.id", "biz.id", "my.id", "ponpes.id"];
   let prices: any = {};
   try {
-    const rawCustPrices = await liquid.getCustomerPrices();
-    prices = formatCustomerPrices(rawCustPrices);
+    const raw = await liquid.getCustomerPrices();
+    prices = formatCustomerPrices(raw);
   } catch {
-    try {
-      prices = await liquid.getPrices();
-    } catch {}
+    prices = {};
   }
 
   let tldsToQuery = defaultTlds;
@@ -428,22 +485,49 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
     else if (rawStatus.includes("pend")) status = "pending";
     else if (rawStatus.includes("cancel")) status = "cancelled";
 
+    let matchedCustomerId: number | null = null;
+    let matchedUserId: number = u.id;
+
+    if (item.customer_id) {
+      const [c] = await db.select().from(customers).where(eq(customers.liquidCustomerId, String(item.customer_id)));
+      if (c) {
+        matchedCustomerId = c.id;
+        if (c.userId) matchedUserId = c.userId;
+      }
+    }
+    if (!matchedCustomerId && item.customer_email) {
+      const [c] = await db.select().from(customers).where(eq(customers.email, String(item.customer_email)));
+      if (c) {
+        matchedCustomerId = c.id;
+        if (c.userId) matchedUserId = c.userId;
+      }
+    }
+
+    const regDate = item.creation_time || item.creation_date ? new Date(item.creation_time || item.creation_date).toISOString().split("T")[0] : null;
+    const expDate = item.expiry_date ? new Date(item.expiry_date).toISOString().split("T")[0] : null;
+
     const [existing] = await db.select().from(domains).where(eq(domains.domainName, fullDomainName)).limit(1);
 
     if (existing) {
       await db.update(domains).set({
         liquidOrderId: orderIdStr || existing.liquidOrderId,
+        customerId: matchedCustomerId || existing.customerId,
         status: status as any,
+        registrationDate: regDate || existing.registrationDate,
+        expiryDate: expDate || existing.expiryDate,
       }).where(eq(domains.id, existing.id));
       syncedCount++;
     } else {
       await db.insert(domains).values({
-        userId: u.id,
+        userId: matchedUserId,
+        customerId: matchedCustomerId,
         domainName: fullDomainName,
         tld,
         years: 1,
         status: status as any,
         liquidOrderId: orderIdStr || null,
+        registrationDate: regDate,
+        expiryDate: expDate,
       });
       newAddedCount++;
       syncedCount++;
