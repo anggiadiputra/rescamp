@@ -1,7 +1,7 @@
 import { db } from "../../db";
 import { customers, users } from "../../db/schema";
 import { domains } from "../../db/schema/domains";
-import { eq, and, like } from "drizzle-orm";
+import { eq, and, like, sql } from "drizzle-orm";
 import { LiquidClient } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 
