@@ -43,35 +43,72 @@ export class LiquidClient {
   checkAvailability(domain: string) {
     return this.request<any>("GET", `/domains/availability?domain=${domain}`);
   }
+
+  async resolveContactIdForDomain(customerId: string, domainName: string): Promise<string> {
+    const isIdTld = domainName.toLowerCase().endsWith(".id");
+    try {
+      const list = await this.request<any>("GET", `/customers/${customerId}/contacts`);
+      const arr = Array.isArray(list) ? list : list?.data || list?.contacts || [];
+      if (arr.length > 0) {
+        if (isIdTld) {
+          const idContact = arr.find((c: any) => 
+            Array.isArray(c.eligibility_criteria) && c.eligibility_criteria.includes("co")
+          );
+          if (idContact) return String(idContact.contact_id || idContact.id);
+        }
+        const activeContact = arr.find((c: any) => c.status === "Active" || !c.status);
+        if (activeContact) return String(activeContact.contact_id || activeContact.id);
+        return String(arr[0].contact_id || arr[0].id);
+      }
+    } catch {}
+
+    try {
+      const defContact = await this.request<any>("GET", `/customers/${customerId}/contacts/default`);
+      const cid = defContact.registrant_contact?.contact_id || defContact.registrant_contact?.id || defContact.contact_id;
+      if (cid) return String(cid);
+    } catch {}
+
+    return customerId;
+  }
+
+  async createCustomerContact(customerId: string, data: Record<string, any>) {
+    const phone = data.phone || data.tel_no || "";
+    let tel_cc_no = data.phone_cc || data.tel_cc_no || "62";
+    let tel_no = phone;
+    if (phone.startsWith("+")) {
+      tel_cc_no = phone.substring(1, 3);
+      tel_no = phone.substring(3);
+    } else if (phone.startsWith("62")) {
+      tel_cc_no = "62";
+      tel_no = phone.substring(2);
+    } else if (phone.startsWith("0")) {
+      tel_no = phone.substring(1);
+    }
+
+    return this.request<any>("POST", `/customers/${customerId}/contacts`, {
+      name: data.name || "Registrant",
+      company: data.company || "Personal",
+      email: data.email,
+      address_line_1: data.address || data.address_line_1 || "Indonesia",
+      city: data.city || "Jakarta",
+      state: data.state || "DKI Jakarta",
+      country_code: (data.country || data.country_code || "ID").slice(0, 2).toLowerCase(),
+      zipcode: data.zipcode || "10110",
+      tel_cc_no,
+      tel_no: tel_no || "8123456789",
+      eligibility_criteria: data.eligibility_criteria || (data.domain_name?.toLowerCase().endsWith(".id") ? "co" : "com"),
+    });
+  }
+
   async registerDomain(data: Record<string, any>) {
     const customerId = String(data.customer_id || "");
     let contactId = data.registrant_contact_id ? String(data.registrant_contact_id) : "";
     
     if (!contactId || contactId === customerId) {
-      try {
-        const defContact = await this.request<any>("GET", `/customers/${customerId}/contacts/default`);
-        contactId = String(
-          defContact.registrant_contact?.contact_id ||
-          defContact.registrant_contact?.id ||
-          defContact.contact_id ||
-          ""
-        );
-      } catch {}
-    }
-    
-    if (!contactId || contactId === customerId) {
-      try {
-        const list = await this.request<any>("GET", `/customers/${customerId}/contacts`);
-        const arr = Array.isArray(list) ? list : list?.data || list?.contacts || [];
-        if (arr.length > 0) {
-          contactId = String(arr[0].contact_id || arr[0].id || "");
-        }
-      } catch {}
+      contactId = await this.resolveContactIdForDomain(customerId, data.domain_name);
     }
 
-    if (!contactId) contactId = customerId;
-
-    return this.request<any>("POST", "/domains", {
+    const payload = {
       domain_name: data.domain_name,
       customer_id: customerId,
       registrant_contact_id: contactId,
@@ -82,7 +119,43 @@ export class LiquidClient {
       ns: data.ns || "",
       purchase_privacy_protection: data.purchase_privacy_protection || data.privacy_protection ? "true" : "false",
       invoice_option: data.invoice_option || "keep_invoice",
-    });
+    };
+
+    try {
+      return await this.request<any>("POST", "/domains", payload);
+    } catch (err: any) {
+      // If contact type doesn't match TLD (e.g. .id TLD requires eligibility_criteria 'co')
+      if (err.message && err.message.includes("type did not match with tld")) {
+        console.warn(`[registerDomain] Contact type mismatch for ${data.domain_name}, creating new compatible contact...`);
+        try {
+          const custInfo = await this.getCustomer(customerId).catch(() => null);
+          const newContact = await this.createCustomerContact(customerId, {
+            name: custInfo?.name || "Registrant",
+            email: custInfo?.email || "registrant@ekstensi.id",
+            company: custInfo?.company || "Personal",
+            address: custInfo?.address_line_1 || "Indonesia",
+            city: custInfo?.city || "Jakarta",
+            state: custInfo?.state || "DKI Jakarta",
+            zipcode: custInfo?.zipcode || "10110",
+            phone: custInfo?.tel_no || "8123456789",
+            domain_name: data.domain_name,
+            eligibility_criteria: data.domain_name.toLowerCase().endsWith(".id") ? "co" : "com",
+          });
+          const newContactId = String(newContact?.contact_id || newContact?.id || "");
+          if (newContactId) {
+            payload.registrant_contact_id = newContactId;
+            payload.admin_contact_id = newContactId;
+            payload.billing_contact_id = newContactId;
+            payload.tech_contact_id = newContactId;
+            console.log(`[registerDomain] Retrying with new contact_id ${newContactId}...`);
+            return await this.request<any>("POST", "/domains", payload);
+          }
+        } catch (retryErr: any) {
+          console.error("[registerDomain] Contact creation retry failed:", retryErr?.message || retryErr);
+        }
+      }
+      throw err;
+    }
   }
   getDomain(domainId: string) {
     return this.request<any>("GET", `/domains/${domainId}`);
