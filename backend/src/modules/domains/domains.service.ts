@@ -1,6 +1,6 @@
 import { db } from "../../db";
 import { domains } from "../../db/schema";
-import { eq, and, like } from "drizzle-orm";
+import { eq, and, like, inArray } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 
