@@ -1,12 +1,15 @@
 import { AppError } from "./error";
+import { env } from "../config/env";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 
 export class LiquidClient {
-  private baseURL = "https://api.liqu.id/v1";
+  private baseURL: string;
   private authHeader: string;
 
-  constructor(resellerId: string, apiKey: string) {
+  constructor(resellerId: string, apiKey: string, baseURL?: string) {
+    const rawUrl = baseURL || env.LIQUID_BASE_URL || "https://api.domainsas.com/v1";
+    this.baseURL = rawUrl.endsWith("/") ? rawUrl.slice(0, -1) : rawUrl;
     this.authHeader = "Basic " + btoa(`${resellerId}:${apiKey}`);
   }
 

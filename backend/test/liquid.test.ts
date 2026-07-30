@@ -29,7 +29,7 @@ describe("LiquidClient", () => {
 
     await client.checkAvailability("test.com");
     const url = (fetch as any).mock.calls[0][0];
-    expect(url).toBe("https://api.liqu.id/v1/domains/availability?domain=test.com");
+    expect(url).toContain("/domains/availability?domain=test.com");
   });
 
   it("should throw AppError on non-ok response", async () => {
@@ -65,9 +65,10 @@ describe("LiquidClient", () => {
       text: async () => JSON.stringify({ order_id: "ORD-123" }),
     }));
 
-    await client.registerDomain({ domain_name: "test.com", years: 1 });
-    const call = (fetch as any).mock.calls[0];
-    expect(call[1].headers["Content-Type"]).toBe("application/x-www-form-urlencoded");
-    expect(call[1].method).toBe("POST");
+    await client.registerDomain({ domain_name: "test.com", customer_id: "12", registrant_contact_id: "45", years: 1 });
+    const calls = (fetch as any).mock.calls;
+    const postCall = calls.find((c: any) => c[1]?.method === "POST");
+    expect(postCall[1].headers["Content-Type"]).toBe("application/x-www-form-urlencoded");
+    expect(postCall[1].method).toBe("POST");
   });
 });
