@@ -44,77 +44,69 @@ export class LiquidClient {
     return this.request<any>("GET", `/domains/availability?domain=${domain}`);
   }
 
+  /**
+   * Map a domain TLD to the correct Resellercamp eligibility_criteria value.
+   * Per luquid.md: valid values = mn, name, biz, us, co, in, cc, ca, com, bz, mobi, info, tv, org, net, pw, asia
+   * .id ccTLDs (co.id, web.id, my.id, etc.) require "co" eligibility.
+   * All generic TLDs (.com, .net, .org, .info, etc.) use "com" eligibility.
+   */
+  private getTldEligibility(domainName: string): string {
+    const d = domainName.toLowerCase();
+    if (d.endsWith(".id")) return "co";
+    if (d.endsWith(".us")) return "us";
+    if (d.endsWith(".asia")) return "asia";
+    if (d.endsWith(".ca")) return "ca";
+    if (d.endsWith(".in")) return "in";
+    if (d.endsWith(".mobi")) return "mobi";
+    if (d.endsWith(".tv")) return "tv";
+    if (d.endsWith(".cc")) return "cc";
+    if (d.endsWith(".bz")) return "bz";
+    if (d.endsWith(".pw")) return "pw";
+    // Default: generic TLD eligibility
+    return "com";
+  }
+
+  /**
+   * Resolves correct registrant contact ID for a domain from Resellercamp.
+   * Strategy per luquid.md:
+   * 1. Query /contacts?eligibility_criteria=<tld_eligibility> (server-side filtered)
+   * 2. Use /contacts/default?eligibility_criteria=<tld_eligibility>
+   * 3. Auto-create a new contact with correct eligibility if none found
+   */
   async resolveContactIdForDomain(customerId: string, domainName: string): Promise<string> {
-    const domainLower = domainName.toLowerCase();
-    const isIdTld = domainLower.endsWith(".id");
+    const eligibility = this.getTldEligibility(domainName);
     let custInfo: any = null;
 
-    // Check if contact has .id-specific eligibility (co, id types)
-    const hasIdEligibility = (c: any) => {
-      if (!c || !c.eligibility_criteria) return false;
-      const ec = c.eligibility_criteria;
-      if (Array.isArray(ec)) {
-        return ec.some((e: any) => {
-          const s = String(e).toLowerCase();
-          return s === "co" || s === "id" || s === "mn" || s === "name" || s === "biz";
-        });
-      }
-      const str = String(ec).toLowerCase();
-      return str.includes("co") || str.includes("biz");
-    };
-
-    // Check if contact is usable for com/net/org/generic TLDs (must NOT be .id-only)
-    const isComCompatible = (c: any) => {
-      if (!c) return false;
-      if (!c.eligibility_criteria) return true; // no restriction = generic = OK
-      const ec = c.eligibility_criteria;
-      if (Array.isArray(ec)) {
-        // OK if has "com" or empty
-        if (ec.length === 0) return true;
-        return ec.some((e: any) => String(e).toLowerCase() === "com");
-      }
-      const str = String(ec).toLowerCase();
-      // Pure .id-specific contacts cannot be used for .com
-      if (str === "co" || str === "biz") return false;
-      return true;
-    };
-
+    // Step 1: Query API with eligibility_criteria filter (server-side — most reliable)
     try {
-      const list = await this.request<any>("GET", `/customers/${customerId}/contacts`);
+      const list = await this.request<any>("GET", `/customers/${customerId}/contacts?eligibility_criteria=${eligibility}&status=Active`);
       const arr = Array.isArray(list) ? list : list?.data || list?.contacts || [];
       if (arr.length > 0) {
-        if (isIdTld) {
-          // For .id TLDs: must find contact with co/id eligibility
-          const idContact = arr.find((c: any) => hasIdEligibility(c));
-          if (idContact) {
-            const resolvedId = String(idContact.contact_id || idContact.id || "");
-            console.log(`[resolveContactIdForDomain] Found existing .id contact ${resolvedId} for customer ${customerId}`);
-            return resolvedId;
-          }
-          // No .id-compatible contact found — will auto-create below
-        } else {
-          // For non-.id TLDs: must find contact that is NOT .id-only
-          const comContact = arr.find((c: any) => isComCompatible(c) && (c.status === "Active" || !c.status));
-          if (comContact) {
-            const resolvedId = String(comContact.contact_id || comContact.id || "");
-            console.log(`[resolveContactIdForDomain] Found compatible contact ${resolvedId} for ${domainName}`);
-            return resolvedId;
-          }
-          // Fallback: any non-.id contact
-          const fallback = arr.find((c: any) => isComCompatible(c));
-          if (fallback) return String(fallback.contact_id || fallback.id);
-          // All contacts are .id-only — auto-create a com contact below
-          console.warn(`[resolveContactIdForDomain] All contacts for customer ${customerId} are .id-only, auto-creating com contact...`);
+        const contactId = String(arr[0].contact_id || arr[0].id || "");
+        if (contactId) {
+          console.log(`[resolveContact] Found contact ${contactId} (eligibility=${eligibility}) for ${domainName}`);
+          return contactId;
         }
       }
     } catch (e: any) {
-      console.warn("[resolveContactIdForDomain] Failed to list customer contacts:", e?.message || e);
+      console.warn(`[resolveContact] contacts?eligibility_criteria=${eligibility} failed:`, e?.message);
     }
 
-    // Auto-create the right contact type when none found
+    // Step 2: Try /contacts/default with eligibility_criteria (per luquid.md docs)
     try {
-      const eligibility = isIdTld ? "co" : "com";
-      console.log(`[resolveContactIdForDomain] Auto-creating new contact (${eligibility}) for customer ${customerId}...`);
+      const def = await this.request<any>("GET", `/customers/${customerId}/contacts/default?eligibility_criteria=${eligibility}`);
+      const cid = def?.registrant_contact?.contact_id || def?.registrant_contact?.id || def?.contact_id || def?.id;
+      if (cid) {
+        console.log(`[resolveContact] Using default contact ${cid} (eligibility=${eligibility}) for ${domainName}`);
+        return String(cid);
+      }
+    } catch (e: any) {
+      console.warn(`[resolveContact] contacts/default?eligibility_criteria=${eligibility} failed:`, e?.message);
+    }
+
+    // Step 3: Auto-create a new contact with the correct eligibility type
+    try {
+      console.log(`[resolveContact] Auto-creating contact (eligibility=${eligibility}) for customer ${customerId}...`);
       custInfo = await this.getCustomer(customerId).catch(() => null);
       const newContact = await this.createCustomerContact(customerId, {
         name: custInfo?.name || "Registrant",
@@ -125,22 +117,22 @@ export class LiquidClient {
         state: custInfo?.state || "DKI Jakarta",
         zipcode: custInfo?.zipcode || "10110",
         phone: custInfo?.tel_no || "8123456789",
-        domain_name: domainName,
         eligibility_criteria: eligibility,
       });
-      const newContactId = String(newContact?.contact_id || newContact?.id || "");
-      if (newContactId) {
-        console.log(`[resolveContactIdForDomain] Successfully created contact ${newContactId} (${eligibility}) for ${domainName}`);
-        return newContactId;
+      const newId = String(newContact?.contact_id || newContact?.id || "");
+      if (newId) {
+        console.log(`[resolveContact] Created new contact ${newId} (eligibility=${eligibility}) for ${domainName}`);
+        return newId;
       }
     } catch (e: any) {
-      console.warn("[resolveContactIdForDomain] Auto-create contact failed:", e?.message || e);
+      console.warn("[resolveContact] Auto-create contact failed:", e?.message || e);
     }
 
+    // Last resort fallback: any active contact
     try {
-      const defContact = await this.request<any>("GET", `/customers/${customerId}/contacts/default`);
-      const cid = defContact.registrant_contact?.contact_id || defContact.registrant_contact?.id || defContact.contact_id;
-      if (cid) return String(cid);
+      const list = await this.request<any>("GET", `/customers/${customerId}/contacts?status=Active`);
+      const arr = Array.isArray(list) ? list : list?.data || list?.contacts || [];
+      if (arr.length > 0) return String(arr[0].contact_id || arr[0].id);
     } catch {}
 
     return customerId;
@@ -171,18 +163,14 @@ export class LiquidClient {
       zipcode: data.zipcode || "10110",
       tel_cc_no,
       tel_no: tel_no || "8123456789",
-      eligibility_criteria: data.eligibility_criteria || (data.domain_name?.toLowerCase().endsWith(".id") ? "co" : "com"),
+      eligibility_criteria: data.eligibility_criteria || "com",
     });
   }
 
   async registerDomain(data: Record<string, any>) {
     const customerId = String(data.customer_id || "");
-    const isIdTld = data.domain_name?.toLowerCase().endsWith(".id");
-    let contactId = data.registrant_contact_id ? String(data.registrant_contact_id) : "";
-    
-    if (!contactId || contactId === customerId || isIdTld) {
-      contactId = await this.resolveContactIdForDomain(customerId, data.domain_name);
-    }
+    // Always resolve correct contact per TLD — never trust frontend-supplied contact ID
+    const contactId = await this.resolveContactIdForDomain(customerId, data.domain_name);
 
     const payload = {
       domain_name: data.domain_name,
