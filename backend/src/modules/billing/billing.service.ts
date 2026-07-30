@@ -1,6 +1,6 @@
 import { db } from "../../db";
-import { transactions } from "../../db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { transactions, users, customers } from "../../db/schema";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 
@@ -25,8 +25,6 @@ export async function getPrices(user: { resellerId: string | null; apiKey: strin
   return liquid.getPrices();
 }
 
-import { inArray } from "drizzle-orm";
-
 export async function listTransactions(
   userParam: number | { id: number; role?: string },
   params?: { type?: string; status?: string; page?: number; per_page?: number },
@@ -40,7 +38,6 @@ export async function listTransactions(
 
   let allowedUserIds = [userId];
   if (userRole === "reseller") {
-    const { users } = await import("../../db/schema");
     const childUsers = await db.select({ id: users.id }).from(users).where(eq(users.parentResellerId, userId));
     allowedUserIds = [userId, ...childUsers.map((c) => c.id)];
   }
@@ -61,10 +58,10 @@ export async function listTransactions(
 
   // Auto-sync transactions from Resellercamp for customer/reseller if available
   try {
-    const [user] = await db.select().from(users).where(eq(users.id, userId));
-    if (user && user.resellerId && user.apiKey) {
-      const liquid = getLiquid(user);
-      if (user.role === "customer") {
+    const [userRecord] = await db.select().from(users).where(eq(users.id, userId));
+    if (userRecord && userRecord.resellerId && userRecord.apiKey) {
+      const liquid = getLiquid(userRecord);
+      if (userRecord.role === "customer") {
         const [cust] = await db.select({ liquidCustomerId: customers.liquidCustomerId }).from(customers).where(eq(customers.userId, userId));
         if (cust?.liquidCustomerId) {
           const res = await liquid.listCustomerTransactions(cust.liquidCustomerId).catch(() => null);
@@ -74,15 +71,15 @@ export async function listTransactions(
             if (!extId) continue;
             const existing = await db.select({ id: transactions.id }).from(transactions).where(sql`JSON_EXTRACT(${transactions.metadata}, '$.liquidTransactionId') = ${extId}`).limit(1);
             if (existing.length === 0) {
-              const amount = Math.abs(Number(item.amount || item.net_amount || 0));
-              const status = item.status === "Paid" || item.status === "Completed" ? "completed" : item.status === "Cancelled" ? "failed" : "pending_payment";
+              const amountVal = Math.abs(Number(item.amount || item.net_amount || 0));
+              const statusVal = item.status === "Paid" || item.status === "Completed" ? "completed" : item.status === "Cancelled" ? "failed" : "pending_payment";
               await db.insert(transactions).values({
                 userId,
                 type: "register",
-                amount,
-                status: status as any,
+                amount: String(amountVal),
+                status: statusVal as any,
                 description: item.description || item.details || `Resellercamp Txn #${extId}`,
-                metadata: { liquidTransactionId: extId, liquidCustomerId: cust.liquidCustomerId, syncedFromLiquid: true },
+                metadata: JSON.stringify({ liquidTransactionId: extId, liquidCustomerId: cust.liquidCustomerId, syncedFromLiquid: true }),
               });
             }
           }
