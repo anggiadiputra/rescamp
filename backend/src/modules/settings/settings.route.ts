@@ -16,6 +16,8 @@ const PUBLIC_SETTINGS_FIELDS = [
   "sidebar_color",
   "theme_preset",
   "email_provider",
+  "turnstile_enabled",
+  "turnstile_site_key",
 ] as const;
 
 // Endpoint PUBLIK — hanya field aman, tanpa auth
