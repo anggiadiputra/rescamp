@@ -102,8 +102,8 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   sumopod_base_url: env.SUMOPOD_PAYMENT_URL || "https://api.sumopod.com/v1",
   sumopod_webhook_token: env.SUMOPOD_WEBHOOK_TOKEN || "",
   sumopod_webhook_secret: env.SUMOPOD_WEBHOOK_SECRET || "",
-  sumopod_success_url: `${env.APP_URL}/billing?status=success`,
-  sumopod_cancel_url: `${env.APP_URL}/billing?status=cancel`,
+  sumopod_success_url: `${env.CORS_ORIGIN || "https://dash.ekstensi.id"}/billing?status=success`,
+  sumopod_cancel_url: `${env.CORS_ORIGIN || "https://dash.ekstensi.id"}/billing?status=cancel`,
 
   s3_endpoint: "",
   s3_region: "us-east-1",
