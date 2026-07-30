@@ -44,20 +44,58 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
 
   const liquid = new LiquidClient(resellerId, apiKey);
 
-  // Resolve Liquid Customer ID
+  // Resolve Liquid Customer ID (auto-lookup & auto-create if missing for user)
   let targetLiquidCustomerId: string | undefined = undefined;
-  const validCustomerId = (payload.customerId && Number(payload.customerId) > 0) ? Number(payload.customerId) : null;
+  let validCustomerId = (payload.customerId && Number(payload.customerId) > 0) ? Number(payload.customerId) : null;
+  let custRecord: any = null;
+
   if (validCustomerId) {
-    const [custRecord] = await db.select().from(customers).where(eq(customers.id, validCustomerId));
-    if (custRecord?.liquidCustomerId) {
+    [custRecord] = await db.select().from(customers).where(eq(customers.id, validCustomerId));
+  }
+
+  if (!custRecord && payload.userId) {
+    [custRecord] = await db.select().from(customers).where(or(eq(customers.userId, payload.userId), eq(customers.email, user.email)));
+  }
+
+  // Auto-create local customer record if missing for this user
+  if (!custRecord) {
+    try {
+      const [insertedCust] = await db.insert(customers).values({
+        userId: user.id,
+        name: user.name || user.email.split("@")[0],
+        email: user.email,
+        company: "Personal",
+        address: "Indonesia",
+        city: "Jakarta",
+        state: "DKI Jakarta",
+        country: "ID",
+        zipcode: "10110",
+        phone: "8123456789",
+      });
+      const newCustId = Number(insertedCust.insertId);
+      [custRecord] = await db.select().from(customers).where(eq(customers.id, newCustId));
+    } catch (e: any) {
+      console.warn("[payments] Local customer auto-creation warning:", e?.message);
+    }
+  }
+
+  if (custRecord) {
+    validCustomerId = custRecord.id;
+    if (custRecord.liquidCustomerId) {
       targetLiquidCustomerId = custRecord.liquidCustomerId;
-    } else if (custRecord) {
-      // Auto-create on Resellercamp
+    } else {
+      // Auto-create customer profile on Resellercamp
       try {
         const lcRes = await liquid.createCustomer({
-          name: custRecord.name, email: custRecord.email, company: custRecord.company || "",
-          address: custRecord.address || "", city: custRecord.city || "", state: custRecord.state || "",
-          country: custRecord.country || "ID", zipcode: custRecord.zipcode || "", phone: custRecord.phone || "",
+          name: custRecord.name || user.name || user.email.split("@")[0],
+          email: custRecord.email || user.email,
+          company: custRecord.company || "Personal",
+          address: custRecord.address || "Indonesia",
+          city: custRecord.city || "Jakarta",
+          state: custRecord.state || "DKI Jakarta",
+          country: custRecord.country || "ID",
+          zipcode: custRecord.zipcode || "10110",
+          phone: custRecord.phone || "8123456789",
         });
         const newId = String(lcRes?.customer_id || lcRes?.id || "");
         if (newId) {
@@ -65,11 +103,11 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
           await db.update(customers).set({ liquidCustomerId: newId }).where(eq(customers.id, custRecord.id));
         }
       } catch (e: any) {
-        // Try finding by email
+        // Try finding existing customer by email on Resellercamp
         try {
           const listRes = await liquid.listCustomers();
           const list = Array.isArray(listRes) ? listRes : listRes?.data || listRes?.customers || [];
-          const match = list.find((c: any) => (c.email || c.customer_email)?.toLowerCase() === custRecord.email.toLowerCase());
+          const match = list.find((c: any) => (c.email || c.customer_email)?.toLowerCase() === (custRecord.email || user.email).toLowerCase());
           if (match) {
             targetLiquidCustomerId = String(match.customer_id || match.id || "");
             await db.update(customers).set({ liquidCustomerId: targetLiquidCustomerId }).where(eq(customers.id, custRecord.id));
