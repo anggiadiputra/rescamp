@@ -276,7 +276,7 @@ export async function listDomains(
   return { data: enriched, meta: { total, page, perPage } };
 }
 
-export async function getDomain(userParam: any, domainId: number) {
+export async function getDomain(userParam: any, lookup: string | number) {
   const user = typeof userParam === "object" ? userParam : { id: Number(userParam), role: "reseller", email: "" };
   const userId = user.id;
   const userRole = user.role || "reseller";
@@ -296,7 +296,15 @@ export async function getDomain(userParam: any, domainId: number) {
     ? or(inArray(domains.userId, allowedUserIds), inArray(domains.customerId, allowedCustomerIds))
     : inArray(domains.userId, allowedUserIds);
 
-  const [domain] = await db.select().from(domains).where(and(eq(domains.id, domainId), accessCondition));
+  // Support lookup by local id or liquidOrderId
+  const lookupNum = parseInt(String(lookup), 10);
+  let [domain] = await db.select().from(domains).where(and(eq(domains.id, lookupNum), accessCondition));
+  if (!domain && !isNaN(lookupNum)) {
+    [domain] = await db.select().from(domains).where(and(eq(domains.liquidOrderId, String(lookupNum)), accessCondition));
+  }
+  if (!domain) {
+    [domain] = await db.select().from(domains).where(and(eq(domains.liquidOrderId, String(lookup)), accessCondition));
+  }
   if (!domain) throw new AppError("Domain not found", 404);
 
   let cust: any = null;

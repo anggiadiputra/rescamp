@@ -22,9 +22,8 @@ export async function create(ctx: any) {
 
 export async function list(ctx: any) {
   const user = await getUser(ctx);
-  const { search } = ctx.query;
-  const rows = await svc.listCustomers(user.id, search);
-  return { data: rows, meta: { total: rows.length, page: 1, perPage: rows.length } };
+  const { search, page, per_page } = ctx.query;
+  return svc.listCustomers(user.id, search, Number(page) || 1, Number(per_page) || 20);
 }
 
 export async function detail(ctx: any) {

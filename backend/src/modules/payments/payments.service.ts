@@ -233,7 +233,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     paymentLinkUrl: sumopodRes.payment_link_url,
     status: "pending_payment",
     paymentStatus: "pending",
-    description: `Domain ${payload.type} - ${fullDomain} (${years} yr)`,
+    description: `Domain ${payload.type} - ${fullDomain} (${years} yr) - ${orderId}`,
     metadata: JSON.stringify({
       orderId,
       domainName: fullDomain,

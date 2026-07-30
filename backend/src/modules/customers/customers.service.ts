@@ -42,7 +42,9 @@ export async function createCustomer(
         if (match) {
           liquidCustomerId = String(match.customer_id || match.id || "");
         }
-      } catch {}
+      } catch (fallbackErr: any) {
+        console.error("[customer-create] LIQUID fallback search also failed:", fallbackErr?.message || fallbackErr);
+      }
     }
   }
 
@@ -65,18 +67,21 @@ export async function createCustomer(
   return cust!;
 }
 
-export async function listCustomers(userId: number, search?: string) {
+export async function listCustomers(userId: number, search?: string, page = 1, perPage = 20) {
   const [user] = await db.select({ role: users.role, email: users.email }).from(users).where(eq(users.id, userId));
   if (user?.role === "customer") {
     let rows = await db.select().from(customers).where(eq(customers.email, user.email));
     if (rows.length === 0) {
       rows = await db.select().from(customers).where(eq(customers.userId, userId));
     }
-    return rows;
+    return { data: rows, meta: { total: rows.length, page: 1, perPage: rows.length } };
   }
   let where: any = undefined;
   if (search) where = like(customers.name, `%${search}%`);
-  return db.select().from(customers).where(where).orderBy(sql`${customers.createdAt} desc`);
+  const offset = (page - 1) * perPage;
+  const rows = await db.select().from(customers).where(where).orderBy(sql`${customers.createdAt} desc`).limit(perPage).offset(offset);
+  const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(customers).where(where);
+  return { data: rows, meta: { total: Number(countResult?.count || 0), page, perPage } };
 }
 
 export async function getCustomer(userId: number, customerId: number) {

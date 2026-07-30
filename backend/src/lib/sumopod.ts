@@ -74,7 +74,17 @@ export class SumopodClient {
         throw new AppError(`Sumopod API Error (${response.status}): ${errorText}`, 502);
       }
 
-      const data = await response.json() as SumopodPaymentResponse;
+      const raw = await response.json() as any;
+      const data: SumopodPaymentResponse = {
+        payment_id: raw.payment_id || raw.paymentId || "",
+        order_id: raw.order_id || raw.orderId || "",
+        amount: raw.amount || 0,
+        fee: raw.fee || 0,
+        net_amount: raw.net_amount || raw.netAmount || 0,
+        payment_link_url: raw.payment_link_url || raw.paymentLinkUrl || "",
+        status: raw.status || "",
+        expires_at: raw.expires_at || raw.expiresAt || "",
+      };
       return data;
     } catch (err: any) {
       if (err instanceof AppError) throw err;

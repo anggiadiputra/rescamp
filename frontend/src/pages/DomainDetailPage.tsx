@@ -171,6 +171,7 @@ export default function DomainDetailPage() {
             <div className="flex justify-between"><span className="text-gray-400">Auto Renew</span><span>{domain.autoRenew ? "On" : "Off"}</span></div>
             <div className="flex justify-between"><span className="text-gray-400">Privacy</span><span>{domain.privacyProtection ? "On" : "Off"}</span></div>
             <div className="flex justify-between"><span className="text-gray-400">Theft Protection</span><span>{domain.theftProtection ? "On" : "Off"}</span></div>
+            {domain.liquidOrderId && <div className="flex justify-between"><span className="text-gray-400">Domain ID</span><span className="font-mono text-[10px]">{domain.liquidOrderId}</span></div>}
           </div>
         </Card>
 

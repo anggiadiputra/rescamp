@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, RefreshCw, ArrowRightLeft, Plus } from "lucide-react";
+import { Search, RefreshCw, ArrowRightLeft, Plus, Settings } from "lucide-react";
 import { Card, Button, Badge, LoadingSpinner, EmptyState, SearchBar, Pagination, toast } from "../components/ui";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../lib/api";
@@ -56,7 +56,7 @@ export default function DomainsPage() {
         <h1 className="text-xl font-bold text-gray-900">Domains</h1>
         <div className="flex items-center gap-2">
           {!isCustomer && (
-            <Button onClick={handleSync} disabled={syncing} variant="outline" className="bg-white border-gray-200 hover:bg-gray-50 text-gray-700">
+            <Button onClick={handleSync} disabled={syncing} variant="outline">
               <RefreshCw className={`w-3.5 h-3.5 mr-1 inline ${syncing ? "animate-spin text-black" : ""}`} />
               {syncing ? "Syncing..." : "Sync dari Resellercamp"}
             </Button>
@@ -103,9 +103,9 @@ export default function DomainsPage() {
                     <td className="px-4 py-3 text-sm text-gray-600">{d.expiryDate || "-"}</td>
                     <td className="px-4 py-3"><Badge status={d.status} /></td>
                     <td className="px-4 py-3 text-right">
-                      <Link to={`/domains/${d.id}`} className="p-1.5 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg transition-colors inline-block">
-                        <RefreshCw className="w-3.5 h-3.5" />
-                      </Link>
+                    <Link to={`/domains/${d.liquidOrderId || d.id}`}>
+                      <Button variant="icon"><Settings className="w-3.5 h-3.5" /></Button>
+                    </Link>
                     </td>
                   </tr>
                 ))}
@@ -114,7 +114,7 @@ export default function DomainsPage() {
           </div>
           <div className="block md:hidden divide-y divide-gray-100 p-4 space-y-4">
             {domains.map((d) => (
-              <Link key={d.id} to={`/domains/${d.id}`} className="block rounded-xl p-4 shadow-sm border bg-white hover:shadow-md transition-shadow">
+              <Link key={d.id} to={`/domains/${d.liquidOrderId || d.id}`} className="block rounded-xl p-4 shadow-sm border bg-white hover:shadow-md transition-shadow">
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-sm font-bold text-gray-900">{d.domainName}</p>
