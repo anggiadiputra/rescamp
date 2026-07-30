@@ -414,7 +414,7 @@ function generateResetToken(): string {
 
 export async function sendLoginOtp(email: string, password: string) {
   const [user] = await db.select().from(users).where(eq(users.email, email));
-  if (!user) throw new AppError("Email tidak ditemukan", 404);
+  if (!user) throw new AppError("Email tidak ditemukan. Silakan daftar terlebih dahulu.", 400);
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) throw new AppError("Password salah", 401);
 
