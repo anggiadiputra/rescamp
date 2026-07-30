@@ -83,3 +83,10 @@ export async function checkWa(ctx: any) {
   const result = await checkWhatsApp(phone);
   return { data: result };
 }
+
+export async function resellerData(ctx: any) {
+  const userId = Number(ctx.store?.user?.sub);
+  if (!userId || isNaN(userId)) throw new AppError("Unauthorized", 401);
+  const result = await svc.getResellerData(userId);
+  return { data: result };
+}

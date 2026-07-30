@@ -494,10 +494,66 @@ export async function resetPassword(token: string, newPassword: string) {
   if (!record) throw new AppError("Token reset tidak valid atau sudah digunakan", 401);
   if (new Date() > record.expiresAt) throw new AppError("Token reset sudah kadaluarsa", 401);
 
-  await db.update(otpCodes).set({ used: true }).where(eq(otpCodes.id, record.id));
+  await db.update(otpCodes).set({ used: true, usedAt: new Date() }).where(eq(otpCodes.id, record.id));
 
   const passwordHash = await hashPassword(newPassword);
   await db.update(users).set({ passwordHash }).where(eq(users.email, record.email));
 
-  return { message: "Password berhasil direset. Silakan login." };
+  return { message: "Password berhasil diubah" };
+}
+
+export async function getResellerData(userId: number) {
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
+  if (!user) throw new AppError("User not found", 404);
+
+  let resellerId = user.resellerId;
+  let apiKey = user.apiKey;
+
+  if (user.role === "customer" && user.parentResellerId) {
+    const [reseller] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
+    if (reseller) {
+      resellerId = reseller.resellerId;
+      apiKey = reseller.apiKey;
+    }
+  }
+
+  if (!resellerId || !apiKey) {
+    const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
+    if (defaultReseller) {
+      resellerId = defaultReseller.resellerId;
+      apiKey = defaultReseller.apiKey;
+    }
+  }
+
+  let balance: any = "0";
+  let balanceError: string | null = null;
+
+  if (resellerId && apiKey) {
+    try {
+      const liquid = new LiquidClient(resellerId, apiKey);
+      const rawBalance = await liquid.getBalance();
+      balance = rawBalance?.balance || rawBalance || "0";
+    } catch (err: any) {
+      console.warn("[getResellerData] Failed to fetch Liquid balance:", err?.message || err);
+      balanceError = err?.message || "Failed to fetch balance from Resellercamp";
+    }
+  }
+
+  const [custCount] = await db.select({ count: sql<number>`count(*)` }).from(customers);
+  const [domCount] = await db.select({ count: sql<number>`count(*)` }).from(domains);
+
+  return {
+    user_id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    reseller_id: resellerId || null,
+    api_key: apiKey ? `${apiKey.slice(0, 6)}...${apiKey.slice(-4)}` : null,
+    balance: balance,
+    currency: "IDR",
+    total_customers: custCount?.count || 0,
+    total_domains: domCount?.count || 0,
+    balance_error: balanceError,
+    last_synced: new Date().toISOString(),
+  };
 }
