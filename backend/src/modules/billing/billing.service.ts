@@ -59,6 +59,40 @@ export async function listTransactions(
     console.warn("[billing] auto-expire check failed:", e);
   }
 
+  // Auto-sync transactions from Resellercamp for customer/reseller if available
+  try {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (user && user.resellerId && user.apiKey) {
+      const liquid = getLiquid(user);
+      if (user.role === "customer") {
+        const [cust] = await db.select({ liquidCustomerId: customers.liquidCustomerId }).from(customers).where(eq(customers.userId, userId));
+        if (cust?.liquidCustomerId) {
+          const res = await liquid.listCustomerTransactions(cust.liquidCustomerId).catch(() => null);
+          const list = Array.isArray(res) ? res : res?.data || res?.transactions || [];
+          for (const item of list.slice(0, 10)) {
+            const extId = String(item.transaction_id || item.id || "");
+            if (!extId) continue;
+            const existing = await db.select({ id: transactions.id }).from(transactions).where(sql`JSON_EXTRACT(${transactions.metadata}, '$.liquidTransactionId') = ${extId}`).limit(1);
+            if (existing.length === 0) {
+              const amount = Math.abs(Number(item.amount || item.net_amount || 0));
+              const status = item.status === "Paid" || item.status === "Completed" ? "completed" : item.status === "Cancelled" ? "failed" : "pending_payment";
+              await db.insert(transactions).values({
+                userId,
+                type: "register",
+                amount,
+                status: status as any,
+                description: item.description || item.details || `Resellercamp Txn #${extId}`,
+                metadata: { liquidTransactionId: extId, liquidCustomerId: cust.liquidCustomerId, syncedFromLiquid: true },
+              });
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[billing] sync from Liquid warning:", e);
+  }
+
   let where = inArray(transactions.userId, allowedUserIds);
   if (params?.type) where = and(where, eq(transactions.type, params.type as any)) as any;
   if (params?.status) where = and(where, eq(transactions.status, params.status as any)) as any;

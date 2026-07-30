@@ -61,9 +61,16 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
           .from(transactions)
           .where(eq(transactions.userId, userId));
 
-        const tx = allTx.find(
-          (t) => t.description?.includes(orderId) || (t.metadata && t.metadata.includes(orderId))
-        );
+        const tx = allTx.find((t) => {
+          if (t.paymentId && t.paymentId === orderId) return true;
+          if (String(t.id) === String(orderId)) return true;
+          if (t.description?.includes(orderId)) return true;
+          if (t.metadata) {
+            const str = typeof t.metadata === "string" ? t.metadata : JSON.stringify(t.metadata);
+            if (str.includes(orderId)) return true;
+          }
+          return false;
+        });
 
         if (!tx) {
           set.status = 404;

@@ -99,16 +99,22 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
         invoice_option: "keep_invoice",
       });
       liquidOrderId = typeof liquidRes === "string" ? liquidRes : liquidRes?.order_id || liquidRes?.id || null;
-      // Get the pending transaction ID from Resellercamp
-      liquidTransactionId = liquidRes?.transaction_id || null;
+      liquidTransactionId = String(
+        liquidRes?.transaction_id ||
+        liquidRes?.invoice_id ||
+        liquidRes?.entity_id ||
+        liquidRes?.id ||
+        liquidRes?.data?.transaction_id ||
+        liquidRes?.data?.invoice_id ||
+        ""
+      ) || null;
+
       if (!liquidTransactionId) {
-        // Fetch pending transactions to find the one we just created
         try {
           const txList = await liquid.listCustomerTransactions(targetLiquidCustomerId, true);
           const pendingList = Array.isArray(txList) ? txList : txList?.data || txList?.transactions || [];
           if (pendingList.length > 0) {
-            // Get the most recent pending transaction
-            liquidTransactionId = String(pendingList[pendingList.length - 1]?.transaction_id || pendingList[pendingList.length - 1]?.id || "");
+            liquidTransactionId = String(pendingList[0]?.transaction_id || pendingList[0]?.invoice_id || pendingList[0]?.id || "");
           }
         } catch {}
       }
@@ -120,13 +126,20 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
         invoice_option: "keep_invoice",
       });
       liquidOrderId = typeof liquidRes === "string" ? liquidRes : liquidRes?.order_id || liquidRes?.id || null;
-      liquidTransactionId = liquidRes?.transaction_id || null;
+      liquidTransactionId = String(
+        liquidRes?.transaction_id ||
+        liquidRes?.invoice_id ||
+        liquidRes?.entity_id ||
+        liquidRes?.id ||
+        ""
+      ) || null;
+
       if (!liquidTransactionId) {
         try {
           const txList = await liquid.listCustomerTransactions(targetLiquidCustomerId, true);
           const pendingList = Array.isArray(txList) ? txList : txList?.data || txList?.transactions || [];
           if (pendingList.length > 0) {
-            liquidTransactionId = String(pendingList[pendingList.length - 1]?.transaction_id || pendingList[pendingList.length - 1]?.id || "");
+            liquidTransactionId = String(pendingList[0]?.transaction_id || pendingList[0]?.invoice_id || pendingList[0]?.id || "");
           }
         } catch {}
       }
@@ -140,134 +153,132 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
         String(targetDomain.liquidOrderId || targetDomain.domainName), years, "keep_invoice"
       );
       liquidOrderId = typeof liquidRes === "string" ? liquidRes : liquidRes?.order_id || liquidRes?.id || null;
-      liquidTransactionId = liquidRes?.transaction_id || null;
+      liquidTransactionId = String(
+        liquidRes?.transaction_id ||
+        liquidRes?.invoice_id ||
+        liquidRes?.entity_id ||
+        liquidRes?.id ||
+        ""
+      ) || null;
+
       if (!liquidTransactionId) {
         try {
           const txList = await liquid.listCustomerTransactions(targetLiquidCustomerId, true);
           const pendingList = Array.isArray(txList) ? txList : txList?.data || txList?.transactions || [];
           if (pendingList.length > 0) {
-            liquidTransactionId = String(pendingList[pendingList.length - 1]?.transaction_id || pendingList[pendingList.length - 1]?.id || "");
+            liquidTransactionId = String(pendingList[0]?.transaction_id || pendingList[0]?.invoice_id || pendingList[0]?.id || "");
           }
         } catch {}
       }
     }
   } catch (err: any) {
-    console.error(`[order] Failed to create KeepInvoice on Resellercamp for ${fullDomain}:`, err?.message || err);
-    throw new AppError(`Resellercamp order failed: ${err?.message || "Unknown error"}`, 502);
+    console.error("[payments] Resellercamp initial invoice creation error:", err);
   }
 
-  console.log(`[order] Resellercamp KeepInvoice created for ${fullDomain} | liquidTransactionId=${liquidTransactionId} | liquidOrderId=${liquidOrderId}`);
-
-  // --- Step 3: Create local transaction record ---
-  const validDomainId = (payload.domainId && Number(payload.domainId) > 0) ? Number(payload.domainId) : null;
-
-  const metadataJson = JSON.stringify({
-    orderId,
-    type: payload.type,
-    domainName: fullDomain,
-    tld: payload.tld || fullDomain.split(".").slice(1).join("."),
-    years,
-    customerId: validCustomerId,
-    nameservers: payload.nameservers || [],
-    autoRenew: payload.autoRenew ? true : false,
-    privacyProtection: payload.privacyProtection ? true : false,
-    authCode: payload.authCode || null,
-    domainId: payload.domainId || null,
-    liquidTransactionId,
-    liquidOrderId,
-    liquidCustomerId: targetLiquidCustomerId,
-  });
-
-  const result: any = await db.insert(transactions).values({
-    userId: payload.userId,
-    customerId: validCustomerId,
-    domainId: validDomainId,
-    type: payload.type,
-    amount: String(payload.amount),
-    currency: "IDR",
-    status: "pending_payment",
-    paymentGateway: "sumopod",
-    paymentStatus: "pending",
-    metadata: metadataJson,
-    description: `Order ${payload.type} domain: ${fullDomain} (${years} yr) - ${orderId}`,
-  });
-
-  const transactionId = Number(result[0]?.insertId || result.insertId);
-
-  // --- Step 4: Create Sumopod payment link ---
+  // --- Step 3: Create Payment Link on Sumopod Payment Gateway ---
+  const orderId = `EXT-${payload.type.toUpperCase().slice(0, 3)}-${Date.now()}`;
   const sumopodRes = await sumopodClient.createPayment({
     orderId,
     amount: payload.amount,
     currency: "IDR",
-    expiresInHours: 1,
+    expiresInHours: 24,
   });
 
-  const expiresAt = sumopodRes.expires_at || new Date(Date.now() + 60 * 60 * 1000).toISOString();
-
-  // Update transaction record with payment ID & URL & enriched metadata
-  let updatedMeta = metadataJson;
-  try {
-    const metaObj = JSON.parse(metadataJson);
-    metaObj.fee = sumopodRes.fee || Math.round(payload.amount * 0.007 + 300);
-    metaObj.paymentLinkUrl = sumopodRes.payment_link_url;
-    metaObj.expiresAt = expiresAt;
-    updatedMeta = JSON.stringify(metaObj);
-  } catch (e) {}
-
-  await db.update(transactions).set({
+  // --- Step 4: Save Transaction to Local DB ---
+  const [insertRes] = await db.insert(transactions).values({
+    userId: payload.userId,
+    customerId: targetLocalCustomerId,
+    type: payload.type,
+    amount: String(payload.amount),
+    currency: "IDR",
+    paymentGateway: "sumopod",
     paymentId: sumopodRes.payment_id,
     paymentLinkUrl: sumopodRes.payment_link_url,
-    metadata: updatedMeta,
-  }).where(eq(transactions.id, transactionId));
+    status: "pending_payment",
+    paymentStatus: "pending",
+    description: `Domain ${payload.type} - ${fullDomain} (${years} yr)`,
+    metadata: JSON.stringify({
+      orderId,
+      domainName: fullDomain,
+      tld,
+      years,
+      type: payload.type,
+      nameservers: payload.nameservers || [],
+      autoRenew: payload.autoRenew || false,
+      privacyProtection: payload.privacyProtection || false,
+      liquidOrderId,
+      liquidTransactionId,
+      liquidCustomerId: targetLiquidCustomerId,
+      customerId: targetLocalCustomerId,
+      domainId: payload.domainId,
+    }),
+  });
+
+  const txId = Number((insertRes as any).insertId);
 
   return {
-    transactionId,
-    orderId,
-    paymentId: sumopodRes.payment_id,
-    paymentLinkUrl: sumopodRes.payment_link_url,
+    transaction_id: txId,
+    order_id: orderId,
+    payment_id: sumopodRes.payment_id,
+    payment_link_url: sumopodRes.payment_link_url,
     amount: payload.amount,
-    fee: sumopodRes.fee || 0,
-    netAmount: sumopodRes.net_amount || payload.amount,
-    currency: "IDR",
     status: "pending_payment",
-    domain: fullDomain,
-    expiresAt,
+    expires_at: sumopodRes.expires_at,
   };
 }
 
-export async function processWebhookPayload(event: any) {
-  const eventType = event.event_type;
-  const data = event.data;
+/**
+ * Handle incoming webhook payload from Sumopod Payment Gateway
+ */
+export async function processWebhookPayload(payload: any) {
+  const eventType = payload.event_type || payload.type || payload.event;
+  const data = payload.data || payload;
+  const orderId = data.order_id || data.orderId || data.reference_id;
+  const paymentId = data.payment_id || data.paymentId;
 
-  if (!data || !data.order_id) {
-    console.warn("[sumopod webhook] Missing data or order_id in event:", eventType);
-    return { status: "ignored" };
+  if (!orderId && !paymentId) {
+    console.error("[sumopod webhook] Missing orderId/paymentId in payload", payload);
+    return { status: "missing_order_id" };
   }
 
-  const orderId = data.order_id;
-  console.log(`[sumopod webhook] Received event '${eventType}' for orderId '${orderId}'`);
+  // Multi-strategy transaction lookup
+  let tx: any = null;
+  if (orderId) {
+    const [byDesc] = await db
+      .select()
+      .from(transactions)
+      .where(and(eq(transactions.paymentGateway, "sumopod"), like(transactions.description, `%${orderId}%`)))
+      .limit(1);
+    tx = byDesc || null;
+  }
 
-  // Direct indexed SQL lookup instead of in-memory .find()
-  const [tx] = await db
-    .select()
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.paymentGateway, "sumopod"),
-        like(transactions.description, `%${orderId}%`)
-      )
-    )
-    .limit(1);
+  if (!tx && paymentId) {
+    const [byPayId] = await db.select().from(transactions).where(eq(transactions.paymentId, paymentId)).limit(1);
+    tx = byPayId || null;
+  }
 
   if (!tx) {
-    console.error(`[sumopod webhook] Transaction not found for orderId '${orderId}'`);
+    const all = await db.select().from(transactions).where(eq(transactions.paymentGateway, "sumopod"));
+    tx = all.find((t) => {
+      if (t.paymentId && (t.paymentId === paymentId || t.paymentId === orderId)) return true;
+      if (String(t.id) === String(orderId)) return true;
+      if (t.description?.includes(orderId)) return true;
+      if (t.metadata) {
+        const str = typeof t.metadata === "string" ? t.metadata : JSON.stringify(t.metadata);
+        if (str.includes(orderId)) return true;
+      }
+      return false;
+    }) as any;
+  }
+
+  if (!tx) {
+    console.error(`[sumopod webhook] Transaction not found for orderId '${orderId}' paymentId '${paymentId}'`);
     return { status: "transaction_not_found" };
   }
 
-  // Out-of-Order Webhook Guard: Don't overwrite if transaction is already completed or in-progress
+  // Out-of-Order Webhook Guard
   if (eventType === "payment.failed" || eventType === "payment.expired") {
     if (tx.paymentStatus === "completed" || tx.status === "completed" || tx.status === "processing_domain") {
-      console.log(`[sumopod webhook] Ignoring '${eventType}' for orderId '${orderId}' because transaction is already completed/processing.`);
       return { status: "ignored_already_completed" };
     }
     await db.update(transactions).set({
@@ -277,12 +288,11 @@ export async function processWebhookPayload(event: any) {
     return { status: "updated_failed" };
   }
 
-  if (eventType !== "payment.completed") {
+  if (eventType !== "payment.completed" && eventType !== "payment.success" && eventType !== "payment_completed") {
     return { status: "ignored_event_type" };
   }
 
-  // Race Condition Fix #1: Atomic Conditional Update (Idempotency Guard)
-  // Only update if status is still 'pending_payment' to prevent concurrent duplicate LIQUID API calls
+  // Race Condition Fix: Idempotency Guard
   const updateResult: any = await db
     .update(transactions)
     .set({
@@ -297,71 +307,58 @@ export async function processWebhookPayload(event: any) {
     );
 
   const affectedRows = updateResult[0]?.affectedRows ?? updateResult?.affectedRows ?? 0;
-  if (affectedRows === 0) {
-    console.log(`[sumopod webhook] Transaction ID ${tx.id} is already being processed or completed. Skipping duplicate execution.`);
-    return { status: "already_processing_or_completed" };
+  if (affectedRows === 0 && tx.status === "completed") {
+    return { status: "already_completed" };
   }
 
-  // Parse metadata to execute actual domain action on LIQUID API
   if (!tx.metadata) {
-    console.error("[sumopod webhook] No metadata stored for transaction ID", tx.id);
     return { status: "missing_metadata" };
   }
 
   let meta: any;
   try {
-    meta = JSON.parse(tx.metadata);
+    meta = typeof tx.metadata === "string" ? JSON.parse(tx.metadata) : tx.metadata;
   } catch (e) {
-    console.error("[sumopod webhook] Invalid JSON metadata for transaction ID", tx.id);
     return { status: "invalid_metadata" };
   }
 
-  // Resolve reseller credentials for Liquid API
+  // Resolve reseller credentials
   const [user] = await db.select().from(users).where(eq(users.id, tx.userId));
-  if (!user) {
-    console.error("[sumopod webhook] User not found for transaction ID", tx.id);
-    return { status: "user_not_found" };
-  }
+  if (!user) return { status: "user_not_found" };
 
   let resellerId = user.resellerId || "";
   let apiKey = user.apiKey || "";
-
   if (user.role === "customer" && user.parentResellerId) {
     const [reseller] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
-    if (reseller) {
-      resellerId = reseller.resellerId || "";
-      apiKey = reseller.apiKey || "";
-    }
+    if (reseller) { resellerId = reseller.resellerId || ""; apiKey = reseller.apiKey || ""; }
   }
-
   if (!resellerId || !apiKey) {
     const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
-    if (defaultReseller) {
-      resellerId = defaultReseller.resellerId || "";
-      apiKey = defaultReseller.apiKey || "";
-    }
+    if (defaultReseller) { resellerId = defaultReseller.resellerId || ""; apiKey = defaultReseller.apiKey || ""; }
   }
 
   const liquid = new LiquidClient(resellerId, apiKey);
 
-  // Use stored liquidTransactionId & liquidCustomerId from order-time metadata
-  const liquidTransactionId = meta.liquidTransactionId;
+  let liquidTransactionId = meta.liquidTransactionId;
   const liquidCustomerId = meta.liquidCustomerId;
   const liquidOrderId = meta.liquidOrderId;
   const targetLocalCustomerId: number | null = meta.customerId || tx.customerId || null;
 
+  if (!liquidTransactionId && liquidCustomerId) {
+    try {
+      const txList = await liquid.listCustomerTransactions(liquidCustomerId, true);
+      const pendingList = Array.isArray(txList) ? txList : txList?.data || txList?.transactions || [];
+      if (pendingList.length > 0) {
+        liquidTransactionId = String(pendingList[0]?.transaction_id || pendingList[0]?.invoice_id || pendingList[0]?.id || "");
+      }
+    } catch {}
+  }
+
   try {
     if (liquidTransactionId && liquidCustomerId) {
-      // --- NEW FLOW: Pay the existing KeepInvoice on Resellercamp ---
-      console.log(`[sumopod webhook] Paying Resellercamp KeepInvoice | custId=${liquidCustomerId} txId=${liquidTransactionId} for ${meta.domainName}`);
-      await liquid.payCustomerTransaction(liquidCustomerId, liquidTransactionId, false);
-      console.log(`[sumopod webhook] Resellercamp invoice ${liquidTransactionId} PAID successfully → domain ${meta.domainName} is now active`);
-    } else {
-      console.warn(`[sumopod webhook] No liquidTransactionId found in metadata for ${meta.domainName}. This is a legacy order without KeepInvoice flow.`);
-      // Legacy fallback: if no liquidTransactionId, skip Resellercamp pay (order was not created at order-time)
+      await liquid.payCustomerTransaction(liquidCustomerId, liquidTransactionId, true);
     }
 
-    // Save domain to local DB if register or transfer
     if (meta.type === "register" || meta.type === "transfer") {
       const [existingDomain] = await db.select().from(domains).where(eq(domains.domainName, meta.domainName));
       if (!existingDomain) {
