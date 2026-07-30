@@ -13,7 +13,7 @@ const envVars = {
   SUMOPOD_PAYMENT_URL: process.env.SUMOPOD_PAYMENT_URL || "https://api-pay-sandbox.sumopod.com/api/v1",
   SUMOPOD_WEBHOOK_TOKEN: process.env.SUMOPOD_WEBHOOK_TOKEN || "",
   SUMOPOD_WEBHOOK_SECRET: process.env.SUMOPOD_WEBHOOK_SECRET || "",
-  LIQUID_BASE_URL: process.env.LIQUID_BASE_URL || "https://api.liqu.id/v1",
+  LIQUID_BASE_URL: process.env.LIQUID_BASE_URL || "https://api.domainsas.com:443/v1/",
   APP_URL: process.env.APP_URL || "http://localhost:5173",
 } as const;
 
