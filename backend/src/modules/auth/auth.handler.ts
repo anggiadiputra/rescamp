@@ -2,6 +2,7 @@ import * as svc from "./auth.service";
 import { checkWhatsApp } from "../../lib/fonnte";
 import type { JwtPayload } from "../../lib/jwt";
 import { verifyTurnstileToken } from "../../lib/turnstile";
+import { AppError } from "../../lib/error";
 
 export async function register(ctx: any) {
   await verifyTurnstileToken(ctx.body?.cfTurnstileResponse || ctx.headers?.["cf-turnstile-response"]);
@@ -41,7 +42,8 @@ export async function updateProfile(ctx: any) {
 }
 
 export async function resellerData(ctx: any) {
-  const userId = Number(ctx.store.user?.sub);
+  const userId = Number(ctx.store?.user?.sub);
+  if (!userId || isNaN(userId)) throw new AppError("Unauthorized", 401);
   const result = await svc.getResellerData(userId);
   return { data: result };
 }
@@ -81,12 +83,5 @@ export async function checkWa(ctx: any) {
   const { phone } = ctx.body;
   if (!phone) return { data: { registered: false } };
   const result = await checkWhatsApp(phone);
-  return { data: result };
-}
-
-export async function resellerData(ctx: any) {
-  const userId = Number(ctx.store?.user?.sub);
-  if (!userId || isNaN(userId)) throw new AppError("Unauthorized", 401);
-  const result = await svc.getResellerData(userId);
   return { data: result };
 }
