@@ -40,16 +40,41 @@ export class LiquidClient {
   checkAvailability(domain: string) {
     return this.request<any>("GET", `/domains/availability?domain=${domain}`);
   }
-  registerDomain(data: Record<string, any>) {
-    // LIQUID requires: domain_name, customer_id, registrant_contact_id, invoice_option
-    const cid = data.customer_id || data.registrant_contact_id;
+  async registerDomain(data: Record<string, any>) {
+    const customerId = String(data.customer_id || "");
+    let contactId = data.registrant_contact_id ? String(data.registrant_contact_id) : "";
+    
+    if (!contactId || contactId === customerId) {
+      try {
+        const defContact = await this.request<any>("GET", `/customers/${customerId}/contacts/default`);
+        contactId = String(
+          defContact.registrant_contact?.contact_id ||
+          defContact.registrant_contact?.id ||
+          defContact.contact_id ||
+          ""
+        );
+      } catch {}
+    }
+    
+    if (!contactId || contactId === customerId) {
+      try {
+        const list = await this.request<any>("GET", `/customers/${customerId}/contacts`);
+        const arr = Array.isArray(list) ? list : list?.data || list?.contacts || [];
+        if (arr.length > 0) {
+          contactId = String(arr[0].contact_id || arr[0].id || "");
+        }
+      } catch {}
+    }
+
+    if (!contactId) contactId = customerId;
+
     return this.request<any>("POST", "/domains", {
       domain_name: data.domain_name,
-      customer_id: cid,
-      registrant_contact_id: cid,
-      admin_contact_id: cid,
-      billing_contact_id: cid,
-      tech_contact_id: cid,
+      customer_id: customerId,
+      registrant_contact_id: contactId,
+      admin_contact_id: data.admin_contact_id || contactId,
+      billing_contact_id: data.billing_contact_id || contactId,
+      tech_contact_id: data.tech_contact_id || contactId,
       years: data.years || 1,
       ns: data.ns || "",
       purchase_privacy_protection: data.purchase_privacy_protection || data.privacy_protection ? "true" : "false",
