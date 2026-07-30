@@ -82,6 +82,26 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
         let currentStatus = tx.status;
         let currentPaymentStatus = tx.paymentStatus;
 
+        if (currentStatus === "pending_payment" && tx.paymentId) {
+          try {
+            const sumopodDetail = await sumopodClient.getPayment(tx.paymentId);
+            const statusUpper = String(sumopodDetail?.status || "").toUpperCase();
+            if (statusUpper === "COMPLETED" || statusUpper === "PAID" || statusUpper === "SUCCESS") {
+              await processWebhookPayload({
+                event_type: "payment.completed",
+                data: { order_id: orderId, payment_id: tx.paymentId },
+              });
+              const [refreshed] = await db.select().from(transactions).where(eq(transactions.id, tx.id));
+              if (refreshed) {
+                currentStatus = refreshed.status;
+                currentPaymentStatus = refreshed.paymentStatus;
+              }
+            }
+          } catch (e) {
+            console.warn("[payments/status] Proactive status check failed:", e);
+          }
+        }
+
         if (isPastExpiry && (currentStatus === "pending_payment" || currentPaymentStatus === "pending")) {
           currentStatus = "expired";
           currentPaymentStatus = "expired";

@@ -114,6 +114,24 @@ export class SumopodClient {
   }
 
   /**
+   * Fetch payment details by payment_id
+   */
+  async getPayment(paymentId: string): Promise<any> {
+    try {
+      const response = await fetch(`${this.baseUrl}/payments/${paymentId}`, {
+        headers: {
+          "X-Api-Key": this.apiKey,
+        },
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch (err) {
+      console.warn("Failed to fetch payment status from Sumopod:", err);
+      return null;
+    }
+  }
+
+  /**
    * Verifies simple webhook token header
    */
   verifyWebhookToken(receivedToken: string | undefined): boolean {

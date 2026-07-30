@@ -109,10 +109,21 @@ export async function getTransaction(userParam: number | { id: number; role?: st
   const [txnUser] = await db.select().from(users).where(eq(users.id, txn.userId));
 
   let resellerUser: any = txnUser;
-  if (txnUser?.parentResellerId) {
-    const [parentReseller] = await db.select().from(users).where(eq(users.id, txnUser.parentResellerId));
-    if (parentReseller) resellerUser = parentReseller;
+  if (txnUser?.role === "customer") {
+    if (txnUser.parentResellerId) {
+      const [parentReseller] = await db.select().from(users).where(eq(users.id, txnUser.parentResellerId));
+      if (parentReseller) resellerUser = parentReseller;
+    }
+    if (!resellerUser || resellerUser.role === "customer") {
+      const [primaryReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
+      if (primaryReseller) resellerUser = primaryReseller;
+    }
   }
+
+  // Get brand_name setting as fallback for provider name
+  const { appSettings } = await import("../../db/schema");
+  const [brandSetting] = await db.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, "brand_name"));
+  const defaultBrand = brandSetting?.value || "Ekstensi ID";
 
   if (resellerUser?.resellerId && resellerUser?.apiKey) {
     try {
@@ -129,9 +140,9 @@ export async function getTransaction(userParam: number | { id: number; role?: st
         ].filter(Boolean);
 
         resellerInfo = {
-          name: liqReseller.name || resellerUser.name,
-          brandName: liqReseller.brand_name || liqReseller.company || resellerUser.name,
-          company: liqReseller.company || liqReseller.brand_name || "Authorized Registrar Partner",
+          name: liqReseller.name || resellerUser.name || defaultBrand,
+          brandName: liqReseller.brand_name || defaultBrand,
+          company: liqReseller.company || liqReseller.brand_name || defaultBrand,
           email: liqReseller.email || resellerUser.email,
           resellerId: liqReseller.reseller_id || resellerUser.resellerId,
           address: addrParts.join(", "),
@@ -143,13 +154,13 @@ export async function getTransaction(userParam: number | { id: number; role?: st
     }
   }
 
-  if (!resellerInfo && resellerUser) {
+  if (!resellerInfo) {
     resellerInfo = {
-      name: resellerUser.name,
-      brandName: resellerUser.name,
-      company: resellerUser.name,
-      email: resellerUser.email,
-      resellerId: resellerUser.resellerId,
+      name: resellerUser?.name || defaultBrand,
+      brandName: defaultBrand,
+      company: defaultBrand,
+      email: resellerUser?.email || null,
+      resellerId: resellerUser?.resellerId || null,
       address: null,
       phone: null,
     };

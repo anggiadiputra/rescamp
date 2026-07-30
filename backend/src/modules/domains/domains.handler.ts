@@ -162,12 +162,24 @@ export async function remove(ctx: any) {
   return new Response(null, { status: 204 });
 }
 
-// For customer: auto-resolve their LIQUID customer_id
+// For customer: auto-resolve or auto-create their LIQUID customer_id
 async function resolveCustomerId(u: any): Promise<number | undefined> {
   if (u.role !== "customer") return undefined;
-  const [cust] = await db.select({ id: customers.id, liquidCustomerId: customers.liquidCustomerId })
+  let [cust] = await db.select({ id: customers.id, liquidCustomerId: customers.liquidCustomerId })
     .from(customers).where(eq(customers.email, u.email));
-  return cust?.id;
+
+  if (!cust) {
+    // Auto-create local customer profile if missing
+    const [res] = await db.insert(customers).values({
+      userId: u.id,
+      name: u.name || u.email.split("@")[0],
+      email: u.email,
+      country: "ID",
+    });
+    const newId = Number(res.insertId);
+    return newId;
+  }
+  return cust.id;
 }
 
 export async function bulkAvailability(ctx: any) {

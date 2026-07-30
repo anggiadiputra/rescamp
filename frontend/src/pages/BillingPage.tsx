@@ -184,8 +184,14 @@ export default function BillingPage() {
   }, [page, isCustomer, perPage]);
 
   useEffect(() => {
-    fetchTxns();
-  }, [fetchTxns, returnStatus]);
+    if (returnOrderId && returnStatus === "success") {
+      api.get(`/payments/status/${returnOrderId}`).catch(() => {}).finally(() => {
+        fetchTxns();
+      });
+    } else {
+      fetchTxns();
+    }
+  }, [fetchTxns, returnStatus, returnOrderId]);
 
   function clearReturnStatus() {
     searchParams.delete("status");
