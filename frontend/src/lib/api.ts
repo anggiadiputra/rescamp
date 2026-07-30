@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
+const API_BASE = import.meta.env.VITE_API_BASE || (typeof window !== "undefined" && window.location.hostname.includes("dash.ekstensi.id") ? "https://api.ekstensi.id/api" : "/api");
 
 let token = localStorage.getItem("token");
 
