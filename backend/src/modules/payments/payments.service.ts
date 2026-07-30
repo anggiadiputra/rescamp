@@ -264,14 +264,42 @@ export async function processWebhookPayload(event: any) {
     }
   }
 
+  if (!targetLiquidCustomerId && tx.userId) {
+    const [userObj] = await db.select().from(users).where(eq(users.id, tx.userId));
+    if (userObj) {
+      try {
+        const liquidRes = await liquid.createCustomer({
+          name: userObj.name || userObj.email.split("@")[0],
+          email: userObj.email,
+          country: "ID",
+        });
+        targetLiquidCustomerId = String(liquidRes?.customer_id || liquidRes?.id || "");
+      } catch (e) {
+        console.warn("[sumopod webhook] Fallback create customer in Liquid failed:", e);
+        try {
+          const listRes = await liquid.listCustomers();
+          const list = Array.isArray(listRes) ? listRes : listRes?.data || listRes?.customers || [];
+          const match = list.find((c: any) => (c.email || c.customer_email)?.toLowerCase() === userObj.email.toLowerCase());
+          if (match) {
+            targetLiquidCustomerId = String(match.customer_id || match.id || "");
+          }
+        } catch {}
+      }
+    }
+  }
+
   try {
     if (meta.type === "register") {
       console.log(`[sumopod webhook] Executing LIQUID domain registration for ${meta.domainName} with reseller ${resellerId} & liquidCustId ${targetLiquidCustomerId}`);
+      if (!targetLiquidCustomerId) {
+        throw new Error("Resellercamp Customer ID could not be created/resolved. Please check Reseller API Credentials.");
+      }
+
       const liquidRes = await liquid.registerDomain({
         domain_name: meta.domainName,
         years: meta.years || 1,
         ns: meta.nameservers?.join(",") || "",
-        customer_id: targetLiquidCustomerId || meta.customerId,
+        customer_id: targetLiquidCustomerId,
         privacy_protection: meta.privacyProtection,
       });
 
@@ -299,10 +327,14 @@ export async function processWebhookPayload(event: any) {
 
     } else if (meta.type === "transfer") {
       console.log(`[sumopod webhook] Executing LIQUID domain transfer for ${meta.domainName}`);
+      if (!targetLiquidCustomerId) {
+        throw new Error("Resellercamp Customer ID could not be created/resolved. Please check Reseller API Credentials.");
+      }
+
       const liquidRes = await liquid.transferDomain({
         domain_name: meta.domainName,
         auth_code: meta.authCode || "",
-        customer_id: targetLiquidCustomerId || meta.customerId,
+        customer_id: targetLiquidCustomerId,
         ns: meta.nameservers?.join(",") || "",
       });
 
@@ -337,7 +369,7 @@ export async function processWebhookPayload(event: any) {
 
       const liquidRes = await liquid.renewDomain(String(targetDomain.liquidOrderId || targetDomain.domainName), meta.years || 1);
 
-      // Race Condition Fix #3: Atomic SQL Increment
+      // Atomic SQL Increment
       await db.update(domains).set({
         years: sql`${domains.years} + ${meta.years || 1}`,
         expiryDate: liquidRes?.expiry_date || targetDomain.expiryDate,
@@ -349,8 +381,16 @@ export async function processWebhookPayload(event: any) {
 
     return { status: "processed_successfully" };
   } catch (err: any) {
-    console.error(`[sumopod webhook] Error executing LIQUID action for ${meta.domainName}:`, err);
-    await db.update(transactions).set({ status: "action_required" }).where(eq(transactions.id, tx.id));
-    return { status: "action_failed", error: err.message };
+    console.error(`[sumopod webhook] Error executing LIQUID action for ${meta.domainName}:`, err?.message || err);
+    // Enrich metadata with exact liquid error for admin review
+    let updatedMetaStr = tx.metadata;
+    try {
+      const metaObj = JSON.parse(tx.metadata);
+      metaObj.lastError = err?.message || String(err);
+      updatedMetaStr = JSON.stringify(metaObj);
+    } catch {}
+
+    await db.update(transactions).set({ status: "action_required", metadata: updatedMetaStr }).where(eq(transactions.id, tx.id));
+    return { status: "action_failed", error: err?.message || String(err) };
   }
 }
