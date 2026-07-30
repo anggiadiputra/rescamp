@@ -76,7 +76,7 @@ export function TurnstileWidget({ onVerify, onError, onExpire, className }: Turn
     }
 
     if (!window.turnstile) {
-      const existingScript = document.getElementById("cf-turnstile-script");
+      const existingScript = document.getElementById("cf-turnstile-script") as HTMLScriptElement | null;
       if (!existingScript) {
         const script = document.createElement("script");
         script.id = "cf-turnstile-script";
@@ -88,7 +88,14 @@ export function TurnstileWidget({ onVerify, onError, onExpire, className }: Turn
         };
         document.head.appendChild(script);
       } else {
-        existingScript.addEventListener("load", renderWidget);
+        // If script is already in head, check if it's already loaded or poll briefly
+        const interval = setInterval(() => {
+          if (window.turnstile) {
+            clearInterval(interval);
+            renderWidget();
+          }
+        }, 100);
+        setTimeout(() => clearInterval(interval), 5000);
       }
     } else {
       renderWidget();
