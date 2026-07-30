@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Card, Button, InfoBanner, TurnstileWidget } from "../components/ui";
 import { api, setToken } from "../lib/api";
@@ -15,15 +15,26 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<"credentials" | "otp">("credentials");
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Timer countdown 30 detik untuk resend OTP
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault();
-    if (loading) return;
+    if (loading || resendCooldown > 0) return;
     setError("");
     setLoading(true);
     try {
       await api.post("/auth/send-otp", { email, password, cfTurnstileResponse: cfTurnstileToken });
       setStep("otp");
+      setResendCooldown(30); // Mulai countdown 30 detik
     } catch (err: any) {
       setError(err.message || "Gagal mengirim OTP");
     }
@@ -87,7 +98,13 @@ export default function LoginPage() {
             </button>
             <p className="text-xs text-gray-400">
               Tidak menerima kode?{" "}
-              <button onClick={handleSendOtp} disabled={loading} className="text-black font-semibold hover:underline">Kirim Ulang</button>
+              <button
+                onClick={handleSendOtp}
+                disabled={loading || resendCooldown > 0}
+                className="text-black font-semibold hover:underline disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed"
+              >
+                {resendCooldown > 0 ? `Kirim Ulang (${resendCooldown}s)` : "Kirim Ulang"}
+              </button>
             </p>
           </div>
         </Card>
