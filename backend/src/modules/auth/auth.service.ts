@@ -498,6 +498,11 @@ export async function forgotPassword(email: string) {
     code: otpCode,
     otp: otpCode,
     reset_link: resetLink,
+    reset_url: resetLink,
+    link: resetLink,
+    url: resetLink,
+    button_url: resetLink,
+    action_url: resetLink,
     expiry_minutes: 30,
   });
 
