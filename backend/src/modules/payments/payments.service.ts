@@ -217,12 +217,17 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
 
   return {
     transaction_id: txId,
+    transactionId: txId,
     order_id: orderId,
+    orderId: orderId,
     payment_id: sumopodRes.payment_id,
+    paymentId: sumopodRes.payment_id,
     payment_link_url: sumopodRes.payment_link_url,
+    paymentLinkUrl: sumopodRes.payment_link_url,
     amount: payload.amount,
     status: "pending_payment",
     expires_at: sumopodRes.expires_at,
+    expiresAt: sumopodRes.expires_at,
   };
 }
 

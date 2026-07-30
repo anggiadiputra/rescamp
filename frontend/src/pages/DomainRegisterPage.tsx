@@ -174,17 +174,21 @@ export default function DomainRegisterPage() {
       });
 
       const paymentInfo = res?.data || res;
-      if (paymentInfo?.paymentLinkUrl) {
+      const paymentLinkUrl = paymentInfo?.paymentLinkUrl || paymentInfo?.payment_link_url;
+      const orderId = paymentInfo?.orderId || paymentInfo?.order_id;
+      const expiresAt = paymentInfo?.expiresAt || paymentInfo?.expires_at;
+
+      if (paymentLinkUrl) {
         setPaymentData({
           open: true,
-          orderId: paymentInfo.orderId,
-          paymentLinkUrl: paymentInfo.paymentLinkUrl,
+          orderId: orderId || "",
+          paymentLinkUrl: paymentLinkUrl,
           amount: paymentInfo.amount,
           fee: paymentInfo.fee || 0,
-          expiresAt: paymentInfo.expiresAt,
+          expiresAt: expiresAt,
           domainName: domainToRegister,
         });
-        window.open(paymentInfo.paymentLinkUrl, "_blank");
+        window.open(paymentLinkUrl, "_blank");
       } else {
         toast(`🎉 ${domainToRegister} registered successfully!`);
         nav("/domains");
@@ -208,17 +212,21 @@ export default function DomainRegisterPage() {
       });
 
       const paymentInfo = res?.data || res;
-      if (paymentInfo?.paymentLinkUrl) {
+      const paymentLinkUrl = paymentInfo?.paymentLinkUrl || paymentInfo?.payment_link_url;
+      const orderId = paymentInfo?.orderId || paymentInfo?.order_id;
+      const expiresAt = paymentInfo?.expiresAt || paymentInfo?.expires_at;
+
+      if (paymentLinkUrl) {
         setPaymentData({
           open: true,
-          orderId: paymentInfo.orderId,
-          paymentLinkUrl: paymentInfo.paymentLinkUrl,
+          orderId: orderId || "",
+          paymentLinkUrl: paymentLinkUrl,
           amount: paymentInfo.amount,
           fee: paymentInfo.fee || 0,
-          expiresAt: paymentInfo.expiresAt,
+          expiresAt: expiresAt,
           domainName: transferDomain.trim(),
         });
-        window.open(paymentInfo.paymentLinkUrl, "_blank");
+        window.open(paymentLinkUrl, "_blank");
       } else {
         toast(`🎉 Permintaan transfer domain ${transferDomain} berhasil diajukan!`);
         nav("/domains");

@@ -64,17 +64,21 @@ export default function DomainDetailPage() {
       const res: any = await api.post(`/domains/${id}/renew`, { years: renewYears });
       setRenewOpen(false);
       const paymentInfo = res?.data || res;
-      if (paymentInfo?.paymentLinkUrl) {
+      const paymentLinkUrl = paymentInfo?.paymentLinkUrl || paymentInfo?.payment_link_url;
+      const orderId = paymentInfo?.orderId || paymentInfo?.order_id;
+      const expiresAt = paymentInfo?.expiresAt || paymentInfo?.expires_at;
+
+      if (paymentLinkUrl) {
         setPaymentData({
           open: true,
-          orderId: paymentInfo.orderId,
-          paymentLinkUrl: paymentInfo.paymentLinkUrl,
+          orderId: orderId || "",
+          paymentLinkUrl: paymentLinkUrl,
           amount: paymentInfo.amount,
           fee: paymentInfo.fee || 0,
-          expiresAt: paymentInfo.expiresAt,
+          expiresAt: expiresAt,
           domainName: domain?.domainName || "",
         });
-        window.open(paymentInfo.paymentLinkUrl, "_blank");
+        window.open(paymentLinkUrl, "_blank");
       } else {
         toast("Domain renewed successfully");
         await fetchDomain();
