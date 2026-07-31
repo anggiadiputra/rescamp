@@ -200,7 +200,7 @@ export default function LandingPage() {
               <Globe className="w-5 h-5" />
             </div>
             <span className="text-base sm:text-lg font-black tracking-tight text-gray-900">
-              Domains<span className="text-gray-900">.id</span>
+              {brand}
             </span>
           </Link>
 

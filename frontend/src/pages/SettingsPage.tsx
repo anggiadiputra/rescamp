@@ -24,7 +24,7 @@ export default function SettingsPage() {
 
   const [form, setForm] = useState<Record<string, any>>({
     // Brand & SEO
-    brand_name: "DomainWhois",
+    brand_name: "Ekstensi.id",
     site_tagline: "",
     seo_title: "",
     seo_description: "",
@@ -43,8 +43,8 @@ export default function SettingsPage() {
     smtp_port: "587",
     smtp_user: "",
     smtp_pass: "",
-    smtp_from_email: "noreply@domainwhois.net",
-    smtp_from_name: "DomainWhois Support",
+    smtp_from_email: "noreply@ekstensi.id",
+    smtp_from_name: "Ekstensi.id Support",
 
     // Theme & Colors
     primary_color: "#000000",
