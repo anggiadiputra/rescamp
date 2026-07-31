@@ -67,9 +67,9 @@ export interface SettingsData {
 }
 
 const DEFAULT_SETTINGS: Record<string, string> = {
-  brand_name: "DomainWhois",
+  brand_name: "Ekstensi.id",
   site_tagline: "High-Performance Domain & Hosting Management Platform",
-  seo_title: "DomainWhois — Domain Registrar & Management",
+  seo_title: "Ekstensi.id — Registrasi & Manajemen Domain",
   seo_description: "Manage, register, transfer, and renew domains effortlessly.",
   seo_keywords: "domain, registrar, whois, dns, hosting, liquid, sumopod",
   og_image_url: "",
@@ -85,8 +85,8 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   smtp_port: "587",
   smtp_user: "",
   smtp_pass: "",
-  smtp_from_email: "noreply@domainwhois.net",
-  smtp_from_name: "DomainWhois Support",
+  smtp_from_email: "noreply@ekstensi.id",
+  smtp_from_name: "Ekstensi.id Support",
 
   primary_color: "#000000",
   header_color: "#ffffff",

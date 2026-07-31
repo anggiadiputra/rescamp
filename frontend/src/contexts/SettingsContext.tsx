@@ -16,9 +16,9 @@ export interface SystemSettings {
 }
 
 const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
-  brand_name: "DomainWhois",
+  brand_name: "Ekstensi.id",
   site_tagline: "High-Performance Domain & Hosting Management Platform",
-  seo_title: "DomainWhois — Domain Registrar & Management",
+  seo_title: "Ekstensi.id — Registrasi & Manajemen Domain",
   seo_description: "Manage, register, transfer, and renew domains effortlessly.",
   seo_keywords: "domain, registrar, whois, dns, hosting",
   og_image_url: "",
@@ -27,6 +27,19 @@ const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   sidebar_color: "#ffffff",
   email_provider: "kirisan",
 };
+
+function getInitialSettings(): SystemSettings {
+  try {
+    const cached = localStorage.getItem("app_settings");
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed && typeof parsed === "object") {
+        return { ...DEFAULT_SYSTEM_SETTINGS, ...parsed };
+      }
+    }
+  } catch {}
+  return DEFAULT_SYSTEM_SETTINGS;
+}
 
 interface SettingsContextType {
   settings: SystemSettings;
@@ -37,7 +50,7 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | null>(null);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SYSTEM_SETTINGS);
+  const [settings, setSettings] = useState<SystemSettings>(getInitialSettings);
   const [loading, setLoading] = useState(true);
 
   async function fetchSettings() {
@@ -45,10 +58,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       const res = await api.get<any>("/settings/public");
       const data = res?.data || res;
       if (data && typeof data === "object") {
-        setSettings((prev) => ({
-          ...prev,
-          ...data,
-        }));
+        setSettings((prev) => {
+          const merged = { ...prev, ...data };
+          try {
+            localStorage.setItem("app_settings", JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
       }
     } catch (err) {
       console.warn("[SettingsContext] Unable to fetch settings, using defaults:", err);

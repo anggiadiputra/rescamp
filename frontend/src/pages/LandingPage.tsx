@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { api } from "../lib/api";
 import { Modal } from "../components/ui";
+import { useSettings } from "../contexts/SettingsContext";
 
 const POPULAR_DOMAINS = [
   { tld: ".COM", price: "Rp 180.000", renew: "Rp 209.000", badge: "Populer", privacy: true },
@@ -75,6 +76,8 @@ const FEATURES_ITEMS = [
 
 export default function LandingPage() {
   const nav = useNavigate();
+  const { settings } = useSettings();
+  const brand = settings.brand_name || "Ekstensi.id";
   const [keyword, setKeyword] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [searchResult, setSearchResult] = useState<any[] | null>(null);
@@ -520,7 +523,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           <div>
             <div className="flex items-center gap-2 text-white font-black text-base mb-3">
-              <Globe className="w-5 h-5 text-blue-500" /> Domains.id
+              <Globe className="w-5 h-5 text-blue-500" /> {brand}
             </div>
             <p className="text-gray-500 leading-relaxed">
               Platform pencarian dan pendaftaran nama domain terpercaya dengan harga transparan & proteksi privasi lengkap.
@@ -552,7 +555,7 @@ export default function LandingPage() {
           </div>
         </div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-gray-900 pt-6 text-center text-gray-600">
-          &copy; {new Date().getFullYear()} Domains.id — Official Authorized Domain Registrar Portal. All rights reserved.
+          &copy; {new Date().getFullYear()} {brand} — Official Authorized Domain Registrar Portal. All rights reserved.
         </div>
       </footer>
 
