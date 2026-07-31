@@ -134,6 +134,19 @@ export async function ensureSettingsTableExists() {
         \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    // Auto-seed initial settings into database table if table is empty
+    const rows = await db.select().from(appSettings).limit(1);
+    if (rows.length === 0) {
+      for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+        await db.insert(appSettings).values({
+          key,
+          value,
+          category: getCategoryForKey(key),
+        }).catch(() => {});
+      }
+    }
+
     isTableInitialized = true;
   } catch (err) {
     console.error("[settings service] Auto-creation of app_settings table failed:", err);
@@ -144,18 +157,26 @@ export async function getSystemSettings(): Promise<Record<string, string>> {
   await ensureSettingsTableExists();
   try {
     const rows = await db.select().from(appSettings);
-    const settingsMap: Record<string, string> = { ...DEFAULT_SETTINGS };
+    const settingsMap: Record<string, string> = {};
 
+    // Populate dynamic values directly from database rows
     for (const r of rows) {
       if (r.key && r.value !== null) {
         settingsMap[r.key] = r.value;
       }
     }
 
+    // Fill missing schema keys if not present in DB
+    for (const [key, defaultVal] of Object.entries(DEFAULT_SETTINGS)) {
+      if (!(key in settingsMap)) {
+        settingsMap[key] = defaultVal;
+      }
+    }
+
     return settingsMap;
   } catch (err) {
-    console.warn("[settings service] Table app_settings may not exist yet, returning defaults:", err);
-    return DEFAULT_SETTINGS;
+    console.warn("[settings service] Table app_settings read failed:", err);
+    return {};
   }
 }
 
