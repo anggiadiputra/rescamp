@@ -391,9 +391,10 @@ export class LiquidClient {
 
   // --- Customer Transactions / Invoices ---
   /** List customer transactions (invoices). Set only_pending=true for pending only. */
-  listCustomerTransactions(customerId: string, onlyPending: boolean = false) {
-    const qs = onlyPending ? "?only_pending=true" : "";
-    return this.request<any>("GET", `/customers/${customerId}/transactions${qs}`);
+  listCustomerTransactions(customerId: string, onlyPending: boolean = false, params?: Record<string, string>) {
+    const qs = new URLSearchParams(params || {}).toString();
+    const suffix = onlyPending ? (qs ? `&only_pending=true` : `?only_pending=true`) : (qs ? `?${qs}` : "");
+    return this.request<any>("GET", `/customers/${customerId}/transactions${suffix}`);
   }
   /** Pay a keep_invoice transaction → triggers domain creation + deducts reseller balance */
   payCustomerTransaction(customerId: string, transactionId: string, subtractBalance: boolean = false) {
@@ -472,8 +473,9 @@ export class LiquidClient {
     }
   }
 
-  getTransactions() {
-    return this.request<any>("GET", "/account/transactions");
+  getTransactions(params?: Record<string, string>) {
+    const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+    return this.request<any>("GET", `/account/transactions${qs}`);
   }
   getTransaction(transactionId: string) {
     return this.request<any>("GET", `/account/transactions/${transactionId}`);

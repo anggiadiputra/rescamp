@@ -8,6 +8,23 @@ function getLiquid(user: { resellerId: string | null; apiKey: string | null }): 
   return new LiquidClient(user.resellerId || "", user.apiKey || "");
 }
 
+async function fetchAllLiquidTransactions(liquid: LiquidClient, customerId?: string): Promise<any[]> {
+  const all: any[] = [];
+  let pageNo = 1;
+  while (true) {
+    const params = { limit: "100", page_no: String(pageNo) };
+    const res = customerId
+      ? await liquid.listCustomerTransactions(customerId, false, params)
+      : await liquid.getTransactions(params);
+    const list = Array.isArray(res) ? res : res?.data || res?.transactions || [];
+    if (list.length === 0) break;
+    all.push(...list);
+    if (list.length < 100) break;
+    pageNo++;
+  }
+  return all;
+}
+
 export async function getBalance(user: { resellerId: string | null; apiKey: string | null }) {
   return getLiquid(user).getBalance();
 }
@@ -59,7 +76,7 @@ async function upsertLiquidTransaction(userId: number, item: any) {
 }
 
 export async function listTransactions(
-  userParam: number | { id: number; role?: string },
+  userParam: number | { id: number; role?: string | null },
   params?: { type?: string; status?: string; page?: number; per_page?: number },
 ) {
   const userId = typeof userParam === "object" ? userParam.id : userParam;
@@ -97,17 +114,15 @@ export async function listTransactions(
       if (userRecord.role === "customer") {
         const [cust] = await db.select({ liquidCustomerId: customers.liquidCustomerId }).from(customers).where(eq(customers.userId, userId));
         if (cust?.liquidCustomerId) {
-          const res = await liquid.listCustomerTransactions(cust.liquidCustomerId).catch(() => null);
-          const list = Array.isArray(res) ? res : res?.data || res?.transactions || [];
-          for (const item of list.slice(0, 100)) {
+          const list = await fetchAllLiquidTransactions(liquid, cust.liquidCustomerId).catch(() => []);
+          for (const item of list) {
             await upsertLiquidTransaction(userId, item);
           }
         }
       } else {
         // Reseller: sync from account/transactions
-        const res = await liquid.getTransactions().catch(() => null);
-        const list = Array.isArray(res) ? res : res?.data || res?.transactions || [];
-        for (const item of list.slice(0, 100)) {
+        const list = await fetchAllLiquidTransactions(liquid).catch(() => []);
+        for (const item of list) {
           await upsertLiquidTransaction(userId, item);
         }
       }
@@ -129,7 +144,7 @@ export async function listTransactions(
   return { data: rows, meta: { total, page, perPage } };
 }
 
-export async function getTransaction(userParam: number | { id: number; role?: string }, txnId: number) {
+export async function getTransaction(userParam: number | { id: number; role?: string | null }, txnId: number) {
   const userId = typeof userParam === "object" ? userParam.id : userParam;
   const userRole = typeof userParam === "object" ? userParam.role : "reseller";
 
@@ -242,7 +257,7 @@ export async function syncBalanceToLocal(user: { resellerId: string | null; apiK
   return getLiquid(user).getBalance();
 }
 
-export async function syncTransactions(user: { id: number; role: string; resellerId?: string | null; apiKey?: string | null }) {
+export async function syncTransactions(user: { id: number; role: string | null; resellerId?: string | null; apiKey?: string | null }) {
   if (!user.resellerId || !user.apiKey) throw new AppError("Reseller credentials not configured", 500);
   const liquid = getLiquid({ resellerId: user.resellerId || "", apiKey: user.apiKey || "" });
   let list: any[] = [];
@@ -252,14 +267,12 @@ export async function syncTransactions(user: { id: number; role: string; reselle
     const [cust] = await db.select({ liquidCustomerId: customers.liquidCustomerId })
       .from(customers).where(eq(customers.userId, user.id));
     if (!cust?.liquidCustomerId) return { synced: 0 };
-    const res = await liquid.listCustomerTransactions(cust.liquidCustomerId);
-    list = Array.isArray(res) ? res : res?.data || res?.transactions || [];
+    list = await fetchAllLiquidTransactions(liquid, cust.liquidCustomerId);
   } else {
-    const res = await liquid.getTransactions();
-    list = Array.isArray(res) ? res : res?.data || res?.transactions || [];
+    list = await fetchAllLiquidTransactions(liquid);
   }
 
-  for (const item of list.slice(0, 100)) {
+  for (const item of list) {
     const liquidTxnId = String(item.transaction_id || item.id || "");
     if (!liquidTxnId) continue;
     const existing = await db.select({ id: transactions.id }).from(transactions)

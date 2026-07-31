@@ -473,74 +473,98 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
   }
 
   const liquid = new LiquidClient(resellerId, apiKey);
-  const rawDomains = await liquid.listDomains({ limit: "100" });
-  const domainList = Array.isArray(rawDomains) ? rawDomains : rawDomains?.data || rawDomains?.domains || [];
+
+  const statusMap: Record<string, string> = {
+    live: "active",
+    active: "active",
+    unpaid: "pending",
+    pending: "pending",
+    expired: "expired",
+    "pending delete restorable": "expired",
+    "pending transfer": "transferred",
+    "pending restore": "suspended",
+    suspended: "suspended",
+    cancelled: "expired",
+  };
 
   let syncedCount = 0;
   let newAddedCount = 0;
+  let total = 0;
+  let pageNo = 1;
 
-  for (const item of domainList) {
-    const fullDomainName = (item.domain_name || item.name || item.domain || "").toLowerCase().trim();
-    if (!fullDomainName) continue;
+  while (true) {
+    const rawDomains = await liquid.listDomains({ limit: "100", page_no: String(pageNo) });
+    const domainList = Array.isArray(rawDomains) ? rawDomains : rawDomains?.data || rawDomains?.domains || [];
+    if (domainList.length === 0) break;
 
-    const orderIdStr = String(item.domain_id || item.order_id || item.id || "");
-    const parts = fullDomainName.split(".");
-    const tld = parts.slice(1).join(".");
+    for (const item of domainList) {
+      try {
+        const fullDomainName = (item.domain_name || item.name || item.domain || "").toLowerCase().trim();
+        if (!fullDomainName) continue;
 
-    let status = "active";
-    const rawStatus = (item.status || "").toLowerCase();
-    if (rawStatus.includes("expir")) status = "expired";
-    else if (rawStatus.includes("pend")) status = "pending";
-    else if (rawStatus.includes("cancel")) status = "cancelled";
+        const orderIdStr = String(item.domain_id || item.order_id || item.id || "");
+        const parts = fullDomainName.split(".");
+        const tld = parts.slice(1).join(".");
 
-    let matchedCustomerId: number | null = null;
-    let matchedUserId: number = u.id;
+        const rawStatus = (item.status || "").toLowerCase().trim();
+        const status = statusMap[rawStatus] || "active";
 
-    if (item.customer_id) {
-      const [c] = await db.select().from(customers).where(eq(customers.liquidCustomerId, String(item.customer_id)));
-      if (c) {
-        matchedCustomerId = c.id;
-        if (c.userId) matchedUserId = c.userId;
+        let matchedCustomerId: number | null = null;
+        let matchedUserId: number = u.id;
+
+        if (item.customer_id) {
+          const [c] = await db.select().from(customers).where(eq(customers.liquidCustomerId, String(item.customer_id)));
+          if (c) {
+            matchedCustomerId = c.id;
+            if (c.userId) matchedUserId = c.userId;
+          }
+        }
+        if (!matchedCustomerId && item.customer_email) {
+          const [c] = await db.select().from(customers).where(eq(customers.email, String(item.customer_email)));
+          if (c) {
+            matchedCustomerId = c.id;
+            if (c.userId) matchedUserId = c.userId;
+          }
+        }
+
+        const regDate = ((item.creation_time || item.creation_date) ? new Date(item.creation_time || item.creation_date).toISOString().split("T")[0] : null) as string | null;
+        const expDate = (item.expiry_date ? new Date(item.expiry_date).toISOString().split("T")[0] : null) as string | null;
+
+        const [existing] = await db.select().from(domains).where(eq(domains.domainName, fullDomainName)).limit(1);
+
+        if (existing) {
+          await db.update(domains).set({
+            liquidOrderId: orderIdStr || existing.liquidOrderId,
+            customerId: matchedCustomerId || existing.customerId,
+            status: status as any,
+            registrationDate: regDate || existing.registrationDate || null,
+            expiryDate: expDate || existing.expiryDate || null,
+          }).where(eq(domains.id, existing.id));
+          syncedCount++;
+        } else {
+          await db.insert(domains).values({
+            userId: matchedUserId,
+            customerId: matchedCustomerId,
+            domainName: fullDomainName,
+            tld,
+            years: 1,
+            status: status as any,
+            liquidOrderId: orderIdStr || null,
+            registrationDate: regDate,
+            expiryDate: expDate,
+          });
+          newAddedCount++;
+          syncedCount++;
+        }
+      } catch (err) {
+        console.error(`[syncDomains] skip ${item?.domain_name || item?.name || item?.id}:`, err);
       }
     }
-    if (!matchedCustomerId && item.customer_email) {
-      const [c] = await db.select().from(customers).where(eq(customers.email, String(item.customer_email)));
-      if (c) {
-        matchedCustomerId = c.id;
-        if (c.userId) matchedUserId = c.userId;
-      }
-    }
 
-    const regDate = ((item.creation_time || item.creation_date) ? new Date(item.creation_time || item.creation_date).toISOString().split("T")[0] : null) as string | null;
-    const expDate = (item.expiry_date ? new Date(item.expiry_date).toISOString().split("T")[0] : null) as string | null;
-
-    const [existing] = await db.select().from(domains).where(eq(domains.domainName, fullDomainName)).limit(1);
-
-    if (existing) {
-      await db.update(domains).set({
-        liquidOrderId: orderIdStr || existing.liquidOrderId,
-        customerId: matchedCustomerId || existing.customerId,
-        status: status as any,
-        registrationDate: regDate || existing.registrationDate || null,
-        expiryDate: expDate || existing.expiryDate || null,
-      }).where(eq(domains.id, existing.id));
-      syncedCount++;
-    } else {
-      await db.insert(domains).values({
-        userId: matchedUserId,
-        customerId: matchedCustomerId,
-        domainName: fullDomainName,
-        tld,
-        years: 1,
-        status: status as any,
-        liquidOrderId: orderIdStr || null,
-        registrationDate: regDate,
-        expiryDate: expDate,
-      });
-      newAddedCount++;
-      syncedCount++;
-    }
+    total += domainList.length;
+    if (domainList.length < 100) break;
+    pageNo++;
   }
 
-  return { syncedCount, newAddedCount, total: domainList.length };
+  return { syncedCount, newAddedCount, total };
 }
