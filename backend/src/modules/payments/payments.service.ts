@@ -218,8 +218,14 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     orderId,
     amount: payload.amount,
     currency: "IDR",
-    expiresInHours: 24,
+    expiresInHours: 1,
   });
+
+  const formattedExpiresAt = sumopodRes.expires_at
+    ? (sumopodRes.expires_at.includes("Z") || /[+-]\d{2}:\d{2}$/.test(sumopodRes.expires_at)
+        ? sumopodRes.expires_at
+        : `${sumopodRes.expires_at.replace(" ", "T")}Z`)
+    : new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
   // --- Step 4: Save Transaction to Local DB ---
   const [insertRes] = await db.insert(transactions).values({
@@ -248,6 +254,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
       liquidCustomerId: targetLiquidCustomerId,
       customerId: validCustomerId,
       domainId: payload.domainId,
+      expiresAt: formattedExpiresAt,
     }),
   });
 
@@ -264,8 +271,8 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     paymentLinkUrl: sumopodRes.payment_link_url,
     amount: payload.amount,
     status: "pending_payment",
-    expires_at: sumopodRes.expires_at,
-    expiresAt: sumopodRes.expires_at,
+    expires_at: formattedExpiresAt,
+    expiresAt: formattedExpiresAt,
   };
 }
 

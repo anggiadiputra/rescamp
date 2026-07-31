@@ -1,5 +1,6 @@
 import { useState, useEffect, type ReactNode } from "react";
-import { Search, X, ChevronLeft, ChevronRight, Eye, EyeOff, CheckCircle2, Loader2, Clock, AlertCircle, Copy, Lock, ArrowRight, ShieldCheck } from "lucide-react";
+import { Search, X, ChevronLeft, ChevronRight, Eye, EyeOff, CheckCircle2, Loader2, Clock, AlertCircle, Copy, Lock, ArrowRight, ShieldCheck, Ban } from "lucide-react";
+import { api } from "../../lib/api";
 
 export function SecretInput({
   value,
@@ -205,15 +206,29 @@ export function PaymentModal({
   const [activeStep, setActiveStep] = useState(1);
   const [timeLeft, setTimeLeft] = useState(3600); // remaining seconds
   const [isExpired, setIsExpired] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [resultStatus, setResultStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setActiveStep(1);
 
     // Calculate target timestamp (default 1 hour if not specified)
-    const targetTime = expiresAt
-      ? new Date(expiresAt).getTime()
-      : Date.now() + 60 * 60 * 1000;
+    let targetTime = Date.now() + 60 * 60 * 1000;
+    if (expiresAt) {
+      if (typeof expiresAt === "number") {
+        targetTime = expiresAt;
+      } else if (expiresAt instanceof Date) {
+        targetTime = expiresAt.getTime();
+      } else {
+        let str = String(expiresAt).trim().replace(" ", "T");
+        if (!str.includes("Z") && !/[+-]\d{2}:\d{2}$/.test(str)) {
+          str += "Z";
+        }
+        const parsed = new Date(str).getTime();
+        if (!isNaN(parsed)) targetTime = parsed;
+      }
+    }
 
     const updateTimer = () => {
       const remaining = Math.max(0, Math.floor((targetTime - Date.now()) / 1000));
@@ -326,7 +341,7 @@ export function PaymentModal({
                   <Clock className="w-4 h-4 text-amber-700" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Batas Waktu Pembayaran (1 Jam)</p>
+                  <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Batas Waktu Pembayaran ({hours > 1 ? `${hours} Jam` : "1 Jam"})</p>
                   <p className="text-[10px] text-amber-600">Tagihan akan otomatis dibatalkan jika melewati batas waktu</p>
                 </div>
               </div>
@@ -435,17 +450,59 @@ export function PaymentModal({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setActiveStep(3);
-                  if (onSuccess) onSuccess();
-                  onClose();
+                disabled={checking}
+                onClick={async () => {
+                  setChecking(true);
+                  try {
+                    const res: any = await api.get(`/payments/status/${orderId}`);
+                    const status = res?.data?.status || res?.status || "";
+                    setResultStatus(status);
+                    if (status === "completed" || status === "processing_domain") {
+                      setActiveStep(3);
+                      if (onSuccess) onSuccess();
+                      setTimeout(onClose, 1000);
+                    } else {
+                      setActiveStep(2);
+                    }
+                  } catch {
+                    setResultStatus("error");
+                  }
+                  setChecking(false);
                 }}
                 className="py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5"
               >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Cek Status
+                {checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                {checking ? "Memeriksa..." : "Cek Status"}
               </button>
             </div>
+
+            {/* Payment Status Result */}
+            {resultStatus && (
+              <div className={`mt-3 p-3 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+                resultStatus === "completed" || resultStatus === "processing_domain"
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                  : resultStatus === "failed" || resultStatus === "expired" || resultStatus === "error"
+                  ? "bg-red-50 text-red-700 border border-red-100"
+                  : "bg-amber-50 text-amber-700 border border-amber-100"
+              }`}>
+                {resultStatus === "completed" || resultStatus === "processing_domain"
+                  ? <ShieldCheck className="w-4 h-4 shrink-0" />
+                  : resultStatus === "failed" || resultStatus === "expired" || resultStatus === "error"
+                  ? <Ban className="w-4 h-4 shrink-0" />
+                  : <Clock className="w-4 h-4 shrink-0" />}
+                <span>
+                  {resultStatus === "completed" || resultStatus === "processing_domain"
+                    ? "Pembayaran berhasil dikonfirmasi!"
+                    : resultStatus === "failed"
+                    ? "Pembayaran gagal — silakan coba lagi"
+                    : resultStatus === "expired"
+                    ? "Batas waktu pembayaran habis"
+                    : resultStatus === "error"
+                    ? "Gagal memeriksa status. Coba lagi."
+                    : "Pembayaran masih dalam proses. Silakan cek kembali."}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Security footer */}
