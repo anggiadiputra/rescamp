@@ -1,6 +1,6 @@
 import { db } from "../../db";
 import { transactions, domains, users, customers } from "../../db/schema";
-import { eq, and, like, sql } from "drizzle-orm";
+import { eq, and, like, sql, or } from "drizzle-orm";
 import { sumopodClient } from "../../lib/sumopod";
 import { LiquidClient } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
@@ -62,7 +62,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     try {
       const [insertedCust] = await db.insert(customers).values({
         userId: user.id,
-        name: user.name || user.email.split("@")[0],
+        name: user.name || user.email.split("@")[0] || "Customer",
         email: user.email,
         company: "Personal",
         address: "Indonesia",
@@ -71,8 +71,8 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
         country: "ID",
         zipcode: "10110",
         phone: "8123456789",
-      });
-      const newCustId = Number(insertedCust.insertId);
+      } as any);
+      const newCustId = Number((insertedCust as any).insertId);
       [custRecord] = await db.select().from(customers).where(eq(customers.id, newCustId));
     } catch (e: any) {
       console.warn("[payments] Local customer auto-creation warning:", e?.message);
