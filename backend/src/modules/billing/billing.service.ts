@@ -25,6 +25,39 @@ export async function getPrices(user: { resellerId: string | null; apiKey: strin
   return liquid.getPrices();
 }
 
+async function upsertLiquidTransaction(userId: number, item: any) {
+  const liquidTxnId = String(item.transaction_id || item.id || "");
+  if (!liquidTxnId) return;
+
+  const existing = await db.select({ id: transactions.id }).from(transactions)
+    .where(sql`JSON_EXTRACT(${transactions.metadata}, '$.liquidTransactionId') = ${liquidTxnId}`)
+    .limit(1);
+  if (existing.length > 0) return;
+
+  const amountVal = Math.abs(Number(item.amount || item.net_amount || 0));
+  const statusMap: Record<string, string> = {
+    paid: "completed", completed: "completed", success: "completed",
+    pending: "pending_payment", unpaid: "pending_payment",
+    cancelled: "cancelled", failed: "failed", expired: "expired",
+  };
+  const statusVal = statusMap[String(item.status || "").toLowerCase()] || "pending_payment";
+  const typeMap: Record<string, string> = {
+    domain: "register", deposit: "fund", fund: "fund",
+    note: "debit", privacy_protect: "privacy",
+  };
+  const typeVal = typeMap[String(item.transaction_type || item.type || "domain").toLowerCase()] || "register";
+
+  await db.insert(transactions).values({
+    userId,
+    type: typeVal as any,
+    amount: String(amountVal),
+    status: statusVal as any,
+    currency: item.currency || "IDR",
+    description: item.description || item.details || `Resellercamp #${liquidTxnId}`,
+    metadata: JSON.stringify({ liquidTransactionId: liquidTxnId, syncedFromLiquid: true }),
+  });
+}
+
 export async function listTransactions(
   userParam: number | { id: number; role?: string },
   params?: { type?: string; status?: string; page?: number; per_page?: number },
@@ -66,23 +99,16 @@ export async function listTransactions(
         if (cust?.liquidCustomerId) {
           const res = await liquid.listCustomerTransactions(cust.liquidCustomerId).catch(() => null);
           const list = Array.isArray(res) ? res : res?.data || res?.transactions || [];
-          for (const item of list.slice(0, 10)) {
-            const extId = String(item.transaction_id || item.id || "");
-            if (!extId) continue;
-            const existing = await db.select({ id: transactions.id }).from(transactions).where(sql`JSON_EXTRACT(${transactions.metadata}, '$.liquidTransactionId') = ${extId}`).limit(1);
-            if (existing.length === 0) {
-              const amountVal = Math.abs(Number(item.amount || item.net_amount || 0));
-              const statusVal = item.status === "Paid" || item.status === "Completed" ? "completed" : item.status === "Cancelled" ? "failed" : "pending_payment";
-              await db.insert(transactions).values({
-                userId,
-                type: "register",
-                amount: String(amountVal),
-                status: statusVal as any,
-                description: item.description || item.details || `Resellercamp Txn #${extId}`,
-                metadata: JSON.stringify({ liquidTransactionId: extId, liquidCustomerId: cust.liquidCustomerId, syncedFromLiquid: true }),
-              });
-            }
+          for (const item of list.slice(0, 100)) {
+            await upsertLiquidTransaction(userId, item);
           }
+        }
+      } else {
+        // Reseller: sync from account/transactions
+        const res = await liquid.getTransactions().catch(() => null);
+        const list = Array.isArray(res) ? res : res?.data || res?.transactions || [];
+        for (const item of list.slice(0, 100)) {
+          await upsertLiquidTransaction(userId, item);
         }
       }
     }
@@ -214,4 +240,36 @@ export async function getTransaction(userParam: number | { id: number; role?: st
 
 export async function syncBalanceToLocal(user: { resellerId: string | null; apiKey: string | null }, userId: number) {
   return getLiquid(user).getBalance();
+}
+
+export async function syncTransactions(user: { id: number; role: string; resellerId?: string | null; apiKey?: string | null }) {
+  if (!user.resellerId || !user.apiKey) throw new AppError("Reseller credentials not configured", 500);
+  const liquid = getLiquid({ resellerId: user.resellerId || "", apiKey: user.apiKey || "" });
+  let list: any[] = [];
+  let count = 0;
+
+  if (user.role === "customer") {
+    const [cust] = await db.select({ liquidCustomerId: customers.liquidCustomerId })
+      .from(customers).where(eq(customers.userId, user.id));
+    if (!cust?.liquidCustomerId) return { synced: 0 };
+    const res = await liquid.listCustomerTransactions(cust.liquidCustomerId);
+    list = Array.isArray(res) ? res : res?.data || res?.transactions || [];
+  } else {
+    const res = await liquid.getTransactions();
+    list = Array.isArray(res) ? res : res?.data || res?.transactions || [];
+  }
+
+  for (const item of list.slice(0, 100)) {
+    const liquidTxnId = String(item.transaction_id || item.id || "");
+    if (!liquidTxnId) continue;
+    const existing = await db.select({ id: transactions.id }).from(transactions)
+      .where(sql`JSON_EXTRACT(${transactions.metadata}, '$.liquidTransactionId') = ${liquidTxnId}`)
+      .limit(1);
+    if (existing.length === 0) {
+      await upsertLiquidTransaction(user.id, item);
+      count++;
+    }
+  }
+
+  return { synced: count, total: list.length };
 }

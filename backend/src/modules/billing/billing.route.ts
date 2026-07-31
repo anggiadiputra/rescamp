@@ -9,4 +9,5 @@ export const billingRoutes = new Elysia({ prefix: "/billing" })
       .get("/prices", h.prices as any, { detail: { tags: ["Billing"], summary: "Get prices" } })
       .get("/transactions", h.transactions as any, { detail: { tags: ["Billing"], summary: "List transactions" } })
       .get("/transactions/:id", h.transactionDetail as any, { detail: { tags: ["Billing"], summary: "Get transaction" } })
+      .post("/sync", h.sync as any, { detail: { tags: ["Billing"], summary: "Sync transactions from Resellercamp" } })
   );

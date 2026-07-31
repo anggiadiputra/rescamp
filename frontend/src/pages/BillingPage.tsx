@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Card, LoadingSpinner, EmptyState, Modal, Pagination, Button, PaymentModal, SearchBar } from "../components/ui";
+import { Card, LoadingSpinner, EmptyState, Modal, Pagination, Button, PaymentModal, SearchBar, toast } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import { useSettings } from "../contexts/SettingsContext";
-import { Printer, CheckCircle2, Receipt, AlertTriangle, X, Lock, AlertCircle } from "lucide-react";
+import { Printer, CheckCircle2, Receipt, AlertTriangle, X, Lock, AlertCircle, RefreshCw } from "lucide-react";
 import type { Transaction, PaginatedResponse } from "../lib/types";
 
 function fmtPrice(amount: any, currency: string = "IDR"): string {
@@ -150,6 +150,7 @@ export default function BillingPage() {
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [billingSyncing, setBillingSyncing] = useState(false);
   const perPage = 20;
 
   const [detailOpen, setDetailOpen] = useState(false);
@@ -201,6 +202,18 @@ export default function BillingPage() {
     searchParams.delete("status");
     searchParams.delete("order_id");
     setSearchParams(searchParams);
+  }
+
+  async function doBillingSync() {
+    if (billingSyncing) return;
+    setBillingSyncing(true);
+    try {
+      const res: any = await api.post("/billing/sync");
+      const synced = res?.data?.synced || res?.synced || 0;
+      if (synced > 0) toast(`${synced} transactions synced from Resellercamp`);
+      fetchTxns();
+    } catch (e: any) { toast(e.message, "error"); }
+    setBillingSyncing(false);
   }
 
   async function openInvoice(txn: Transaction) {
@@ -311,6 +324,10 @@ export default function BillingPage() {
             </button>
           ))}
         </div>
+        <Button variant="outline" onClick={doBillingSync} disabled={billingSyncing} className="ml-auto shrink-0">
+          <RefreshCw className={`w-3.5 h-3.5 inline mr-1 ${billingSyncing ? "animate-spin" : ""}`} />
+          {billingSyncing ? "Sync..." : "Sync Resellercamp"}
+        </Button>
       </div>
 
       <Card className="p-6 bg-white border border-gray-200 rounded-2xl shadow-sm space-y-4">

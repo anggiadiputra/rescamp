@@ -51,3 +51,10 @@ export async function transactionDetail(ctx: any) {
   const txn = await svc.getTransaction(user, parseInt(ctx.params.id));
   return { data: txn };
 }
+
+export async function sync(ctx: any) {
+  const user = await getUser(ctx);
+  const creds = await getResellerCreds(ctx);
+  const result = await svc.syncTransactions({ id: creds.id, role: creds.role, resellerId: creds.resellerId, apiKey: creds.apiKey });
+  return { data: result };
+}
