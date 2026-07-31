@@ -228,8 +228,14 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     : new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
   // --- Step 4: Save Transaction to Local DB ---
+  // Use customer's userId (not reseller) so customer sees invoice in their billing
+  let transactionUserId = payload.userId;
+  if (validCustomerId) {
+    const [cust] = await db.select({ userId: customers.userId }).from(customers).where(eq(customers.id, validCustomerId));
+    if (cust?.userId) transactionUserId = cust.userId;
+  }
   const [insertRes] = await db.insert(transactions).values({
-    userId: payload.userId,
+    userId: transactionUserId,
     customerId: validCustomerId,
     type: payload.type,
     amount: String(payload.amount),

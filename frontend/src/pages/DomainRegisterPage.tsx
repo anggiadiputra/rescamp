@@ -153,6 +153,7 @@ export default function DomainRegisterPage() {
   async function submit() {
     if (submitting) return;
     if (!customerId && user?.role !== "customer") { setError("Please select a customer contact"); return; }
+    const effectiveCustomerId = (customerId && customerId !== "__self__") ? Number(customerId) : undefined;
     const domainToRegister = selectedDomain?.domain || search;
     if (!domainToRegister.includes(".")) { setError("Invalid domain name"); return; }
 
@@ -167,7 +168,7 @@ export default function DomainRegisterPage() {
         domain_name: name,
         tld,
         years,
-        customer_id: customerId ? Number(customerId) : undefined,
+        customer_id: effectiveCustomerId,
         nameservers: ns.length >= 2 ? ns : undefined,
         privacy_protection: isIdDomain ? false : privacy,
         auto_renew: autoRenew,
@@ -178,7 +179,10 @@ export default function DomainRegisterPage() {
       const orderId = paymentInfo?.orderId || paymentInfo?.order_id;
       const expiresAt = paymentInfo?.expiresAt || paymentInfo?.expires_at;
 
-      if (paymentLinkUrl) {
+      // Reseller assigning to customer: no PaymentModal, invoice goes to customer
+      const isAssigning = user?.role !== "customer" && customerId && customerId !== "__self__";
+      if (paymentLinkUrl && !isAssigning) {
+        // Customer self-service: show PaymentModal
         setPaymentData({
           open: true,
           orderId: orderId || "",
@@ -189,6 +193,10 @@ export default function DomainRegisterPage() {
           domainName: domainToRegister,
         });
         window.open(paymentLinkUrl, "_blank");
+      } else if (isAssigning) {
+        // Reseller assigned domain to customer — invoice sent to customer
+        toast(`🎉 Order domain ${domainToRegister} berhasil dibuat! Invoice dikirim ke customer.`);
+        nav("/domains");
       } else {
         toast(`🎉 ${domainToRegister} registered successfully!`);
         nav("/domains");
@@ -201,6 +209,7 @@ export default function DomainRegisterPage() {
     if (transferSubmitting) return;
     if (!transferDomain.includes(".")) { setError("Sila masukkan nama domain lengkap (misal: bisnisku.com)"); return; }
     if (!customerId && user?.role !== "customer") { setError("Sila pilih kontak pemilik domain"); return; }
+    const effectiveCustomerId = (customerId && customerId !== "__self__") ? Number(customerId) : undefined;
 
     setTransferSubmitting(true);
     setError("");
@@ -208,7 +217,7 @@ export default function DomainRegisterPage() {
       const res: any = await api.post("/domains/transfer", {
         domain_name: transferDomain.trim(),
         auth_code: authCode.trim() || undefined,
-        customer_id: customerId ? Number(customerId) : undefined,
+        customer_id: effectiveCustomerId,
       });
 
       const paymentInfo = res?.data || res;
@@ -216,7 +225,8 @@ export default function DomainRegisterPage() {
       const orderId = paymentInfo?.orderId || paymentInfo?.order_id;
       const expiresAt = paymentInfo?.expiresAt || paymentInfo?.expires_at;
 
-      if (paymentLinkUrl) {
+      const isAssigning = user?.role !== "customer" && customerId && customerId !== "__self__";
+      if (paymentLinkUrl && !isAssigning) {
         setPaymentData({
           open: true,
           orderId: orderId || "",
@@ -227,6 +237,9 @@ export default function DomainRegisterPage() {
           domainName: transferDomain.trim(),
         });
         window.open(paymentLinkUrl, "_blank");
+      } else if (isAssigning) {
+        toast(`🎉 Transfer domain ${transferDomain} berhasil diajukan untuk customer! Invoice dikirim ke customer.`);
+        nav("/domains");
       } else {
         toast(`🎉 Permintaan transfer domain ${transferDomain} berhasil diajukan!`);
         nav("/domains");
@@ -447,8 +460,10 @@ export default function DomainRegisterPage() {
                   >
                     <option value="">Select customer contact...</option>
                     {customers.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.email}) &middot; {c.country}</option>
+                      <option key={c.id} value={c.id}>{c.name} ({c.email}) · {c.country}</option>
                     ))}
+                    <option disabled>──────────────</option>
+                    <option value="__self__">— Daftar untuk saya sendiri —</option>
                   </select>
                 )}
               </div>
@@ -643,8 +658,10 @@ export default function DomainRegisterPage() {
                 >
                   <option value="">Pilih kontak pemilik domain...</option>
                   {customers.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name} ({c.email}) &middot; {c.country}</option>
+                    <option key={c.id} value={c.id}>{c.name} ({c.email}) · {c.country}</option>
                   ))}
+                  <option disabled>──────────────</option>
+                  <option value="__self__">— Daftar untuk saya sendiri —</option>
                 </select>
               )}
             </div>
