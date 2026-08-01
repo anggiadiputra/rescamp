@@ -26,7 +26,12 @@ async function fetchAllLiquidTransactions(liquid: LiquidClient, customerId?: str
 }
 
 export async function getBalance(user: { resellerId: string | null; apiKey: string | null }) {
-  return getLiquid(user).getBalance();
+  try {
+    return await getLiquid(user).getBalance();
+  } catch (err: any) {
+    console.warn("[billing.service] getBalance fallback triggered:", err?.message || err);
+    return { balance: "0.00", currency: "IDR" };
+  }
 }
 
 export async function getPrices(user: { resellerId: string | null; apiKey: string | null; role?: string }) {
@@ -36,10 +41,21 @@ export async function getPrices(user: { resellerId: string | null; apiKey: strin
       const raw = await liquid.getCustomerPrices();
       return formatCustomerPrices(raw);
     } catch {
-      return liquid.getPrices();
+      try {
+        const raw = await liquid.getPrices();
+        return raw;
+      } catch (err: any) {
+        console.warn("[billing.service] getPrices customer fallback triggered:", err?.message || err);
+        return {};
+      }
     }
   }
-  return liquid.getPrices();
+  try {
+    return await liquid.getPrices();
+  } catch (err: any) {
+    console.warn("[billing.service] getPrices fallback triggered:", err?.message || err);
+    return {};
+  }
 }
 
 async function upsertLiquidTransaction(userId: number, item: any) {
