@@ -333,7 +333,7 @@ export async function getDomain(userParam: any, lookup: string | number) {
 export async function renewDomain(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, years: number) {
   const domain = await getDomain({ id: userId, role: "customer" }, domainId);
   const liquidRes = await getLiquid(user).renewDomain(String(domain.liquidOrderId || domain.domainName), years);
-  await db.update(domains).set({ years: (domain.years || 1) + years }).where(eq(domains.id, domainId));
+  await db.update(domains).set({ years: (domain.years || 1) + years }).where(eq(domains.id, domain.id));
   return { domain_id: domain.id, domain_name: domain.domainName, years_added: years, previous_expiry: domain.expiryDate, new_expiry: liquidRes?.expiry_date || null };
 }
 
@@ -345,23 +345,23 @@ export async function updateLock(user: { resellerId: string | null; apiKey: stri
   } catch (err: any) {
     const msg = String(err?.message || "").toLowerCase();
     if (msg.includes("already locked")) {
-      await db.update(domains).set({ locked: 1 }).where(eq(domains.id, domainId));
+      await db.update(domains).set({ locked: 1 }).where(eq(domains.id, domain.id));
       return { locked: true, message: "Domain already locked" };
     }
     if (msg.includes("already unlocked") || msg.includes("not locked")) {
-      await db.update(domains).set({ locked: 0 }).where(eq(domains.id, domainId));
+      await db.update(domains).set({ locked: 0 }).where(eq(domains.id, domain.id));
       return { locked: false, message: "Domain already unlocked" };
     }
     throw err;
   }
-  await db.update(domains).set({ locked: lock ? 1 : 0 }).where(eq(domains.id, domainId));
+  await db.update(domains).set({ locked: lock ? 1 : 0 }).where(eq(domains.id, domain.id));
   return { locked: lock };
 }
 
 export async function updateNameservers(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, ns: string[]) {
   const domain = await getDomain(userId, domainId);
   await getLiquid(user).updateNameservers(String(domain.liquidOrderId || domain.domainName), ns);
-  await db.update(domains).set({ nameservers: ns }).where(eq(domains.id, domainId));
+  await db.update(domains).set({ nameservers: ns }).where(eq(domains.id, domain.id));
   return { domain_id: domainId, nameservers: ns };
 }
 
@@ -383,23 +383,23 @@ export async function toggleTheftProtection(user: { resellerId: string | null; a
   } catch (err: any) {
     const msg = String(err?.message || "").toLowerCase();
     if (msg.includes("already enabled") || msg.includes("already active")) {
-      await db.update(domains).set({ theftProtection: 1 }).where(eq(domains.id, domainId));
+      await db.update(domains).set({ theftProtection: 1 }).where(eq(domains.id, domain.id));
       return { theftProtection: true, message: "Theft protection is already enabled" };
     }
     if (msg.includes("already disabled") || msg.includes("not enabled")) {
-      await db.update(domains).set({ theftProtection: 0 }).where(eq(domains.id, domainId));
+      await db.update(domains).set({ theftProtection: 0 }).where(eq(domains.id, domain.id));
       return { theftProtection: false, message: "Theft protection is already disabled" };
     }
     throw err;
   }
-  await db.update(domains).set({ theftProtection: enable ? 1 : 0 }).where(eq(domains.id, domainId));
+  await db.update(domains).set({ theftProtection: enable ? 1 : 0 }).where(eq(domains.id, domain.id));
   return { theftProtection: enable };
 }
 
 export async function restoreDomain(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
   const domain = await getDomain(userId, domainId);
   const res = await getLiquid(user).restoreDomain(String(domain.liquidOrderId || domain.domainName));
-  await db.update(domains).set({ status: "active" }).where(eq(domains.id, domainId));
+  await db.update(domains).set({ status: "active" }).where(eq(domains.id, domain.id));
   return res;
 }
 
@@ -407,13 +407,13 @@ export async function toggleSuspend(user: { resellerId: string | null; apiKey: s
   const domain = await getDomain(userId, domainId);
   if (suspend) await getLiquid(user).suspendDomain(String(domain.liquidOrderId || domain.domainName));
   else await getLiquid(user).unsuspendDomain(String(domain.liquidOrderId || domain.domainName));
-  await db.update(domains).set({ status: suspend ? "suspended" : "active" }).where(eq(domains.id, domainId));
+  await db.update(domains).set({ status: suspend ? "suspended" : "active" }).where(eq(domains.id, domain.id));
 }
 
 export async function deleteDomainRecord(userId: number, domainId: number) {
   const domain = await getDomain(userId, domainId);
   if (domain.status === "active") throw new AppError("Cannot delete active domain. Suspend first.", 400);
-  await db.delete(domains).where(eq(domains.id, domainId));
+  await db.delete(domains).where(eq(domains.id, domain.id));
 }
 
 export async function bulkAvailability(user: { resellerId: string; apiKey: string; role?: string }, keyword: string) {
