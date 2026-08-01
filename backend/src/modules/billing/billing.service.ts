@@ -80,15 +80,22 @@ async function upsertLiquidTransaction(userId: number, item: any) {
   };
   const typeVal = typeMap[String(item.transaction_type || item.type || "domain").toLowerCase()] || "register";
 
-  await db.insert(transactions).values({
-    userId,
-    type: typeVal as any,
-    amount: String(amountVal),
-    status: statusVal as any,
-    currency: item.currency || "IDR",
-    description: item.description || item.details || `Resellercamp #${liquidTxnId}`,
-    metadata: JSON.stringify({ liquidTransactionId: liquidTxnId, syncedFromLiquid: true }),
-  });
+  try {
+    await db.insert(transactions).values({
+      userId,
+      type: typeVal as any,
+      amount: String(amountVal),
+      status: statusVal as any,
+      currency: item.currency || "IDR",
+      description: item.description || item.details || `Resellercamp #${liquidTxnId}`,
+      liquidTransactionId: liquidTxnId,
+      metadata: JSON.stringify({ liquidTransactionId: liquidTxnId, syncedFromLiquid: true }),
+    });
+  } catch (err: any) {
+    // ER_DUP_ENTRY (1062): concurrent sync already inserted this liquid txn — unique index on liquid_transaction_id
+    if (err?.errno === 1062 || String(err?.code || "").includes("ER_DUP_ENTRY")) return;
+    throw err;
+  }
 }
 
 export async function listTransactions(

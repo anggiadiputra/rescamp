@@ -1,6 +1,6 @@
 import { db } from "../../db";
 import { domains, users, customers } from "../../db/schema";
-import { eq, and, like, inArray, or } from "drizzle-orm";
+import { eq, and, like, inArray, or, sql } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 
@@ -591,7 +591,7 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
             liquidOrderId: orderIdStr || null,
             registrationDate: regDate,
             expiryDate: expDate,
-          });
+          }).onDuplicateKeyUpdate({ set: { domainName: sql`${domains.domainName}` } });
           newAddedCount++;
           syncedCount++;
         }

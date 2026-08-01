@@ -1,4 +1,4 @@
-import { mysqlTable, int, varchar, decimal, text, timestamp, mysqlEnum } from "drizzle-orm/mysql-core";
+import { mysqlTable, int, varchar, decimal, text, timestamp, mysqlEnum, uniqueIndex } from "drizzle-orm/mysql-core";
 import { users } from "./users";
 import { customers } from "./customers";
 import { domains } from "./domains";
@@ -20,4 +20,6 @@ export const transactions = mysqlTable("transactions", {
   liquidTransactionId: varchar("liquid_transaction_id", { length: 100 }),
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  liquidTxnIdUnique: uniqueIndex("liquid_transaction_id_unique").on(table.liquidTransactionId),
+}));

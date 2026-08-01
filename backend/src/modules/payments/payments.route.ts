@@ -3,7 +3,7 @@ import { sumopodClient } from "../../lib/sumopod";
 import { processWebhookPayload } from "./payments.service";
 import { db } from "../../db";
 import { transactions } from "../../db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { authGuard } from "../../middleware/auth";
 
 export const paymentRoutes = new Elysia({ prefix: "/payments" })
@@ -110,9 +110,15 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
         }
 
         if (isPastExpiry && (currentStatus === "pending_payment" || currentPaymentStatus === "pending")) {
-          currentStatus = "expired";
-          currentPaymentStatus = "expired";
-          await db.update(transactions).set({ status: "expired", paymentStatus: "expired" }).where(eq(transactions.id, tx.id));
+          // CAS: only expire if still pending — a concurrent webhook may have just completed it
+          const res: any = await db.update(transactions)
+            .set({ status: "expired", paymentStatus: "expired" })
+            .where(and(eq(transactions.id, tx.id), eq(transactions.status, "pending_payment")));
+          const changed = res[0]?.affectedRows ?? res?.affectedRows ?? 0;
+          if (changed > 0) {
+            currentStatus = "expired";
+            currentPaymentStatus = "expired";
+          }
         }
 
         return {

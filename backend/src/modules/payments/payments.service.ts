@@ -243,6 +243,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     paymentGateway: "sumopod",
     paymentId: sumopodRes.payment_id,
     paymentLinkUrl: sumopodRes.payment_link_url,
+    liquidTransactionId: liquidTransactionId ? String(liquidTransactionId) : null,
     status: "pending_payment",
     paymentStatus: "pending",
     description: `Domain ${payload.type} - ${fullDomain} (${years} yr) - ${orderId}`,
@@ -362,8 +363,10 @@ export async function processWebhookPayload(payload: any) {
     );
 
   const affectedRows = updateResult[0]?.affectedRows ?? updateResult?.affectedRows ?? 0;
-  if (affectedRows === 0 && tx.status === "completed") {
-    return { status: "already_completed" };
+  // Whoever wins the CAS (pending_payment -> processing_domain) processes the payment;
+  // a concurrent duplicate webhook/poll that loses must bail regardless of its stale read.
+  if (affectedRows === 0) {
+    return { status: "already_processing" };
   }
 
   if (!tx.metadata) {
@@ -428,7 +431,7 @@ export async function processWebhookPayload(payload: any) {
           privacyProtection: meta.privacyProtection ? 1 : 0,
           liquidOrderId: liquidOrderId ? String(liquidOrderId) : null,
           nameservers: meta.nameservers || [],
-        });
+        }).onDuplicateKeyUpdate({ set: { domainName: sql`${domains.domainName}` } });
       }
     } else if (meta.type === "renew") {
       const domainId = meta.domainId || tx.domainId;

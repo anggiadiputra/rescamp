@@ -1,4 +1,4 @@
-import { mysqlTable, int, varchar, date, tinyint, json, timestamp, mysqlEnum, index } from "drizzle-orm/mysql-core";
+import { mysqlTable, int, varchar, date, tinyint, json, timestamp, mysqlEnum, index, uniqueIndex } from "drizzle-orm/mysql-core";
 import { users } from "./users";
 import { customers } from "./customers";
 
@@ -24,5 +24,6 @@ export const domains = mysqlTable("domains", {
   userIdIdx: index("user_id_idx").on(table.userId),
   customerIdIdx: index("customer_id_idx").on(table.customerId),
   statusIdx: index("status_idx").on(table.status),
-  domainNameIdx: index("domain_name_idx").on(table.domainName)
+  domainNameIdx: index("domain_name_idx").on(table.domainName),
+  domainNameUnique: uniqueIndex("domain_name_unique").on(table.domainName)
 }));
