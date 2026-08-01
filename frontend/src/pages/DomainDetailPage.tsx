@@ -1,6 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { Card, Button, Badge, LoadingSpinner, Modal, InfoBanner, ConfirmDialog, toast, PaymentModal } from "../components/ui";
+import {
+  Globe, ShieldCheck, Lock, Unlock, Key, RefreshCw, Server,
+  AlertTriangle, Trash2, Copy, Check, ExternalLink, Calendar, User, ArrowLeft
+} from "lucide-react";
+import { Button, Badge, LoadingSpinner, Modal, InfoBanner, ConfirmDialog, toast, PaymentModal } from "../components/ui";
 import { api } from "../lib/api";
 import type { Domain } from "../lib/types";
 
@@ -10,6 +14,7 @@ export default function DomainDetailPage() {
   const [domain, setDomain] = useState<Domain | null>(null);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
+  const [copiedNs, setCopiedNs] = useState(false);
 
   // Modal states
   const [renewOpen, setRenewOpen] = useState(false);
@@ -34,27 +39,46 @@ export default function DomainDetailPage() {
   const [authCodeOpen, setAuthCodeOpen] = useState(false);
   const [authCode, setAuthCode] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  const [copiedAuth, setCopiedAuth] = useState(false);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [suspendLoading, setSuspendLoading] = useState(false);
+  const [lockLoading, setLockLoading] = useState(false);
+  const [theftLoading, setTheftLoading] = useState(false);
 
   const fetchDomain = useCallback(async () => {
     setLoading(true);
-    try { const d = await api.get<Domain>(`/domains/${id}`); setDomain(d); } catch { /* 404 */ }
+    try {
+      const d = await api.get<Domain>(`/domains/${id}`);
+      setDomain(d);
+    } catch {
+      toast("Domain tidak ditemukan", "error");
+    }
     setLoading(false);
   }, [id]);
 
-  useEffect(() => { fetchDomain(); }, [fetchDomain]);
+  useEffect(() => {
+    fetchDomain();
+  }, [fetchDomain]);
 
   async function toggleLock() {
     if (!domain) return;
+    setLockLoading(true);
     setMsg("");
     try {
-      if (domain.locked) await api.delete(`/domains/${id}/locked`);
-      else await api.put(`/domains/${id}/locked`);
+      if (domain.locked) {
+        await api.delete(`/domains/${id}/locked`);
+        toast("Penguncian domain (Transfer Lock) berhasil dibuka");
+      } else {
+        await api.put(`/domains/${id}/locked`);
+        toast("Domain berhasil dikunci (Transfer Lock Aktif)");
+      }
       await fetchDomain();
-    } catch (e: any) { setMsg(e.message); }
+    } catch (e: any) {
+      toast(e.message || "Gagal mengubah status transfer lock", "error");
+    }
+    setLockLoading(false);
   }
 
   async function doRenew() {
@@ -80,31 +104,44 @@ export default function DomainDetailPage() {
         });
         window.open(paymentLinkUrl, "_blank");
       } else {
-        toast("Domain renewed successfully");
+        toast("Perpanjangan domain berhasil diproses!");
         await fetchDomain();
       }
-    } catch (e: any) { setMsg(e.message); }
+    } catch (e: any) {
+      toast(e.message || "Gagal memproses perpanjangan domain", "error");
+    }
     setRenewLoading(false);
   }
 
   async function doUpdateNs() {
+    const validNs = nsForm.map(s => s.trim()).filter(Boolean);
+    if (validNs.length < 2) {
+      toast("Minimal 2 Nameserver wajib diisi", "error");
+      return;
+    }
     setNsLoading(true);
     setMsg("");
     try {
-      await api.put(`/domains/${id}/ns`, { nameservers: nsForm.filter(Boolean) });
+      await api.put(`/domains/${id}/ns`, { nameservers: validNs });
+      toast("Nameservers berhasil diperbarui!");
       setNsOpen(false);
       await fetchDomain();
-    } catch (e: any) { setMsg(e.message); }
+    } catch (e: any) {
+      toast(e.message || "Gagal memperbarui nameservers", "error");
+    }
     setNsLoading(false);
   }
 
   async function getAuthCode() {
     setAuthLoading(true);
     try {
-      const res = await api.get<{ auth_code?: string; epp_code?: string }>(`/domains/${id}/auth-code`);
-      setAuthCode(res.auth_code || res.epp_code || "-");
+      const res = await api.get<{ auth_code?: string; epp_code?: string; data?: any }>(`/domains/${id}/auth-code`);
+      const code = res.auth_code || res.epp_code || (res.data && (res.data.auth_code || res.data.epp_code)) || "-";
+      setAuthCode(code);
       setAuthCodeOpen(true);
-    } catch (e: any) { setMsg(e.message); }
+    } catch (e: any) {
+      toast(e.message || "Gagal mengambil EPP Auth Code dari Resellercamp", "error");
+    }
     setAuthLoading(false);
   }
 
@@ -113,147 +150,428 @@ export default function DomainDetailPage() {
     try {
       if (domain?.status === "suspended") {
         await api.delete(`/domains/${id}/suspended`);
-        toast("Domain unsuspended");
+        toast("Domain berhasil di-unsuspend (Aktif kembali)");
       } else {
         await api.put(`/domains/${id}/suspended`);
-        toast("Domain suspended");
+        toast("Domain berhasil di-suspend");
       }
       await fetchDomain();
-    } catch (e: any) { toast(e.message, "error"); }
+    } catch (e: any) {
+      toast(e.message || "Gagal mengubah status suspend domain", "error");
+    }
     setSuspendLoading(false);
   }
 
   async function toggleTheft() {
+    setTheftLoading(true);
     try {
       if (domain?.theftProtection) {
         await api.delete(`/domains/${id}/theft-protection`);
-        toast("Theft protection disabled");
+        toast("Proteksi pencurian domain dinonaktifkan");
       } else {
         await api.put(`/domains/${id}/theft-protection`);
-        toast("Theft protection enabled");
+        toast("Proteksi pencurian domain diaktifkan");
       }
       await fetchDomain();
-    } catch (e: any) { toast(e.message, "error"); }
+    } catch (e: any) {
+      toast(e.message || "Gagal menguji proteksi pencurian domain", "error");
+    }
+    setTheftLoading(false);
   }
 
   async function doDelete() {
     setDeleteLoading(true);
     try {
       await api.delete(`/domains/${id}`);
-      toast("Domain deleted");
+      toast("Catatan domain berhasil dihapus");
       nav("/domains");
-    } catch (e: any) { toast(e.message, "error"); setDeleteOpen(false); }
+    } catch (e: any) {
+      toast(e.message || "Gagal menghapus domain", "error");
+      setDeleteOpen(false);
+    }
     setDeleteLoading(false);
   }
 
+  function handleCopyNs() {
+    const list = domain?.nameservers?.length ? domain.nameservers.join("\n") : "ns1.liquid.net\nns2.liquid.net";
+    navigator.clipboard.writeText(list);
+    setCopiedNs(true);
+    toast("Nameservers berhasil disalin!");
+    setTimeout(() => setCopiedNs(false), 2000);
+  }
+
   if (loading) return <LoadingSpinner />;
-  if (!domain) return <div className="text-center py-16 text-gray-500">Domain not found</div>;
+  if (!domain) {
+    return (
+      <div className="text-center py-16 space-y-4">
+        <p className="text-gray-500 font-medium">Domain tidak ditemukan atau Anda tidak memiliki hak akses.</p>
+        <Link to="/domains">
+          <Button variant="secondary"><ArrowLeft className="w-4 h-4 mr-2" /> Kembali ke Daftar Domain</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  // Days until expiry calculation
+  let daysLeft: number | null = null;
+  if (domain.expiryDate) {
+    const expTime = new Date(domain.expiryDate).getTime();
+    const nowTime = new Date().getTime();
+    daysLeft = Math.ceil((expTime - nowTime) / (1000 * 60 * 60 * 24));
+  }
+
+  const activeNs = domain.nameservers?.length ? domain.nameservers : ["ns1.liquid.net", "ns2.liquid.net"];
 
   return (
     <div className="space-y-6">
       {msg && <InfoBanner type="error" message={msg} />}
 
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">{domain.domainName}</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Expires: {domain.expiryDate || "-"}</p>
-        </div>
-        <Badge status={domain.status} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Info</h2>
-          <div className="space-y-2 text-xs text-gray-700">
-            <div className="flex justify-between"><span className="text-gray-400">Registration</span><span>{domain.registrationDate || "-"}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Expiry</span><span>{domain.expiryDate || "-"}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Years</span><span>{domain.years}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Auto Renew</span><span>{domain.autoRenew ? "On" : "Off"}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Privacy</span><span>{domain.privacyProtection ? "On" : "Off"}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Theft Protection</span><span>{domain.theftProtection ? "On" : "Off"}</span></div>
-            {domain.liquidOrderId && <div className="flex justify-between"><span className="text-gray-400">Domain ID</span><span className="font-mono text-[10px]">{domain.liquidOrderId}</span></div>}
+      {/* Top Header Card */}
+      <div className="bg-white rounded-2xl border border-gray-200/80 p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <Link to="/domains" className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+            </Link>
+            <div className="p-2.5 rounded-xl bg-black text-white shadow-sm">
+              <Globe className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-2xl font-black text-gray-900 tracking-tight font-mono">{domain.domainName}</h1>
+                <Badge status={domain.status} />
+              </div>
+              <p className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                <span>Ekstensi: <strong className="uppercase font-semibold text-gray-700">.{domain.tld}</strong></span>
+                <span>•</span>
+                <span>Kadaluarsa: <strong className="text-gray-800">{domain.expiryDate || "-"}</strong></span>
+                {daysLeft !== null && (
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${daysLeft > 30 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : daysLeft > 0 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                    {daysLeft > 0 ? `${daysLeft} hari tersisa` : 'Expired'}
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
-        </Card>
+        </div>
 
-        <Card>
-          <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Nameservers</h2>
-          {(domain.nameservers?.length ? domain.nameservers : ["ns1.liquid.net", "ns2.liquid.net"]).map((ns: string, i: number) => (
-            <p key={i} className="text-xs text-gray-700 font-mono">{ns}</p>
-          ))}
-        </Card>
+        {/* Header Action Shortcuts */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link to={`/domains/${id}/dns`}>
+            <button className="px-4 py-2.5 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer">
+              <Server className="w-4 h-4" /> Kelola DNS Record
+            </button>
+          </Link>
+          <button
+            onClick={() => { setRenewYears(1); setRenewOpen(true); }}
+            className="px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-900 border border-gray-300 text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <RefreshCw className="w-4 h-4 text-emerald-600" /> Perpanjang Domain
+          </button>
+        </div>
       </div>
 
-      <Card>
-        <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">Actions</h2>
-        <div className="flex flex-wrap gap-3">
-          <Link to={`/domains/${id}/dns`}><Button>Manage DNS</Button></Link>
-          <Button variant="secondary" onClick={() => { setRenewYears(1); setRenewOpen(true); }}>Renew Domain</Button>
-          <Button variant={domain.locked ? "danger" : "secondary"} onClick={toggleLock}>
-            {domain.locked ? "Unlock" : "Lock"} Domain
-          </Button>
-          <Button variant="secondary" onClick={() => { setNsForm(domain.nameservers?.length ? [...domain.nameservers] : ["", ""]); setNsOpen(true); }}>
-            Edit Nameservers
-          </Button>
-          <Button variant="secondary" onClick={getAuthCode} disabled={authLoading}>
-            {authLoading ? "..." : "Get Auth Code"}
-          </Button>
-          <Button variant={domain.theftProtection ? "secondary" : "secondary"} onClick={toggleTheft}>
-            {domain.theftProtection ? "Disable" : "Enable"} Theft Protection
-          </Button>
-          <Button variant="secondary" onClick={toggleSuspend} disabled={suspendLoading}>
-            {domain.status === "suspended" ? "Unsuspend" : "Suspend"} Domain
-          </Button>
-          <Button variant="danger" onClick={() => setDeleteOpen(true)}>
-            Delete Domain
-          </Button>
+      {/* Main Grid: Details & Nameservers */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Domain Information Card */}
+        <div className="bg-white rounded-2xl border border-gray-200/80 p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-gray-700" /> Informasi Spesifikasi Domain
+            </h2>
+            {domain.liquidOrderId && (
+              <span className="text-[11px] font-mono bg-gray-100 px-2 py-0.5 rounded text-gray-600">
+                Order ID: #{domain.liquidOrderId}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 text-xs">
+            <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
+              <span className="text-gray-400 block text-[11px]">Tanggal Registrasi</span>
+              <span className="font-semibold text-gray-900">{domain.registrationDate || "-"}</span>
+            </div>
+            <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
+              <span className="text-gray-400 block text-[11px]">Tanggal Kadaluarsa</span>
+              <span className="font-semibold text-gray-900">{domain.expiryDate || "-"}</span>
+            </div>
+            <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
+              <span className="text-gray-400 block text-[11px]">Durasi Kontrak</span>
+              <span className="font-semibold text-gray-900">{domain.years} Tahun</span>
+            </div>
+            <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
+              <span className="text-gray-400 block text-[11px]">WHOIS Privacy</span>
+              <span className={`font-bold ${domain.privacyProtection ? "text-emerald-600" : "text-gray-500"}`}>
+                {domain.privacyProtection ? "✓ Aktif" : "Non-Aktif"}
+              </span>
+            </div>
+            <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
+              <span className="text-gray-400 block text-[11px]">Transfer Lock</span>
+              <span className={`font-bold ${domain.locked ? "text-emerald-600" : "text-amber-600"}`}>
+                {domain.locked ? "🔒 Terkunci (Locked)" : "🔓 Terbuka (Unlocked)"}
+              </span>
+            </div>
+            <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
+              <span className="text-gray-400 block text-[11px]">Theft Protection</span>
+              <span className={`font-bold ${domain.theftProtection ? "text-emerald-600" : "text-gray-500"}`}>
+                {domain.theftProtection ? "🛡️ Aktif" : "Non-Aktif"}
+              </span>
+            </div>
+          </div>
+
+          {(domain.customerName || domain.customerEmail) && (
+            <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-600">
+              <span className="flex items-center gap-1.5 text-gray-400"><User className="w-3.5 h-3.5" /> Pemilik Domain:</span>
+              <span className="font-medium text-gray-900">{domain.customerName || domain.customerEmail}</span>
+            </div>
+          )}
         </div>
-      </Card>
+
+        {/* Nameservers Card */}
+        <div className="bg-white rounded-2xl border border-gray-200/80 p-6 shadow-sm flex flex-col justify-between space-y-4">
+          <div>
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
+              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                <Globe className="w-4 h-4 text-blue-600" /> Nameservers Aktif (DNS NS)
+              </h2>
+              <button
+                onClick={handleCopyNs}
+                className="text-xs font-semibold text-gray-600 hover:text-black flex items-center gap-1 bg-gray-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+              >
+                {copiedNs ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedNs ? "Tersalin" : "Salin All"}
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              {activeNs.map((ns: string, i: number) => (
+                <div key={i} className="p-3 bg-gray-50 rounded-xl border border-gray-200/80 font-mono text-xs text-gray-900 flex items-center justify-between">
+                  <span>{ns}</span>
+                  <span className="text-[10px] text-gray-400 font-sans uppercase font-bold">NS{i + 1}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-gray-100 flex justify-end">
+            <button
+              onClick={() => { setNsForm(activeNs.length ? [...activeNs] : ["", ""]); setNsOpen(true); }}
+              className="w-full py-2.5 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Globe className="w-3.5 h-3.5" /> Ubah Nameservers Domain
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Action Control Panel */}
+      <div className="bg-white rounded-2xl border border-gray-200/80 p-6 shadow-sm space-y-6">
+        <div className="border-b border-gray-100 pb-3">
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Pusat Aksi & Kontrol Domain</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Kelola seluruh fitur keamanan, transfer, perpanjangan, dan konfigurasi domain.</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Action 1: Manage DNS */}
+          <Link to={`/domains/${id}/dns`} className="p-4 bg-gray-50 hover:bg-gray-100/80 border border-gray-200/80 rounded-xl transition-all flex flex-col justify-between gap-3 group">
+            <div className="flex items-center justify-between">
+              <div className="p-2.5 bg-black text-white rounded-xl group-hover:scale-105 transition-transform">
+                <Server className="w-5 h-5" />
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-black transition-colors" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-gray-900">Kelola DNS Record</h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">Atur A, CNAME, MX, TXT, AAAA record secara instan.</p>
+            </div>
+          </Link>
+
+          {/* Action 2: Renew Domain */}
+          <button
+            onClick={() => { setRenewYears(1); setRenewOpen(true); }}
+            className="p-4 bg-gray-50 hover:bg-emerald-50/50 border border-gray-200/80 hover:border-emerald-200 rounded-xl transition-all flex flex-col justify-between gap-3 text-left group cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <div className="p-2.5 bg-emerald-600 text-white rounded-xl group-hover:scale-105 transition-transform">
+                <RefreshCw className="w-5 h-5" />
+              </div>
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-gray-900">Perpanjang Domain</h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">Perpanjang masa berlaku domain 1-10 tahun.</p>
+            </div>
+          </button>
+
+          {/* Action 3: Lock/Unlock */}
+          <button
+            onClick={toggleLock}
+            disabled={lockLoading}
+            className={`p-4 bg-gray-50 border rounded-xl transition-all flex flex-col justify-between gap-3 text-left group cursor-pointer ${domain.locked ? 'hover:bg-amber-50/50 hover:border-amber-200' : 'hover:bg-emerald-50/50 hover:border-emerald-200'}`}
+          >
+            <div className="flex items-center justify-between">
+              <div className={`p-2.5 text-white rounded-xl group-hover:scale-105 transition-transform ${domain.locked ? 'bg-amber-600' : 'bg-emerald-600'}`}>
+                {domain.locked ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-gray-200 text-gray-700">
+                {domain.locked ? "Locked" : "Unlocked"}
+              </span>
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-gray-900">{domain.locked ? "Unlock Domain" : "Lock Domain"}</h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">Cegah pemindahan domain (Transfer Lock).</p>
+            </div>
+          </button>
+
+          {/* Action 4: Get Auth Code */}
+          <button
+            onClick={getAuthCode}
+            disabled={authLoading}
+            className="p-4 bg-gray-50 hover:bg-blue-50/50 border border-gray-200/80 hover:border-blue-200 rounded-xl transition-all flex flex-col justify-between gap-3 text-left group cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <div className="p-2.5 bg-blue-600 text-white rounded-xl group-hover:scale-105 transition-transform">
+                <Key className="w-5 h-5" />
+              </div>
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-gray-900">Get EPP Auth Code</h3>
+              <p className="text-[11px] text-gray-500 mt-0.5">Dapatkan kode otorisasi transfer domain.</p>
+            </div>
+          </button>
+        </div>
+
+        {/* Advanced & Danger Actions */}
+        <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={toggleTheft}
+              disabled={theftLoading}
+              className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4 text-blue-600" />
+              {domain.theftProtection ? "Matikan Theft Protection" : "Aktifkan Theft Protection"}
+            </button>
+            <button
+              onClick={toggleSuspend}
+              disabled={suspendLoading}
+              className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold rounded-xl border border-amber-200 transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              {domain.status === "suspended" ? "Unsuspend Domain" : "Suspend Domain"}
+            </button>
+          </div>
+
+          <button
+            onClick={() => setDeleteOpen(true)}
+            className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl border border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4 text-rose-600" /> Hapus Record Domain
+          </button>
+        </div>
+      </div>
 
       {/* Renew Modal */}
-      <Modal open={renewOpen} onClose={() => setRenewOpen(false)} title="Renew Domain">
-        <div className="space-y-4">
-          <p className="text-sm text-gray-700">Renew <strong className="font-mono">{domain.domainName}</strong></p>
+      <Modal open={renewOpen} onClose={() => setRenewOpen(false)} title="Perpanjang Masa Berlaku Domain">
+        <div className="space-y-4 text-left">
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Nama Domain</span>
+            <p className="text-sm font-black text-emerald-950 font-mono">{domain.domainName}</p>
+          </div>
+
           <div>
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Years</label>
-            <select value={renewYears} onChange={(e) => setRenewYears(Number(e.target.value))}
-              className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-black">
-              {[1,2,3,4,5,6,7,8,9,10].map(y => <option key={y} value={y}>{y} year{y>1?"s":""}</option>)}
+            <label className="text-xs font-bold text-gray-600 uppercase tracking-wider block mb-1">Pilih Durasi Perpanjangan (Tahun)</label>
+            <select
+              value={renewYears}
+              onChange={(e) => setRenewYears(Number(e.target.value))}
+              className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black font-semibold"
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(y => (
+                <option key={y} value={y}>{y} Tahun (+ {y} tahun dari tanggal kadaluarsa)</option>
+              ))}
             </select>
           </div>
+
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setRenewOpen(false)}>Cancel</Button>
-            <Button onClick={doRenew} disabled={renewLoading}>{renewLoading ? "..." : "Renew"}</Button>
+            <Button variant="secondary" onClick={() => setRenewOpen(false)}>Batal</Button>
+            <Button onClick={doRenew} disabled={renewLoading}>
+              {renewLoading ? "Memproses..." : "Lanjutkan Pembayaran"}
+            </Button>
           </div>
         </div>
       </Modal>
 
       {/* Nameserver Edit Modal */}
-      <Modal open={nsOpen} onClose={() => setNsOpen(false)} title="Edit Nameservers">
-        <div className="space-y-4">
-          {nsForm.map((ns, i) => (
-            <div key={i}>
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Nameserver {i+1}</label>
-              <input value={ns} onChange={(e) => { const n = [...nsForm]; n[i] = e.target.value; setNsForm(n); }}
-                className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-black font-mono" />
+      <Modal open={nsOpen} onClose={() => setNsOpen(false)} title="Ubah Nameservers Domain">
+        <div className="space-y-4 text-left">
+          <p className="text-xs text-gray-500">Masukkan minimal 2 Host Nameserver aktif untuk mengarahkan DNS domain Anda.</p>
+          <div className="space-y-3">
+            {nsForm.map((ns, i) => (
+              <div key={i}>
+                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Nameserver {i + 1}</label>
+                <input
+                  value={ns}
+                  placeholder={`ns${i + 1}.example.com`}
+                  onChange={(e) => {
+                    const n = [...nsForm];
+                    n[i] = e.target.value;
+                    setNsForm(n);
+                  }}
+                  className="w-full px-3.5 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black font-mono"
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            <button
+              onClick={() => setNsForm([...nsForm, ""])}
+              className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer"
+            >
+              + Tambah Nameserver
+            </button>
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => setNsOpen(false)}>Batal</Button>
+              <Button onClick={doUpdateNs} disabled={nsLoading}>
+                {nsLoading ? "Menyimpan..." : "Simpan Changes"}
+              </Button>
             </div>
-          ))}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setNsOpen(false)}>Cancel</Button>
-            <Button onClick={doUpdateNs} disabled={nsLoading}>{nsLoading ? "..." : "Save"}</Button>
           </div>
         </div>
       </Modal>
+
       {/* Auth Code Modal */}
-      <Modal open={authCodeOpen} onClose={() => setAuthCodeOpen(false)} title="Auth / EPP Code">
-        <div className="space-y-3">
-          <p className="text-xs text-gray-500">Use this code to transfer your domain to another registrar.</p>
-          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 font-mono text-sm text-center font-bold select-all">{authCode}</div>
-          <button onClick={() => { navigator.clipboard.writeText(authCode); toast("Auth code copied!"); }} className="w-full px-4 py-2 bg-black text-white text-sm font-semibold rounded-lg hover:bg-gray-800 transition-colors">Copy to Clipboard</button>
+      <Modal open={authCodeOpen} onClose={() => setAuthCodeOpen(false)} title="Kode EPP / Auth Code Domain">
+        <div className="space-y-4 text-left">
+          <p className="text-xs text-gray-600 leading-relaxed">
+            Kode EPP Auth Code ini digunakan jika Anda ingin mengotorisasi pemindahan/transfer domain <strong className="font-mono text-gray-900">{domain.domainName}</strong> ke registrar lain.
+          </p>
+          <div className="p-4 bg-gray-900 text-emerald-400 rounded-xl border border-gray-800 font-mono text-base text-center font-bold tracking-widest select-all shadow-inner">
+            {authCode}
+          </div>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(authCode);
+              setCopiedAuth(true);
+              toast("Auth code berhasil disalin!");
+              setTimeout(() => setCopiedAuth(false), 2000);
+            }}
+            className="w-full py-2.5 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            {copiedAuth ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+            {copiedAuth ? "Tersalin ke Clipboard" : "Salin Auth Code"}
+          </button>
         </div>
       </Modal>
 
       {/* Delete Confirm */}
-      <ConfirmDialog open={deleteOpen} title="Delete Domain" message={`Are you sure you want to delete ${domain.domainName}? This cannot be undone.`} onConfirm={doDelete} onClose={() => setDeleteOpen(false)} loading={deleteLoading} />
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Hapus Catatan Domain"
+        message={`Apakah Anda yakin ingin menghapus catatan domain ${domain.domainName}? Tindakan ini tidak dapat dibatalkan.`}
+        onConfirm={doDelete}
+        onClose={() => setDeleteOpen(false)}
+        loading={deleteLoading}
+      />
 
       {/* Payment Gateway Modal */}
       <PaymentModal

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, Button, InfoBanner, LoadingSpinner, toast } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
-import { User, Lock, Building, MapPin, Mail, ShieldCheck, CreditCard, EyeOff, Pencil, X } from "lucide-react";
+import { User, Lock, Building, MapPin, Mail, ShieldCheck, CreditCard, EyeOff, Pencil, X, CheckCircle2, AlertCircle } from "lucide-react";
 
 export default function ProfilePage() {
   const { user } = useAuth();

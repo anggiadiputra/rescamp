@@ -19,6 +19,8 @@ export interface Domain {
   liquidOrderId: string | null;
   nameservers: string[] | null;
   customerId: number | null;
+  customerName?: string | null;
+  customerEmail?: string | null;
   createdAt: string;
   updatedAt: string;
 }
