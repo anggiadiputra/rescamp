@@ -74,10 +74,17 @@ export default function DomainDetailPage() {
         await api.put(`/domains/${id}/locked`);
         toast("Domain berhasil dikunci (Transfer Lock Aktif)");
       }
-      await fetchDomain();
     } catch (e: any) {
-      toast(e.message || "Gagal mengubah status transfer lock", "error");
+      const errorMsg = String(e?.message || "");
+      if (errorMsg.includes("already Locked") || errorMsg.includes("already locked")) {
+        toast("Status diperbarui: Domain sudah dalam keadaan dikunci (Locked)");
+      } else if (errorMsg.includes("already Unlocked") || errorMsg.includes("already unlocked")) {
+        toast("Status diperbarui: Domain sudah dalam keadaan terbuka (Unlocked)");
+      } else {
+        toast(errorMsg || "Gagal mengubah status transfer lock", "error");
+      }
     }
+    await fetchDomain();
     setLockLoading(false);
   }
 
@@ -307,8 +314,9 @@ export default function DomainDetailPage() {
             </div>
             <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
               <span className="text-gray-400 block text-[11px]">Transfer Lock</span>
-              <span className={`font-bold ${domain.locked ? "text-emerald-600" : "text-amber-600"}`}>
-                {domain.locked ? "🔒 Terkunci (Locked)" : "🔓 Terbuka (Unlocked)"}
+              <span className={`font-bold flex items-center gap-1.5 ${domain.locked ? "text-emerald-600" : "text-amber-600"}`}>
+                {domain.locked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                {domain.locked ? "Terkunci (Locked)" : "Terbuka (Unlocked)"}
               </span>
             </div>
             <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">

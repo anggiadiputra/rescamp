@@ -339,9 +339,23 @@ export async function renewDomain(user: { resellerId: string | null; apiKey: str
 
 export async function updateLock(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, lock: boolean) {
   const domain = await getDomain(userId, domainId);
-  if (lock) await getLiquid(user).lockDomain(String(domain.liquidOrderId || domain.domainName));
-  else await getLiquid(user).unlockDomain(String(domain.liquidOrderId || domain.domainName));
+  try {
+    if (lock) await getLiquid(user).lockDomain(String(domain.liquidOrderId || domain.domainName));
+    else await getLiquid(user).unlockDomain(String(domain.liquidOrderId || domain.domainName));
+  } catch (err: any) {
+    const msg = String(err?.message || "").toLowerCase();
+    if (msg.includes("already locked")) {
+      await db.update(domains).set({ locked: 1 }).where(eq(domains.id, domainId));
+      return { locked: true, message: "Domain already locked" };
+    }
+    if (msg.includes("already unlocked") || msg.includes("not locked")) {
+      await db.update(domains).set({ locked: 0 }).where(eq(domains.id, domainId));
+      return { locked: false, message: "Domain already unlocked" };
+    }
+    throw err;
+  }
   await db.update(domains).set({ locked: lock ? 1 : 0 }).where(eq(domains.id, domainId));
+  return { locked: lock };
 }
 
 export async function updateNameservers(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, ns: string[]) {
