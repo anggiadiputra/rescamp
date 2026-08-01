@@ -179,18 +179,35 @@ export default function DomainDetailPage() {
   }
 
   async function toggleTheft() {
+    if (!domain) return;
+    const currentTheft = Boolean(domain.theftProtection);
+    const targetState = currentTheft ? 0 : 1;
     setTheftLoading(true);
+
+    // Optimistic UI state update (Instant UI reaction)
+    setDomain((prev) => (prev ? { ...prev, theftProtection: targetState } : prev));
+
     try {
-      if (domain?.theftProtection) {
+      if (currentTheft) {
         await api.delete(`/domains/${id}/theft-protection`);
-        toast("Proteksi pencurian domain dinonaktifkan");
+        toast("Proteksi pencurian domain (Theft Protection) dinonaktifkan");
       } else {
         await api.put(`/domains/${id}/theft-protection`);
-        toast("Proteksi pencurian domain diaktifkan");
+        toast("Proteksi pencurian domain (Theft Protection) diaktifkan");
       }
-      await fetchDomain();
     } catch (e: any) {
-      toast(e.message || "Gagal menguji proteksi pencurian domain", "error");
+      const errorMsg = String(e?.message || "");
+      if (errorMsg.includes("already enabled") || errorMsg.includes("already active")) {
+        setDomain((prev) => (prev ? { ...prev, theftProtection: 1 } : prev));
+        toast("Status diperbarui: Theft Protection sudah dalam keadaan aktif");
+      } else if (errorMsg.includes("already disabled") || errorMsg.includes("not enabled")) {
+        setDomain((prev) => (prev ? { ...prev, theftProtection: 0 } : prev));
+        toast("Status diperbarui: Theft Protection sudah dalam keadaan non-aktif");
+      } else {
+        // Rollback state on error
+        setDomain((prev) => (prev ? { ...prev, theftProtection: currentTheft ? 1 : 0 } : prev));
+        toast(errorMsg || "Gagal mengubah status theft protection", "error");
+      }
     }
     setTheftLoading(false);
   }

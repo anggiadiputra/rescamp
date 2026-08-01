@@ -145,15 +145,13 @@ export async function updateAuth(ctx: any) {
 
 export async function enableTheft(ctx: any) {
   const u = await getUser(ctx);
-  await svc.toggleTheftProtection(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), true);
-  ctx.set.status = 204;
-  return;
+  const result = await svc.toggleTheftProtection(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), true);
+  return { success: true, theftProtection: 1, message: "Theft protection enabled successfully", data: result };
 }
 export async function disableTheft(ctx: any) {
   const u = await getUser(ctx);
-  await svc.toggleTheftProtection(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), false);
-  ctx.set.status = 204;
-  return;
+  const result = await svc.toggleTheftProtection(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), false);
+  return { success: true, theftProtection: 0, message: "Theft protection disabled successfully", data: result };
 }
 
 export async function restore(ctx: any) {

@@ -377,9 +377,23 @@ export async function updateAuthCode(user: { resellerId: string | null; apiKey: 
 
 export async function toggleTheftProtection(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, enable: boolean) {
   const domain = await getDomain(userId, domainId);
-  if (enable) await getLiquid(user).enableTheftProtection(String(domain.liquidOrderId || domain.domainName));
-  else await getLiquid(user).disableTheftProtection(String(domain.liquidOrderId || domain.domainName));
+  try {
+    if (enable) await getLiquid(user).enableTheftProtection(String(domain.liquidOrderId || domain.domainName));
+    else await getLiquid(user).disableTheftProtection(String(domain.liquidOrderId || domain.domainName));
+  } catch (err: any) {
+    const msg = String(err?.message || "").toLowerCase();
+    if (msg.includes("already enabled") || msg.includes("already active")) {
+      await db.update(domains).set({ theftProtection: 1 }).where(eq(domains.id, domainId));
+      return { theftProtection: true, message: "Theft protection is already enabled" };
+    }
+    if (msg.includes("already disabled") || msg.includes("not enabled")) {
+      await db.update(domains).set({ theftProtection: 0 }).where(eq(domains.id, domainId));
+      return { theftProtection: false, message: "Theft protection is already disabled" };
+    }
+    throw err;
+  }
   await db.update(domains).set({ theftProtection: enable ? 1 : 0 }).where(eq(domains.id, domainId));
+  return { theftProtection: enable };
 }
 
 export async function restoreDomain(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
