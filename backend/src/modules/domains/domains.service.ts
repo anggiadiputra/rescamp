@@ -218,26 +218,22 @@ export async function listDomains(
   const perPage = params?.per_page || 20;
   const offset = (page - 1) * perPage;
 
-  let allowedUserIds = [user.id];
-  let allowedCustomerIds: number[] = [];
+  const conditions: any[] = [];
 
   if (user.role === "customer") {
     const custs = await db.select({ id: customers.id }).from(customers).where(or(eq(customers.userId, user.id), eq(customers.email, user.email || "")));
-    allowedCustomerIds = custs.map((c) => c.id);
-  } else if (user.role === "reseller") {
-    const childUsers = await db.select({ id: users.id }).from(users).where(eq(users.parentResellerId, user.id));
-    allowedUserIds = [user.id, ...childUsers.map((c) => c.id)];
+    const allowedCustomerIds = custs.map((c) => c.id);
+
+    const accessCondition = allowedCustomerIds.length > 0
+      ? or(eq(domains.userId, user.id), inArray(domains.customerId, allowedCustomerIds))
+      : eq(domains.userId, user.id);
+    conditions.push(accessCondition);
   }
 
-  const accessCondition = allowedCustomerIds.length > 0
-    ? or(inArray(domains.userId, allowedUserIds), inArray(domains.customerId, allowedCustomerIds))
-    : inArray(domains.userId, allowedUserIds);
-
-  const conditions: any[] = [accessCondition];
   if (params?.search) conditions.push(like(domains.domainName, `%${params.search}%`));
   if (params?.status) conditions.push(eq(domains.status, params.status as any));
 
-  const where = and(...conditions);
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
 
   const rows = await db.select().from(domains).where(where).limit(perPage).offset(offset);
   const total = await db.$count(domains, where);
@@ -281,30 +277,27 @@ export async function getDomain(userParam: any, lookup: string | number) {
   const userId = user.id;
   const userRole = user.role || "reseller";
 
-  let allowedUserIds = [userId];
-  let allowedCustomerIds: number[] = [];
+  const conditions: any[] = [];
 
   if (userRole === "customer") {
     const custs = await db.select({ id: customers.id }).from(customers).where(or(eq(customers.userId, userId), eq(customers.email, user.email || "")));
-    allowedCustomerIds = custs.map((c) => c.id);
-  } else if (userRole === "reseller") {
-    const childUsers = await db.select({ id: users.id }).from(users).where(eq(users.parentResellerId, userId));
-    allowedUserIds = [userId, ...childUsers.map((c) => c.id)];
-  }
+    const allowedCustomerIds = custs.map((c) => c.id);
 
-  const accessCondition = allowedCustomerIds.length > 0
-    ? or(inArray(domains.userId, allowedUserIds), inArray(domains.customerId, allowedCustomerIds))
-    : inArray(domains.userId, allowedUserIds);
+    const accessCondition = allowedCustomerIds.length > 0
+      ? or(eq(domains.userId, userId), inArray(domains.customerId, allowedCustomerIds))
+      : eq(domains.userId, userId);
+    conditions.push(accessCondition);
+  }
 
   // Support lookup by local id or liquidOrderId
   const lookupNum = parseInt(String(lookup), 10);
-  let [domain] = await db.select().from(domains).where(and(eq(domains.id, lookupNum), accessCondition));
-  if (!domain && !isNaN(lookupNum)) {
-    [domain] = await db.select().from(domains).where(and(eq(domains.liquidOrderId, String(lookupNum)), accessCondition));
-  }
-  if (!domain) {
-    [domain] = await db.select().from(domains).where(and(eq(domains.liquidOrderId, String(lookup)), accessCondition));
-  }
+  const domainCond = isNaN(lookupNum)
+    ? eq(domains.liquidOrderId, String(lookup))
+    : or(eq(domains.id, lookupNum), eq(domains.liquidOrderId, String(lookupNum)));
+
+  conditions.push(domainCond);
+
+  const [domain] = await db.select().from(domains).where(and(...conditions));
   if (!domain) throw new AppError("Domain not found", 404);
 
   let cust: any = null;
@@ -525,6 +518,24 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
             matchedCustomerId = c.id;
             if (c.userId) matchedUserId = c.userId;
           }
+        }
+        if (!matchedCustomerId && (item.customer_id || item.customer_email)) {
+          try {
+            const [newCust] = await db.insert(customers).values({
+              liquidCustomerId: item.customer_id ? String(item.customer_id) : null,
+              name: item.customer_name || item.customer_email?.split("@")[0] || "Customer",
+              email: item.customer_email || `customer-${item.customer_id}@ekstensi.id`,
+              company: "Personal",
+              address: "Indonesia",
+              city: "Jakarta",
+              state: "DKI Jakarta",
+              country: "ID",
+              zipcode: "10110",
+              phone: "8123456789",
+            } as any);
+            const newCustId = Number((newCust as any).insertId);
+            if (newCustId > 0) matchedCustomerId = newCustId;
+          } catch {}
         }
 
         const regDate = ((item.creation_time || item.creation_date) ? new Date(item.creation_time || item.creation_date).toISOString().split("T")[0] : null) as string | null;
