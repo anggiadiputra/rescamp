@@ -104,16 +104,14 @@ export async function renew(ctx: any) {
 export async function lock(ctx: any) {
   const user = await getUser(ctx);
   const creds = user.role === "customer" ? await getResellerCreds(ctx) : user;
-  await svc.updateLock(creds as any, user.id, parseInt(ctx.params.id), true);
-  ctx.set.status = 204;
-  return;
+  const result = await svc.updateLock(creds as any, user.id, parseInt(ctx.params.id), true);
+  return { success: true, locked: 1, message: "Domain locked successfully", data: result };
 }
 export async function unlock(ctx: any) {
   const user = await getUser(ctx);
   const creds = user.role === "customer" ? await getResellerCreds(ctx) : user;
-  await svc.updateLock(creds as any, user.id, parseInt(ctx.params.id), false);
-  ctx.set.status = 204;
-  return;
+  const result = await svc.updateLock(creds as any, user.id, parseInt(ctx.params.id), false);
+  return { success: true, locked: 0, message: "Domain unlocked successfully", data: result };
 }
 
 export async function updateNs(ctx: any) {

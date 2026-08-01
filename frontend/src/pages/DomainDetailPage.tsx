@@ -64,10 +64,16 @@ export default function DomainDetailPage() {
 
   async function toggleLock() {
     if (!domain) return;
+    const currentLock = Boolean(domain.locked);
+    const targetLockState = currentLock ? 0 : 1;
     setLockLoading(true);
     setMsg("");
+
+    // Optimistic UI state update (Instant UI reaction)
+    setDomain((prev) => (prev ? { ...prev, locked: targetLockState } : prev));
+
     try {
-      if (domain.locked) {
+      if (currentLock) {
         await api.delete(`/domains/${id}/locked`);
         toast("Penguncian domain (Transfer Lock) berhasil dibuka");
       } else {
@@ -77,14 +83,17 @@ export default function DomainDetailPage() {
     } catch (e: any) {
       const errorMsg = String(e?.message || "");
       if (errorMsg.includes("already Locked") || errorMsg.includes("already locked")) {
+        setDomain((prev) => (prev ? { ...prev, locked: 1 } : prev));
         toast("Status diperbarui: Domain sudah dalam keadaan dikunci (Locked)");
       } else if (errorMsg.includes("already Unlocked") || errorMsg.includes("already unlocked")) {
+        setDomain((prev) => (prev ? { ...prev, locked: 0 } : prev));
         toast("Status diperbarui: Domain sudah dalam keadaan terbuka (Unlocked)");
       } else {
+        // Rollback state on error
+        setDomain((prev) => (prev ? { ...prev, locked: currentLock ? 1 : 0 } : prev));
         toast(errorMsg || "Gagal mengubah status transfer lock", "error");
       }
     }
-    await fetchDomain();
     setLockLoading(false);
   }
 
