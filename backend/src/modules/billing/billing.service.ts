@@ -202,7 +202,7 @@ export async function getTransaction(userParam: number | { id: number; role?: st
   let targetDomainName = meta?.domainName ? String(meta.domainName) : null;
   if (!targetDomainName && txn.description) {
     const match = txn.description.match(/\b([a-zA-Z0-9-]+\.[a-zA-Z]{2,})\b/);
-    if (match) targetDomainName = match[1];
+    if (match?.[1]) targetDomainName = match[1];
   }
 
   if (!customer && targetDomainName) {
