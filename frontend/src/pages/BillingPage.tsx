@@ -525,7 +525,7 @@ export default function BillingPage() {
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Billed To Customer</p>
                 <p className="font-bold text-gray-900 text-sm mt-0.5">
-                  {(detail as any).customer?.name || user?.name || "Customer"}
+                  {(detail as any).customer?.name || (isCustomer ? user?.name : "-")}
                 </p>
                 {(detail as any).customer?.company && (
                   <p className="text-gray-600 text-xs font-semibold mt-0.5">
@@ -537,9 +537,11 @@ export default function BillingPage() {
                     {(detail as any).customer.formattedAddress || (detail as any).customer.address}
                   </p>
                 )}
-                <p className="text-gray-500 text-[11px] font-mono mt-0.5">
-                  {(detail as any).customer?.email || user?.email}
-                </p>
+                {((detail as any).customer?.email || (isCustomer ? user?.email : null)) && (
+                  <p className="text-gray-500 text-[11px] font-mono mt-0.5">
+                    {(detail as any).customer?.email || (isCustomer ? user?.email : "")}
+                  </p>
+                )}
                 {(detail as any).customer?.phone && (
                   <p className="text-gray-400 text-[10px] font-mono mt-0.5">
                     Telp: {(detail as any).customer.phone}

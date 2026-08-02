@@ -184,9 +184,33 @@ export async function getTransaction(userParam: number | { id: number; role?: st
 
   // 1. Resolve Customer Info
   let customer: any = null;
+  const meta: any = typeof txn.metadata === "string" ? (JSON.parse(txn.metadata || "{}") as any) : txn.metadata || {};
+
   if (txn.customerId) {
     const [c] = await db.select().from(customers).where(eq(customers.id, txn.customerId));
     customer = c || null;
+  }
+  if (!customer && meta?.customerId) {
+    const [c] = await db.select().from(customers).where(eq(customers.id, Number(meta.customerId)));
+    customer = c || null;
+  }
+  if (!customer && meta?.domainName) {
+    const { domains } = await import("../../db/schema");
+    const [dom] = await db.select().from(domains).where(eq(domains.domainName, String(meta.domainName)));
+    if (dom?.customerId) {
+      const [c] = await db.select().from(customers).where(eq(customers.id, dom.customerId));
+      customer = c || null;
+    }
+    if (!customer && dom?.userId) {
+      const [c] = await db.select().from(customers).where(eq(customers.userId, dom.userId));
+      customer = c || null;
+      if (!customer) {
+        const [u] = await db.select().from(users).where(eq(users.id, dom.userId));
+        if (u && u.role === "customer") {
+          customer = { name: u.name, email: u.email };
+        }
+      }
+    }
   }
   if (!customer && txn.userId) {
     const [c] = await db.select().from(customers).where(eq(customers.userId, txn.userId));
@@ -194,9 +218,20 @@ export async function getTransaction(userParam: number | { id: number; role?: st
   }
   if (!customer && txn.userId) {
     const [u] = await db.select().from(users).where(eq(users.id, txn.userId));
-    if (u) {
+    if (u && u.role === "customer") {
       customer = { name: u.name, email: u.email };
     }
+  }
+
+  if (customer) {
+    const addrParts = [
+      customer.address,
+      customer.city,
+      customer.state,
+      customer.zipcode,
+      customer.country,
+    ].filter(Boolean);
+    customer.formattedAddress = addrParts.length > 0 ? addrParts.join(", ") : null;
   }
 
   // 2. Resolve Reseller / Registrar Provider Info (from Liquid API or local user DB)
