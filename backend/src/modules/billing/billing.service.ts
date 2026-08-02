@@ -100,7 +100,7 @@ async function upsertLiquidTransaction(userId: number, item: any) {
 
 export async function listTransactions(
   userParam: number | { id: number; role?: string | null },
-  params?: { type?: string; status?: string; page?: number; per_page?: number },
+  params?: { type?: string; status?: string; category?: string; page?: number; per_page?: number },
 ) {
   const userId = typeof userParam === "object" ? userParam.id : userParam;
   const userRole = typeof userParam === "object" ? userParam.role : "reseller";
@@ -157,6 +157,11 @@ export async function listTransactions(
   let where = inArray(transactions.userId, allowedUserIds);
   if (params?.type) where = and(where, eq(transactions.type, params.type as any)) as any;
   if (params?.status) where = and(where, eq(transactions.status, params.status as any)) as any;
+  if (params?.category === "retail") {
+    where = and(where, sql`(${transactions.metadata} IS NULL OR ${transactions.metadata} NOT LIKE '%"syncedFromLiquid":true%')`) as any;
+  } else if (params?.category === "wholesale") {
+    where = and(where, sql`${transactions.metadata} LIKE '%"syncedFromLiquid":true%'`) as any;
+  }
 
   const [rows, countResult] = await Promise.all([
     db.select().from(transactions).where(where).orderBy(sql`${transactions.createdAt} desc`).limit(perPage).offset(offset),
@@ -322,7 +327,10 @@ export async function getTransaction(userParam: number | { id: number; role?: st
     customer.formattedAddress = custAddrParts.join(", ");
   }
 
-  return { ...txn, customer, resellerInfo };
+  const isWholesale = Boolean(meta?.syncedFromLiquid || txn.type === "fund" || txn.type === "debit");
+  const invoiceType = isWholesale ? "wholesale" : "retail";
+
+  return { ...txn, invoiceType, isWholesale, customer, resellerInfo };
 }
 
 export async function syncBalanceToLocal(user: { resellerId: string | null; apiKey: string | null }, userId: number) {

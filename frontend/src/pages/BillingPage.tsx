@@ -4,7 +4,7 @@ import { Card, LoadingSpinner, EmptyState, Modal, Pagination, Button, PaymentMod
 import { api } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import { useSettings } from "../contexts/SettingsContext";
-import { Printer, CheckCircle2, Receipt, AlertTriangle, X, Lock, AlertCircle, RefreshCw } from "lucide-react";
+import { Printer, CheckCircle2, Receipt, AlertTriangle, X, Lock, AlertCircle, RefreshCw, ShoppingBag, CreditCard } from "lucide-react";
 import type { Transaction, PaginatedResponse } from "../lib/types";
 
 function fmtPrice(amount: any, currency: string = "IDR"): string {
@@ -166,10 +166,14 @@ export default function BillingPage() {
     domainName: string;
   }>({ open: false, orderId: "", paymentLinkUrl: "", amount: 0, fee: 0, expiresAt: "", domainName: "" });
 
+  const [categoryTab, setCategoryTab] = useState<"retail" | "wholesale">("retail");
+
   const fetchTxns = useCallback(() => {
     setLoading(true);
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
     if (statusFilter) params.set("status", statusFilter);
+    if (!isCustomer) params.set("category", categoryTab);
+
     const promises: Promise<any>[] = [
       api.get<PaginatedResponse<Transaction>>(`/billing/transactions?${params}`).catch(() => ({ data: [], meta: { total: 0 } })),
     ];
@@ -186,7 +190,7 @@ export default function BillingPage() {
         setBalance(b);
       }
     }).finally(() => setLoading(false));
-  }, [page, statusFilter, isCustomer, perPage]);
+  }, [page, statusFilter, isCustomer, perPage, categoryTab]);
 
   useEffect(() => {
     if (returnOrderId && returnStatus === "success") {
@@ -331,10 +335,49 @@ export default function BillingPage() {
       </div>
 
       <Card className="p-6 bg-white border border-gray-200 rounded-2xl shadow-sm space-y-4">
+        {!isCustomer && (
+          <div className="flex flex-wrap border-b border-gray-100 pb-3 gap-2">
+            <button
+              onClick={() => { setCategoryTab("retail"); setPage(1); }}
+              className={`py-2 px-4 font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
+                categoryTab === "retail"
+                  ? "bg-gray-900 text-white shadow-sm"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              Invoice Penjualan Customer (Retail)
+            </button>
+            <button
+              onClick={() => { setCategoryTab("wholesale"); setPage(1); }}
+              className={`py-2 px-4 font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
+                categoryTab === "wholesale"
+                  ? "bg-gray-900 text-white shadow-sm"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              Mutasi &amp; Deposit Saldo Reseller (Wholesale)
+            </button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Riwayat Tagihan &amp; Invoice</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Daftar seluruh transaksi pendaftaran, perpanjangan, dan transfer domain Anda.</p>
+            <h2 className="text-base font-bold text-gray-900">
+              {isCustomer
+                ? "Riwayat Tagihan & Invoice"
+                : categoryTab === "retail"
+                ? "Invoice Penjualan Customer (Retail)"
+                : "Mutasi & Potong Saldo Reseller (Wholesale)"}
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {isCustomer
+                ? "Daftar seluruh transaksi pendaftaran, perpanjangan, dan transfer domain Anda."
+                : categoryTab === "retail"
+                ? "Daftar faktur tagihan penjualan domain resmi yang ditagihkan kepada Customer."
+                : "Daftar mutasi pemotongan dan topup saldo deposit di Resellercamp."}
+            </p>
           </div>
         </div>
 
@@ -453,7 +496,11 @@ export default function BillingPage() {
           <div className="space-y-6 text-xs text-gray-800 p-2">
             <div className="flex justify-between items-start border-b border-gray-200 pb-4">
               <div>
-                <h3 className="text-lg font-black text-gray-900 tracking-tight">INVOICE &amp; RECEIPT</h3>
+                <h3 className="text-lg font-black text-gray-900 tracking-tight">
+                  {(detail as any).isWholesale || (detail as any).invoiceType === "wholesale"
+                    ? "RESELLER WHOLESALE BALANCE DEBIT NOTE"
+                    : "OFFICIAL CUSTOMER RETAIL INVOICE"}
+                </h3>
                 <p className="text-xs font-mono font-bold text-blue-600">#{getInvoiceNumber(detail)}</p>
                 {((detail as any).paymentId || (detail as any).liquidTransactionId || (detail as any).liquidOrderId) && (
                   <p className="text-[10px] font-mono text-gray-500 mt-0.5">
@@ -496,58 +543,87 @@ export default function BillingPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Registrar Provider</p>
-                <p className="font-bold text-gray-900 text-sm mt-0.5">
-                  {(detail as any).resellerInfo?.brandName || (detail as any).resellerInfo?.name || "Ekstensi ID"}
-                </p>
-                {(detail as any).resellerInfo?.company && (detail as any).resellerInfo?.company !== ((detail as any).resellerInfo?.brandName || (detail as any).resellerInfo?.name) && (
-                  <p className="text-gray-600 text-xs font-semibold">
-                    {(detail as any).resellerInfo.company}
-                  </p>
-                )}
-                {(detail as any).resellerInfo?.address && (
-                  <p className="text-gray-500 text-[11px] mt-0.5 leading-relaxed">
-                    {(detail as any).resellerInfo.address}
-                  </p>
-                )}
-                {(detail as any).resellerInfo?.email && (
-                  <p className="text-gray-500 text-[11px] font-mono mt-0.5">
-                    {(detail as any).resellerInfo.email}
-                  </p>
-                )}
-                {(detail as any).resellerInfo?.phone && (
-                  <p className="text-gray-400 text-[10px] font-mono mt-0.5">
-                    Telp: {(detail as any).resellerInfo.phone}
-                  </p>
-                )}
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Billed To Customer</p>
-                <p className="font-bold text-gray-900 text-sm mt-0.5">
-                  {(detail as any).customer?.name || (isCustomer ? user?.name : "-")}
-                </p>
-                {(detail as any).customer?.company && (
-                  <p className="text-gray-600 text-xs font-semibold mt-0.5">
-                    {(detail as any).customer.company}
-                  </p>
-                )}
-                {((detail as any).customer?.formattedAddress || (detail as any).customer?.address) && (
-                  <p className="text-gray-500 text-[11px] mt-0.5 leading-relaxed">
-                    {(detail as any).customer.formattedAddress || (detail as any).customer.address}
-                  </p>
-                )}
-                {((detail as any).customer?.email || (isCustomer ? user?.email : null)) && (
-                  <p className="text-gray-500 text-[11px] font-mono mt-0.5">
-                    {(detail as any).customer?.email || (isCustomer ? user?.email : "")}
-                  </p>
-                )}
-                {(detail as any).customer?.phone && (
-                  <p className="text-gray-400 text-[10px] font-mono mt-0.5">
-                    Telp: {(detail as any).customer.phone}
-                  </p>
-                )}
-              </div>
+              {(detail as any).isWholesale || (detail as any).invoiceType === "wholesale" ? (
+                /* --- WHOLESALE INVOICE (Reseller Deposit Debit Note) --- */
+                <>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Wholesale Registrar System</p>
+                    <p className="font-bold text-gray-900 text-sm mt-0.5">Resellercamp Wholesale (Liquid API)</p>
+                    <p className="text-gray-500 text-[11px] mt-0.5">Automated Wholesale Registrar Service</p>
+                    <p className="text-gray-500 text-[11px] font-mono mt-0.5">support@resellercamp.com</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Billed To Reseller Account</p>
+                    <p className="font-bold text-gray-900 text-sm mt-0.5">
+                      {(detail as any).resellerInfo?.brandName || (detail as any).resellerInfo?.name || user?.name}
+                    </p>
+                    {(detail as any).resellerInfo?.address && (
+                      <p className="text-gray-500 text-[11px] mt-0.5 leading-relaxed">
+                        {(detail as any).resellerInfo.address}
+                      </p>
+                    )}
+                    <p className="text-gray-500 text-[11px] font-mono mt-0.5">
+                      {(detail as any).resellerInfo?.email || user?.email}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                /* --- RETAIL INVOICE (Customer Retail Tax Invoice) --- */
+                <>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Registrar Provider</p>
+                    <p className="font-bold text-gray-900 text-sm mt-0.5">
+                      {(detail as any).resellerInfo?.brandName || (detail as any).resellerInfo?.name || "Ekstensi ID"}
+                    </p>
+                    {(detail as any).resellerInfo?.company && (detail as any).resellerInfo?.company !== ((detail as any).resellerInfo?.brandName || (detail as any).resellerInfo?.name) && (
+                      <p className="text-gray-600 text-xs font-semibold">
+                        {(detail as any).resellerInfo.company}
+                      </p>
+                    )}
+                    {(detail as any).resellerInfo?.address && (
+                      <p className="text-gray-500 text-[11px] mt-0.5 leading-relaxed">
+                        {(detail as any).resellerInfo.address}
+                      </p>
+                    )}
+                    {(detail as any).resellerInfo?.email && (
+                      <p className="text-gray-500 text-[11px] font-mono mt-0.5">
+                        {(detail as any).resellerInfo.email}
+                      </p>
+                    )}
+                    {(detail as any).resellerInfo?.phone && (
+                      <p className="text-gray-400 text-[10px] font-mono mt-0.5">
+                        Telp: {(detail as any).resellerInfo.phone}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Billed To Customer</p>
+                    <p className="font-bold text-gray-900 text-sm mt-0.5">
+                      {(detail as any).customer?.name || (isCustomer ? user?.name : "-")}
+                    </p>
+                    {(detail as any).customer?.company && (
+                      <p className="text-gray-600 text-xs font-semibold mt-0.5">
+                        {(detail as any).customer.company}
+                      </p>
+                    )}
+                    {((detail as any).customer?.formattedAddress || (detail as any).customer?.address) && (
+                      <p className="text-gray-500 text-[11px] mt-0.5 leading-relaxed">
+                        {(detail as any).customer.formattedAddress || (detail as any).customer.address}
+                      </p>
+                    )}
+                    {((detail as any).customer?.email || (isCustomer ? user?.email : null)) && (
+                      <p className="text-gray-500 text-[11px] font-mono mt-0.5">
+                        {(detail as any).customer?.email || (isCustomer ? user?.email : "")}
+                      </p>
+                    )}
+                    {(detail as any).customer?.phone && (
+                      <p className="text-gray-400 text-[10px] font-mono mt-0.5">
+                        Telp: {(detail as any).customer.phone}
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="border border-gray-200 rounded-xl overflow-hidden">
