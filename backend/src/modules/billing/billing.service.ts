@@ -194,9 +194,15 @@ export async function getTransaction(userParam: number | { id: number; role?: st
     const [c] = await db.select().from(customers).where(eq(customers.id, Number(meta.customerId)));
     customer = c || null;
   }
-  if (!customer && meta?.domainName) {
+  let targetDomainName = meta?.domainName ? String(meta.domainName) : null;
+  if (!targetDomainName && txn.description) {
+    const match = txn.description.match(/\b([a-zA-Z0-9-]+\.[a-zA-Z]{2,})\b/);
+    if (match) targetDomainName = match[1];
+  }
+
+  if (!customer && targetDomainName) {
     const { domains } = await import("../../db/schema");
-    const [dom] = await db.select().from(domains).where(eq(domains.domainName, String(meta.domainName)));
+    const [dom] = await db.select().from(domains).where(eq(domains.domainName, targetDomainName));
     if (dom?.customerId) {
       const [c] = await db.select().from(customers).where(eq(customers.id, dom.customerId));
       customer = c || null;
@@ -211,6 +217,14 @@ export async function getTransaction(userParam: number | { id: number; role?: st
         }
       }
     }
+  }
+  if (!customer && (meta?.customerName || meta?.customerEmail)) {
+    customer = {
+      name: meta.customerName || null,
+      email: meta.customerEmail || null,
+      company: meta.customerCompany || null,
+      address: meta.customerAddress || null,
+    };
   }
   if (!customer && txn.userId) {
     const [c] = await db.select().from(customers).where(eq(customers.userId, txn.userId));
