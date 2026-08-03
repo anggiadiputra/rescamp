@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Card, Button, InfoBanner } from "../components/ui";
+import { Card, Button, InfoBanner, PasswordInput } from "../components/ui";
 import { api } from "../lib/api";
 import { Lock, Key, CheckCircle2 } from "lucide-react";
 
@@ -67,13 +67,13 @@ export default function ResetPasswordPage() {
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1">
               <Lock className="w-3.5 h-3.5" /> Password Baru
             </label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-black text-gray-800" required minLength={6} />
+            <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
           </div>
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1">
               <Lock className="w-3.5 h-3.5" /> Konfirmasi Password
             </label>
-            <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-black text-gray-800" required minLength={6} />
+            <PasswordInput value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={6} />
           </div>
           <Button type="submit" disabled={loading} className="w-full">
             {loading ? "Memproses..." : "Reset Password"}

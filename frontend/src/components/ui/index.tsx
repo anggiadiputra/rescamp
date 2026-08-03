@@ -38,6 +38,52 @@ export function SecretInput({
   );
 }
 
+export function PasswordInput({
+  value,
+  onChange,
+  placeholder,
+  className = "",
+  disabled = false,
+  required = false,
+  minLength,
+  autoComplete,
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+  className?: string;
+  disabled?: boolean;
+  required?: boolean;
+  minLength?: number;
+  autoComplete?: string;
+}) {
+  const [show, setShow] = useState(false);
+
+  return (
+    <div className="relative flex items-center w-full">
+      <input
+        type={show ? "text" : "password"}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        disabled={disabled}
+        required={required}
+        minLength={minLength}
+        autoComplete={autoComplete}
+        className={`w-full pl-3.5 pr-10 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-black text-gray-800 ${className}`}
+      />
+      <button
+        type="button"
+        onClick={() => setShow(!show)}
+        tabIndex={-1}
+        className="absolute right-3 p-1 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+      >
+        {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+      </button>
+    </div>
+  );
+}
+
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <div className={`bg-white rounded-xl border border-gray-200 shadow-sm p-5 md:p-6 ${className}`}>

@@ -501,7 +501,7 @@ export default function BillingPage() {
         );})()}
       </Card>
 
-      <Modal open={detailOpen} onClose={() => setDetailOpen(false)} title="Official Tax Invoice & Receipt" size="2xl">
+      <Modal open={detailOpen} onClose={() => setDetailOpen(false)} title={(detail as any)?.isWholesale || (detail as any)?.invoiceType === "wholesale" ? "Reseller Wholesale Balance Receipt" : "Official Tax Invoice & Receipt"} size="2xl">
         {detail && (
           <div className="space-y-6 text-xs text-gray-800 p-2">
             <div className="flex justify-between items-start border-b border-gray-200 pb-4">

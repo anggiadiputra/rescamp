@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { Card, Button, InfoBanner, TurnstileWidget, WaBadge, toast } from "../components/ui";
+import { Card, Button, InfoBanner, TurnstileWidget, WaBadge, toast, PasswordInput } from "../components/ui";
 import { api } from "../lib/api";
 import { KeyRound, ArrowLeft } from "lucide-react";
 
@@ -139,7 +139,7 @@ export default function RegisterPage() {
           <div><label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Email *</label>
             <input type="email" value={form.email} onChange={set("email")} className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-black" required /></div>
           <div><label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Password *</label>
-            <input type="password" value={form.password} onChange={set("password")} className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-black" required minLength={6} /></div>
+            <PasswordInput value={form.password} onChange={set("password")} required minLength={6} /></div>
           <div><label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Perusahaan / Organization *</label>
             <input type="text" value={form.company} onChange={set("company")} className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-black" required /></div>
           <div><label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Alamat Lengkap *</label>
