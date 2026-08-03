@@ -265,33 +265,33 @@ export class LiquidClient {
     return this.request<any>("GET", `/domains${qs}`);
   }
   async renewDomain(domainId: string, years: number, invoiceOption: string = "keep_invoice", expiryDate?: string | null) {
-    let epochSec = "";
-    if (expiryDate) {
-      if (!isNaN(Number(expiryDate)) && String(expiryDate).length <= 11) {
-        epochSec = String(expiryDate);
-      } else {
-        const parsed = Math.floor(new Date(expiryDate).getTime() / 1000);
-        if (!isNaN(parsed) && parsed > 0) epochSec = String(parsed);
+    // Always fetch the authoritative expiry_date from Resellercamp API
+    // (format: "Y-m-d H:i:s" e.g. "2027-07-30 12:52:14")
+    let currentDate = "";
+    try {
+      const details = await this.getDomain(domainId);
+      if (details?.expiry_date) {
+        currentDate = String(details.expiry_date);
+        console.log(`[renewDomain] Got expiry_date from Resellercamp: "${currentDate}"`);
       }
+    } catch (e: any) {
+      console.warn("[renewDomain] Failed to fetch expiry_date via getDomain:", e?.message);
     }
 
-    if (!epochSec) {
-      try {
-        const details = await this.getDomain(domainId);
-        if (details?.endtime) epochSec = String(details.endtime);
-      } catch (e: any) {
-        console.warn("[renewDomain] Failed to fetch endtime via getDomain:", e?.message);
-      }
+    // Fallback to provided expiryDate if API call failed
+    if (!currentDate && expiryDate) {
+      currentDate = expiryDate.includes(" ") ? expiryDate : `${expiryDate} 00:00:00`;
+      console.log(`[renewDomain] Fallback expiryDate used: "${currentDate}"`);
     }
 
-    if (!epochSec) {
-      epochSec = String(Math.floor(Date.now() / 1000));
+    if (!currentDate) {
+      throw new Error("Unable to determine current expiry date for domain renewal");
     }
 
-    console.log(`[renewDomain] Ordering renew for domainId=${domainId}, years=${years}, current_date (epochSec)=${epochSec}`);
+    console.log(`[renewDomain] Sending renew domainId=${domainId}, years=${years}, current_date="${currentDate}"`);
     return this.request<any>("POST", `/domains/${domainId}/renew`, {
       years: String(years),
-      current_date: epochSec,
+      current_date: currentDate,
       invoice_option: invoiceOption,
     });
   }
