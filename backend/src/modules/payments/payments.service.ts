@@ -210,6 +210,12 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     }
   } catch (err: any) {
     console.error("[payments] Resellercamp initial invoice creation error:", err);
+    throw new AppError(`Gagal membuat order domain di Resellercamp: ${err?.message || err}. Silakan coba lagi.`, 502);
+  }
+
+  // Guard: never let customer pay if Resellercamp invoice was not created
+  if (!liquidTransactionId) {
+    throw new AppError("Order domain berhasil dibuat tapi tidak mendapat ID invoice dari Resellercamp. Silakan coba lagi atau hubungi admin.", 502);
   }
 
   // --- Step 3: Create Payment Link on Sumopod Payment Gateway ---
@@ -406,9 +412,10 @@ export async function processWebhookPayload(payload: any) {
 
   let liquidTransactionId = meta.liquidTransactionId;
   const liquidCustomerId = meta.liquidCustomerId;
-  const liquidOrderId = meta.liquidOrderId;
+  let liquidOrderId = meta.liquidOrderId;
   const targetLocalCustomerId: number | null = meta.customerId || tx.customerId || null;
 
+  // Fallback 1: search for pending transactions if we don't have a transaction ID
   if (!liquidTransactionId && liquidCustomerId) {
     try {
       const txList = await liquid.listCustomerTransactions(liquidCustomerId, true);
@@ -419,9 +426,75 @@ export async function processWebhookPayload(payload: any) {
     } catch {}
   }
 
+  // Fallback 2: Re-create the order on Resellercamp if it was never created (Step 2 failed originally)
+  if (!liquidTransactionId && liquidCustomerId && meta.domainName) {
+    console.log(`[sumopod webhook] liquidTransactionId missing for tx ${tx.id} — attempting to re-create order on Resellercamp...`);
+    try {
+      if (meta.type === "register") {
+        const liquidRes = await liquid.registerDomain({
+          domain_name: meta.domainName,
+          years: meta.years || 1,
+          ns: (meta.nameservers || []).join(","),
+          customer_id: liquidCustomerId,
+          privacy_protection: meta.privacyProtection || false,
+          invoice_option: "keep_invoice",
+        });
+        liquidOrderId = typeof liquidRes === "string" ? liquidRes : liquidRes?.order_id || liquidRes?.id || null;
+        liquidTransactionId = String(
+          liquidRes?.transaction_id || liquidRes?.invoice_id || liquidRes?.entity_id || liquidRes?.id || liquidRes?.data?.transaction_id || liquidRes?.data?.invoice_id || ""
+        ) || null;
+      } else if (meta.type === "transfer") {
+        const liquidRes = await liquid.transferDomain({
+          domain_name: meta.domainName,
+          auth_code: meta.authCode || "",
+          customer_id: liquidCustomerId,
+          invoice_option: "keep_invoice",
+        });
+        liquidOrderId = typeof liquidRes === "string" ? liquidRes : liquidRes?.order_id || liquidRes?.id || null;
+        liquidTransactionId = String(
+          liquidRes?.transaction_id || liquidRes?.invoice_id || liquidRes?.entity_id || liquidRes?.id || ""
+        ) || null;
+      } else if (meta.type === "renew" && (meta.domainId || tx.domainId)) {
+        const domainId = meta.domainId || tx.domainId;
+        const [targetDomain] = await db.select().from(domains).where(eq(domains.id, domainId));
+        if (targetDomain) {
+          const liquidRes = await liquid.renewDomain(
+            String(targetDomain.liquidOrderId || targetDomain.domainName), meta.years || 1, "keep_invoice"
+          );
+          liquidOrderId = typeof liquidRes === "string" ? liquidRes : liquidRes?.order_id || liquidRes?.id || null;
+          liquidTransactionId = String(
+            liquidRes?.transaction_id || liquidRes?.invoice_id || liquidRes?.entity_id || liquidRes?.id || ""
+          ) || null;
+        }
+      }
+
+      // Fallback search if still no transaction ID after re-creation
+      if (!liquidTransactionId && liquidCustomerId) {
+        const txList = await liquid.listCustomerTransactions(liquidCustomerId, true);
+        const pendingList = Array.isArray(txList) ? txList : txList?.data || txList?.transactions || [];
+        if (pendingList.length > 0) {
+          liquidTransactionId = String(pendingList[0]?.transaction_id || pendingList[0]?.invoice_id || pendingList[0]?.id || "");
+        }
+      }
+
+      // Update metadata with newly obtained IDs
+      if (liquidTransactionId || liquidOrderId) {
+        const updatedMeta = { ...meta, liquidTransactionId, liquidOrderId };
+        await db.update(transactions)
+          .set({ metadata: JSON.stringify(updatedMeta), liquidTransactionId: liquidTransactionId ? String(liquidTransactionId) : null })
+          .where(eq(transactions.id, tx.id));
+        console.log(`[sumopod webhook] Re-created order for tx ${tx.id}: liquidTxnId=${liquidTransactionId}, liquidOrderId=${liquidOrderId}`);
+      }
+    } catch (reCreateErr: any) {
+      console.error(`[sumopod webhook] Failed to re-create order for tx ${tx.id}:`, reCreateErr?.message || reCreateErr);
+    }
+  }
+
   try {
     if (liquidTransactionId && liquidCustomerId) {
       await liquid.payCustomerTransaction(liquidCustomerId, liquidTransactionId, true);
+    } else {
+      throw new Error(`Cannot pay Resellercamp invoice: liquidTransactionId=${liquidTransactionId}, liquidCustomerId=${liquidCustomerId}`);
     }
 
     if (meta.type === "register" || meta.type === "transfer") {

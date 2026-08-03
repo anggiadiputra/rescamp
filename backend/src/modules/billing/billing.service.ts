@@ -151,9 +151,9 @@ export async function sweepActionRequiredRetries() {
   for (const row of rows) {
     let meta: any = {};
     try { meta = row.metadata ? JSON.parse(row.metadata) : {}; } catch {}
-    const liquidTxnId = meta.liquidTransactionId ? String(meta.liquidTransactionId) : null;
+    let liquidTxnId = meta.liquidTransactionId ? String(meta.liquidTransactionId) : null;
     const liquidCustomerId = meta.liquidCustomerId ? String(meta.liquidCustomerId) : null;
-    if (!liquidTxnId || !liquidCustomerId) continue; // path (a) — skip
+    if (!liquidCustomerId) continue; // skip if no customer ID
 
     const [tx] = await db.select().from(transactions).where(eq(transactions.id, row.id)).limit(1);
     if (!tx || tx.status !== "action_required") continue;
@@ -180,6 +180,28 @@ export async function sweepActionRequiredRetries() {
     if (!claimed) continue; // another sweeper/webhook got it
 
     try {
+      if (!liquidTxnId && meta.domainName) {
+        try {
+          if (meta.type === "register") {
+            const liquidRes = await liquid.registerDomain({
+              domain_name: meta.domainName,
+              years: meta.years || 1,
+              ns: (meta.nameservers || []).join(","),
+              customer_id: liquidCustomerId,
+              privacy_protection: meta.privacyProtection || false,
+              invoice_option: "keep_invoice",
+            });
+            liquidTxnId = String(
+              liquidRes?.transaction_id || liquidRes?.invoice_id || liquidRes?.entity_id || liquidRes?.id || ""
+            ) || null;
+          }
+        } catch {}
+      }
+
+      if (!liquidTxnId) {
+        throw new Error("No liquidTransactionId found to pay");
+      }
+
       await liquid.payCustomerTransaction(liquidCustomerId, liquidTxnId, true);
 
       if (meta.type === "register" || meta.type === "transfer") {
