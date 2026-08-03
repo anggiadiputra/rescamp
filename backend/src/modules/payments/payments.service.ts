@@ -186,8 +186,9 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
       const [targetDomain] = await db.select().from(domains).where(eq(domains.id, domainId));
       if (!targetDomain) throw new AppError(`Domain ID ${domainId} not found`, 404);
 
+      console.log(`[renew] domain=${targetDomain.domainName} liquidOrderId=${targetDomain.liquidOrderId} expiryDate=${targetDomain.expiryDate}`);
       const liquidRes = await liquid.renewDomain(
-        String(targetDomain.liquidOrderId || targetDomain.domainName), years, "keep_invoice"
+        String(targetDomain.liquidOrderId || targetDomain.domainName), years, "keep_invoice", targetDomain.expiryDate
       );
       liquidOrderId = typeof liquidRes === "string" ? liquidRes : liquidRes?.order_id || liquidRes?.id || null;
       liquidTransactionId = String(

@@ -264,10 +264,12 @@ export class LiquidClient {
     const qs = params ? "?" + new URLSearchParams(params).toString() : "";
     return this.request<any>("GET", `/domains${qs}`);
   }
-  renewDomain(domainId: string, years: number, invoiceOption: string = "keep_invoice") {
+  renewDomain(domainId: string, years: number, invoiceOption: string = "keep_invoice", expiryDate?: string | null) {
+    // current_date = domain's current expiry date, required by Resellercamp API
+    const currentDate = expiryDate ? expiryDate.split("T")[0] : new Date().toISOString().split("T")[0];
     return this.request<any>("POST", `/domains/${domainId}/renew`, {
       years,
-      current_date: new Date().toISOString().split("T")[0],
+      current_date: currentDate,
       invoice_option: invoiceOption,
     });
   }
