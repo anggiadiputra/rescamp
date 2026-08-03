@@ -70,10 +70,12 @@ export class LiquidClient {
    */
   private getTldEligibility(domainName: string): string {
     const d = domainName.toLowerCase();
-    // Indonesian sub-TLDs — must be checked BEFORE .id (more specific first)
-    if (d.endsWith(".sch.id")) return "sch"; // Sekolah/pendidikan
-    // .id ccTLDs (co.id, web.id, or.id, my.id, ac.id, sch.id, biz.id, ponpes.id, etc.) require "co" eligibility
-    if (d.endsWith(".id")) return "co";
+    // Sub-TLD .id (misal .co.id, .web.id, .my.id, .sch.id, dll) butuh eligibility "co" atau "sch"
+    if (d.endsWith(".sch.id")) return "sch";
+    if (d.match(/\.[a-z0-9-]+\.id$/i)) return "co";
+    // Bare domain .id (misal: sepertibiasah.id) TIDAK menggunakan eligibility_criteria (bebas / default contact)
+    if (d.endsWith(".id")) return "";
+
     if (d.endsWith(".us")) return "us";
     if (d.endsWith(".asia")) return "asia";
     if (d.endsWith(".ca")) return "ca";
@@ -109,13 +111,19 @@ export class LiquidClient {
       const matched = arr.find((c: any) => {
         const crit = Array.isArray(c.eligibility_criteria)
           ? c.eligibility_criteria
-          : [String(c.eligibility_criteria || c.type || "")];
-        return crit.some((x: string) => String(x).toLowerCase() === eligibility.toLowerCase());
+          : [c.eligibility_criteria || c.type || null];
+
+        if (!eligibility) {
+          // Look for contact with null / empty eligibility_criteria
+          return crit.every((x: any) => !x || x === "null" || x === "");
+        }
+
+        return crit.some((x: any) => x && String(x).toLowerCase() === eligibility.toLowerCase());
       });
       if (matched) {
         const contactId = String(matched.contact_id || matched.id || "");
         if (contactId) {
-          console.log(`[resolveContact] Found contact ${contactId} matching eligibility=${eligibility} for ${domainName}`);
+          console.log(`[resolveContact] Found contact ${contactId} matching eligibility=${eligibility || "default(none)"} for ${domainName}`);
           return contactId;
         }
       }
@@ -125,21 +133,24 @@ export class LiquidClient {
 
     // Step 2: Try /contacts/default with eligibility_criteria (per luquid.md docs)
     try {
-      const def = await this.request<any>("GET", `/customers/${customerId}/contacts/default?eligibility_criteria=${eligibility}`);
+      const url = eligibility
+        ? `/customers/${customerId}/contacts/default?eligibility_criteria=${eligibility}`
+        : `/customers/${customerId}/contacts/default`;
+      const def = await this.request<any>("GET", url);
       const cid = def?.registrant_contact?.contact_id || def?.registrant_contact?.id || def?.contact_id || def?.id;
       if (cid) {
-        console.log(`[resolveContact] Using default contact ${cid} (eligibility=${eligibility}) for ${domainName}`);
+        console.log(`[resolveContact] Using default contact ${cid} (eligibility=${eligibility || "default(none)"}) for ${domainName}`);
         return String(cid);
       }
     } catch (e: any) {
-      console.warn(`[resolveContact] contacts/default?eligibility_criteria=${eligibility} failed:`, e?.message);
+      console.warn(`[resolveContact] contacts/default failed:`, e?.message);
     }
 
     // Step 3: Auto-create a new contact with the correct eligibility type
     try {
-      console.log(`[resolveContact] Auto-creating contact (eligibility=${eligibility}) for customer ${customerId}...`);
+      console.log(`[resolveContact] Auto-creating contact (eligibility=${eligibility || "default(none)"}) for customer ${customerId}...`);
       custInfo = await this.getCustomer(customerId).catch(() => null);
-      const newContact = await this.createCustomerContact(customerId, {
+      const contactPayload: any = {
         name: custInfo?.name || "Registrant",
         email: custInfo?.email || "registrant@ekstensi.id",
         company: custInfo?.company || "Personal",
@@ -148,11 +159,14 @@ export class LiquidClient {
         state: custInfo?.state || "DKI Jakarta",
         zipcode: custInfo?.zipcode || "10110",
         phone: custInfo?.tel_no || "8123456789",
-        eligibility_criteria: eligibility,
-      });
+      };
+      if (eligibility) {
+        contactPayload.eligibility_criteria = eligibility;
+      }
+      const newContact = await this.createCustomerContact(customerId, contactPayload);
       const newId = String(newContact?.contact_id || newContact?.id || "");
       if (newId) {
-        console.log(`[resolveContact] Created new contact ${newId} (eligibility=${eligibility}) for ${domainName}`);
+        console.log(`[resolveContact] Created new contact ${newId} (eligibility=${eligibility || "default(none)"}) for ${domainName}`);
         return newId;
       }
     } catch (e: any) {
