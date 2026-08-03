@@ -40,24 +40,45 @@ function getInvoiceNumber(t: any): string {
 function getTxnInfo(t: any) {
   let orderId = getInvoiceNumber(t);
   let domainName = "Domain Order";
+  let years = 1;
   let fee = 0;
   let paymentLinkUrl = t.paymentLinkUrl || "";
   let expiresAt = "";
+  let registerDate = "";
+  let expiryDate = "";
 
   if (t.metadata) {
     try {
       const meta = typeof t.metadata === "string" ? JSON.parse(t.metadata) : t.metadata;
       if (meta.orderId) orderId = meta.orderId;
       if (meta.domainName) domainName = meta.domainName;
+      if (meta.years) years = Number(meta.years) || 1;
       if (meta.fee) fee = Number(meta.fee);
       if (meta.paymentLinkUrl) paymentLinkUrl = meta.paymentLinkUrl;
       if (meta.expiresAt) expiresAt = meta.expiresAt;
+      if (meta.expiryDate) expiryDate = meta.expiryDate;
     } catch {}
   }
 
   if (!expiresAt) {
     const createdAtTime = t.createdAt ? new Date(String(t.createdAt).replace(" ", "T")).getTime() : Date.now();
     expiresAt = new Date(createdAtTime + 60 * 60 * 1000).toISOString();
+  }
+
+  // Register/expiry dates for description suffix
+  if (t.createdAt) {
+    const c = new Date(String(t.createdAt).replace(" ", "T"));
+    if (!isNaN(c.getTime())) {
+      registerDate = c.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+      if (!expiryDate) {
+        const e = new Date(c);
+        e.setFullYear(e.getFullYear() + years);
+        expiryDate = e.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+      } else {
+        const parsed = new Date(expiryDate);
+        if (!isNaN(parsed.getTime())) expiryDate = parsed.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+      }
+    }
   }
 
   if (domainName === "Domain Order" && t.description) {
@@ -71,7 +92,7 @@ function getTxnInfo(t: any) {
     fee = Math.round(actualAmt * 0.007 + 300);
   }
 
-  return { orderId, domainName, fee, paymentLinkUrl, amount: actualAmt, expiresAt };
+  return { orderId, domainName, years, fee, paymentLinkUrl, amount: actualAmt, expiresAt, registerDate, expiryDate };
 }
 
 function parseTargetTime(expiresAt?: string | Date | number): number {
@@ -421,7 +442,15 @@ export default function BillingPage() {
                         {new Date(t.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
                       </td>
                       <td className="px-5 py-3.5 text-xs text-gray-800 font-medium">
-                        {t.description || `${t.type === "domain" ? "Domain Registration Order" : "Service Order"}`}
+                        {(() => {
+                          const fallback = t.description || `${t.type === "domain" ? "Domain Registration Order" : "Service Order"}`;
+                          if ((t as any).isWholesale || (t as any).invoiceType === "wholesale") return fallback;
+                          if (t.type !== "register" && t.type !== "transfer" && t.type !== "renew") return fallback;
+                          const info = getTxnInfo(t);
+                          if (!info.registerDate || !info.expiryDate) return fallback;
+                          const typeLabel = t.type === "register" ? "Domain register" : t.type === "transfer" ? "Domain transfer" : "Domain renewal";
+                          return `${typeLabel} - ${info.domainName} (${info.years} yr) - ${info.registerDate} → ${info.expiryDate}`;
+                        })()}
                       </td>
                       <td className="px-5 py-3.5 text-xs text-gray-600">
                         {(() => {
@@ -468,7 +497,17 @@ export default function BillingPage() {
                     <span className="text-xs font-mono font-bold text-gray-900">#{getInvoiceNumber(t)}</span>
                     {renderStatusBadge(t)}
                   </div>
-                  <p className="text-xs text-gray-600">{t.description || "Service Order"}</p>
+                  <p className="text-xs text-gray-600">
+                    {(() => {
+                      const fallback = t.description || "Service Order";
+                      if ((t as any).isWholesale || (t as any).invoiceType === "wholesale") return fallback;
+                      if (t.type !== "register" && t.type !== "transfer" && t.type !== "renew") return fallback;
+                      const info = getTxnInfo(t);
+                      if (!info.registerDate || !info.expiryDate) return fallback;
+                      const typeLabel = t.type === "register" ? "Domain register" : t.type === "transfer" ? "Domain transfer" : "Domain renewal";
+                      return `${typeLabel} - ${info.domainName} (${info.years} yr) - ${info.registerDate} → ${info.expiryDate}`;
+                    })()}
+                  </p>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-500">{new Date(t.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
                     <span className="text-sm font-bold font-mono text-gray-900">{fmtPrice(t.amount)}</span>
@@ -648,7 +687,17 @@ export default function BillingPage() {
                 <tbody className="divide-y divide-gray-100">
                   <tr>
                     <td className="p-3">
-                      <p className="font-bold text-gray-900">{detail.description || "Domain Registration Order"}</p>
+                      <p className="font-bold text-gray-900">
+                        {(() => {
+                          const fallback = detail.description || "Domain Registration Order";
+                          if ((detail as any).isWholesale || (detail as any).invoiceType === "wholesale") return fallback;
+                          if (detail.type !== "register" && detail.type !== "transfer" && detail.type !== "renew") return fallback;
+                          const info = getTxnInfo(detail);
+                          if (!info.registerDate || !info.expiryDate) return fallback;
+                          const typeLabel = detail.type === "register" ? "Domain register" : detail.type === "transfer" ? "Domain transfer" : "Domain renewal";
+                          return `${typeLabel} - ${info.domainName} (${info.years} yr) - ${info.registerDate} → ${info.expiryDate}`;
+                        })()}
+                      </p>
                     </td>
                     <td className="p-3 text-center font-mono">1</td>
                     <td className="p-3 text-right font-mono font-bold whitespace-nowrap">{fmtPrice(detail.amount)}</td>
