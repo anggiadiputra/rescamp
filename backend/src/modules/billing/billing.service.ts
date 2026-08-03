@@ -1,8 +1,10 @@
 import { db } from "../../db";
-import { transactions, users, customers } from "../../db/schema";
+import { transactions, users, customers, domains } from "../../db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
+
+const MAX_ACTION_REQUIRED_RETRIES = 5;
 
 function getLiquid(user: { resellerId: string | null; apiKey: string | null }): LiquidClient {
   return new LiquidClient(user.resellerId || "", user.apiKey || "");
@@ -124,6 +126,103 @@ async function upsertLiquidTransaction(userId: number, item: any) {
     if (err?.errno === 1062 || String(err?.code || "").includes("ER_DUP_ENTRY")) return;
     throw err;
   }
+}
+
+/**
+ * Background sweeper: retry payCustomerTransaction for action_required rows.
+ * Mirrors the post-pay success path from payments.service.ts:422-465.
+ * Bounded retries via metadata.retryCount (CAS-guarded). Path (a) rows —
+ * where liquidTransactionId is null in metadata — are skipped (admin must
+ * reconcile manually).
+ */
+export async function sweepActionRequiredRetries() {
+  const rows: any[] = await db.select({
+    id: transactions.id,
+    metadata: transactions.metadata,
+    userId: transactions.userId,
+  }).from(transactions).where(and(
+    eq(transactions.status, "action_required"),
+    sql`JSON_EXTRACT(${transactions.metadata}, '$.retryCount') IS NULL OR JSON_EXTRACT(${transactions.metadata}, '$.retryCount') < ${MAX_ACTION_REQUIRED_RETRIES}`
+  ));
+
+  if (rows.length === 0) return 0;
+
+  let processed = 0;
+  for (const row of rows) {
+    let meta: any = {};
+    try { meta = row.metadata ? JSON.parse(row.metadata) : {}; } catch {}
+    const liquidTxnId = meta.liquidTransactionId ? String(meta.liquidTransactionId) : null;
+    const liquidCustomerId = meta.liquidCustomerId ? String(meta.liquidCustomerId) : null;
+    if (!liquidTxnId || !liquidCustomerId) continue; // path (a) — skip
+
+    const [tx] = await db.select().from(transactions).where(eq(transactions.id, row.id)).limit(1);
+    if (!tx || tx.status !== "action_required") continue;
+
+    const [user] = await db.select().from(users).where(eq(users.id, tx.userId));
+    if (!user) continue;
+    let resellerId = user.resellerId || "";
+    let apiKey = user.apiKey || "";
+    if (user.role === "customer" && user.parentResellerId) {
+      const [reseller] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
+      if (reseller) { resellerId = reseller.resellerId || ""; apiKey = reseller.apiKey || ""; }
+    }
+    const liquid = new LiquidClient(resellerId, apiKey);
+
+    const currentRetry = Number(meta.retryCount || 0);
+    const casResult: any = await db.update(transactions)
+      .set({ metadata: sql`JSON_SET(COALESCE(${transactions.metadata}, JSON_OBJECT()), '$.retryCount', ${currentRetry + 1})` })
+      .where(and(
+        eq(transactions.id, row.id),
+        eq(transactions.status, "action_required"),
+        sql`(JSON_EXTRACT(${transactions.metadata}, '$.retryCount') IS NULL OR JSON_EXTRACT(${transactions.metadata}, '$.retryCount') <= ${currentRetry})`
+      ));
+    const claimed = (casResult[0]?.affectedRows ?? casResult?.affectedRows ?? 0) > 0;
+    if (!claimed) continue; // another sweeper/webhook got it
+
+    try {
+      await liquid.payCustomerTransaction(liquidCustomerId, liquidTxnId, true);
+
+      if (meta.type === "register" || meta.type === "transfer") {
+        const [existingDomain] = await db.select().from(domains).where(eq(domains.domainName, meta.domainName));
+        if (!existingDomain) {
+          await db.insert(domains).values({
+            userId: tx.userId,
+            customerId: meta.customerId || tx.customerId || null,
+            domainName: meta.domainName,
+            tld: meta.tld || meta.domainName.split(".").slice(1).join("."),
+            years: meta.years || 1,
+            status: "active",
+            autoRenew: meta.autoRenew ? 1 : 0,
+            privacyProtection: meta.privacyProtection ? 1 : 0,
+            liquidOrderId: meta.liquidOrderId ? String(meta.liquidOrderId) : null,
+            nameservers: meta.nameservers || [],
+          } as any).onDuplicateKeyUpdate({ set: { domainName: sql`${domains.domainName}` } });
+        }
+      } else if (meta.type === "renew") {
+        const domainId = meta.domainId || tx.domainId;
+        if (domainId) {
+          const yearsToAdd = meta.years || 1;
+          if (meta.yearsRenewed !== yearsToAdd) {
+            await db.update(transactions)
+              .set({ metadata: sql`JSON_SET(COALESCE(${transactions.metadata}, JSON_OBJECT()), '$.yearsRenewed', ${yearsToAdd})` })
+              .where(and(eq(transactions.id, tx.id), sql`JSON_EXTRACT(${transactions.metadata}, '$.yearsRenewed') IS NULL`));
+            await db.update(domains)
+              .set({ years: sql`${domains.years} + ${yearsToAdd}` })
+              .where(eq(domains.id, domainId));
+          }
+        }
+      }
+
+      await db.update(transactions).set({ status: "completed" }).where(eq(transactions.id, tx.id));
+      console.log(`[sweeper] retried action_required tx ${tx.id} -> completed`);
+      processed++;
+    } catch (err: any) {
+      const updatedMeta = sql`JSON_SET(COALESCE(${transactions.metadata}, JSON_OBJECT()), '$.lastError', ${err?.message || String(err)})`;
+      await db.update(transactions).set({ metadata: updatedMeta }).where(eq(transactions.id, tx.id));
+      console.warn(`[sweeper] retry ${currentRetry + 1}/${MAX_ACTION_REQUIRED_RETRIES} failed for tx ${tx.id}: ${err?.message || err}`);
+    }
+  }
+  return processed;
 }
 
 /**

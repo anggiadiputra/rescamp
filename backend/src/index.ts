@@ -9,7 +9,7 @@ import { billingRoutes } from "./modules/billing/billing.route";
 import { forwardingRoutes } from "./modules/forwarding/forwarding.route";
 import { paymentRoutes } from "./modules/payments/payments.route";
 import { settingsRoutes } from "./modules/settings/settings.route";
-import { sweepExpiredTransactions } from "./modules/billing/billing.service";
+import { sweepExpiredTransactions, sweepActionRequiredRetries } from "./modules/billing/billing.service";
 import { AppError } from "./lib/error";
 
 const app = new Elysia()
@@ -47,13 +47,15 @@ const app = new Elysia()
 
 console.log(`🚀 Server running on http://localhost:${env.PORT}`);
 
-// Background sweeper: mark pending_payment transactions as expired every 15 minutes
+// Background sweeper: expire pending_payment + retry action_required every 15 minutes
 let sweepTimer: Timer | null = null;
 function startAutoExpireSweeper() {
   if (sweepTimer) return;
   sweepExpiredTransactions().catch((e) => console.warn("[sweeper] initial run failed:", e));
+  sweepActionRequiredRetries().catch((e) => console.warn("[sweeper] initial action_required run failed:", e));
   sweepTimer = setInterval(() => {
     sweepExpiredTransactions().catch((e) => console.warn("[sweeper] run failed:", e));
+    sweepActionRequiredRetries().catch((e) => console.warn("[sweeper] action_required run failed:", e));
   }, 15 * 60 * 1000);
 }
 startAutoExpireSweeper();
