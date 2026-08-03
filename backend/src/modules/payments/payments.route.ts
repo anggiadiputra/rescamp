@@ -83,7 +83,10 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
         }
 
         const createdAtTime = tx.createdAt ? new Date(tx.createdAt).getTime() : Date.now();
-        const expiresAt = metaObj.expiresAt || new Date(createdAtTime + 60 * 60 * 1000).toISOString();
+        // Prefer the indexed `expires_at` column; fallback to metadata, fallback to createdAt+1h
+        const expiresAt = (tx as any).expiresAt
+          ? new Date((tx as any).expiresAt).toISOString()
+          : metaObj.expiresAt || new Date(createdAtTime + 60 * 60 * 1000).toISOString();
         const isPastExpiry = Date.now() > new Date(expiresAt).getTime();
 
         let currentStatus = tx.status;

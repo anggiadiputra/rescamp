@@ -75,6 +75,20 @@ async function upsertLiquidTransaction(userId: number, item: any) {
   };
   const typeVal = typeMap[String(item.transaction_type || item.type || "domain").toLowerCase()] || "register";
 
+  // Resolve expires_at: prefer item.expiry_date, fallback created+1h, fallback now+1h
+  const computeExpiresAt = () => {
+    if (item.expiry_date) {
+      const d = new Date(item.expiry_date);
+      if (!isNaN(d.getTime())) return d;
+    }
+    if (item.date_created) {
+      const d = new Date(item.date_created);
+      if (!isNaN(d.getTime())) return new Date(d.getTime() + 60 * 60 * 1000);
+    }
+    return new Date(Date.now() + 60 * 60 * 1000);
+  };
+  const expiresAt = computeExpiresAt();
+
   // N14: lookup on the indexed `liquidTransactionId` column (was JSON_EXTRACT on metadata — no index)
   // and filter by userId so we don't match a row owned by a different user.
   const [existing] = await db.select({ id: transactions.id, status: transactions.status })
@@ -102,7 +116,8 @@ async function upsertLiquidTransaction(userId: number, item: any) {
       currency: item.currency || "IDR",
       description: item.description || item.details || `Resellercamp #${liquidTxnId}`,
       liquidTransactionId: liquidTxnId,
-      metadata: JSON.stringify({ liquidTransactionId: liquidTxnId, syncedFromLiquid: true }),
+      expiresAt,
+      metadata: JSON.stringify({ liquidTransactionId: liquidTxnId, syncedFromLiquid: true, expiresAt: expiresAt.toISOString() }),
     });
   } catch (err: any) {
     // ER_DUP_ENTRY (1062): concurrent sync already inserted this liquid txn — unique index on liquid_transaction_id

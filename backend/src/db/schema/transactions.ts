@@ -21,6 +21,7 @@ export const transactions = mysqlTable("transactions", {
   liquidTransactionId: varchar("liquid_transaction_id", { length: 100 }),
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
 }, (table) => ({
   liquidTxnIdUnique: uniqueIndex("liquid_transaction_id_unique").on(table.liquidTransactionId),
   orderIdIdx: index("order_id_idx").on(table.orderId),

@@ -245,6 +245,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     paymentId: sumopodRes.payment_id,
     orderId,
     paymentLinkUrl: sumopodRes.payment_link_url,
+    expiresAt: new Date(formattedExpiresAt),
     liquidTransactionId: liquidTransactionId ? String(liquidTransactionId) : null,
     status: "pending_payment",
     paymentStatus: "pending",

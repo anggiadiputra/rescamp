@@ -405,6 +405,7 @@ export default function BillingPage() {
                     <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Invoice #</th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Description</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Berlaku Hingga</th>
                     <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Amount</th>
                     <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
@@ -421,6 +422,15 @@ export default function BillingPage() {
                       </td>
                       <td className="px-5 py-3.5 text-xs text-gray-800 font-medium">
                         {t.description || `${t.type === "domain" ? "Domain Registration Order" : "Service Order"}`}
+                      </td>
+                      <td className="px-5 py-3.5 text-xs text-gray-600">
+                        {(() => {
+                          const info = getTxnInfo(t);
+                          if (!info.expiresAt) return "—";
+                          const dt = new Date(info.expiresAt);
+                          if (isNaN(dt.getTime())) return "—";
+                          return dt.toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+                        })()}
                       </td>
                       <td className="px-5 py-3.5 text-xs text-gray-900 font-bold text-right font-mono">
                         {fmtPrice(t.amount)}

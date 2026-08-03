@@ -1,0 +1,3 @@
+ALTER TABLE `transactions` ADD `expires_at` timestamp;--> statement-breakpoint
+UPDATE `transactions` SET `expires_at` = JSON_UNQUOTE(JSON_EXTRACT(`metadata`, '$.expiresAt')) WHERE `expires_at` IS NULL AND `metadata` IS NOT NULL AND JSON_EXTRACT(`metadata`, '$.expiresAt') IS NOT NULL;--> statement-breakpoint
+UPDATE `transactions` SET `expires_at` = DATE_ADD(`created_at`, INTERVAL 1 HOUR) WHERE `expires_at` IS NULL AND `created_at` IS NOT NULL;
