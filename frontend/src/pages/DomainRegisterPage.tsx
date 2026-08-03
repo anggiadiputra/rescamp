@@ -175,24 +175,13 @@ export default function DomainRegisterPage() {
       });
 
       const paymentInfo = res?.data || res;
-      const paymentLinkUrl = paymentInfo?.paymentLinkUrl || paymentInfo?.payment_link_url;
       const orderId = paymentInfo?.orderId || paymentInfo?.order_id;
-      const expiresAt = paymentInfo?.expiresAt || paymentInfo?.expires_at;
 
-      // Reseller assigning to customer: no PaymentModal, invoice goes to customer
+      // Reseller assigning to customer: no redirect, invoice goes to customer
       const isAssigning = user?.role !== "customer" && customerId && customerId !== "__self__";
-      if (paymentLinkUrl && !isAssigning) {
-        // Customer self-service: show PaymentModal
-        setPaymentData({
-          open: true,
-          orderId: orderId || "",
-          paymentLinkUrl: paymentLinkUrl,
-          amount: paymentInfo.amount,
-          fee: paymentInfo.fee || 0,
-          expiresAt: expiresAt,
-          domainName: domainToRegister,
-        });
-        window.open(paymentLinkUrl, "_blank");
+      if (orderId && !isAssigning) {
+        nav(`/billing/pay/${orderId}`);
+        return;
       } else if (isAssigning) {
         // Reseller assigned domain to customer — invoice sent to customer
         toast(`🎉 Order domain ${domainToRegister} berhasil dibuat! Invoice dikirim ke customer.`);
@@ -221,22 +210,12 @@ export default function DomainRegisterPage() {
       });
 
       const paymentInfo = res?.data || res;
-      const paymentLinkUrl = paymentInfo?.paymentLinkUrl || paymentInfo?.payment_link_url;
       const orderId = paymentInfo?.orderId || paymentInfo?.order_id;
-      const expiresAt = paymentInfo?.expiresAt || paymentInfo?.expires_at;
 
       const isAssigning = user?.role !== "customer" && customerId && customerId !== "__self__";
-      if (paymentLinkUrl && !isAssigning) {
-        setPaymentData({
-          open: true,
-          orderId: orderId || "",
-          paymentLinkUrl: paymentLinkUrl,
-          amount: paymentInfo.amount,
-          fee: paymentInfo.fee || 0,
-          expiresAt: expiresAt,
-          domainName: transferDomain.trim(),
-        });
-        window.open(paymentLinkUrl, "_blank");
+      if (orderId && !isAssigning) {
+        nav(`/billing/pay/${orderId}`);
+        return;
       } else if (isAssigning) {
         toast(`🎉 Transfer domain ${transferDomain} berhasil diajukan untuk customer! Invoice dikirim ke customer.`);
         nav("/domains");
