@@ -62,16 +62,8 @@ export class LiquidClient {
     const d = domainName.toLowerCase();
     // Indonesian sub-TLDs — must be checked BEFORE .id (more specific first)
     if (d.endsWith(".sch.id")) return "sch"; // Sekolah/pendidikan
-    if (d.endsWith(".ac.id")) return "ac"; // Akademik/pendidikan tinggi
-    if (d.endsWith(".go.id")) return "go"; // Pemerintahan
-    if (d.endsWith(".mil.id")) return "mil"; // Militer
-    if (d.endsWith(".co.id")) return "co"; // Komersial
-    if (d.endsWith(".or.id")) return "or"; // Organisasi
-    if (d.endsWith(".net.id")) return "net"; // Jaringan
-    if (d.endsWith(".web.id")) return "web"; // Web umum
-    if (d.endsWith(".biz.id")) return "biz"; // Bisnis
-    if (d.endsWith(".my.id")) return "my"; // Personal
-    if (d.endsWith(".id")) return "co"; // Generic .id fallback
+    // .id ccTLDs (co.id, web.id, or.id, my.id, ac.id, sch.id, biz.id, ponpes.id, etc.) require "co" eligibility
+    if (d.endsWith(".id")) return "co";
     if (d.endsWith(".us")) return "us";
     if (d.endsWith(".asia")) return "asia";
     if (d.endsWith(".ca")) return "ca";
@@ -81,6 +73,10 @@ export class LiquidClient {
     if (d.endsWith(".cc")) return "cc";
     if (d.endsWith(".bz")) return "bz";
     if (d.endsWith(".pw")) return "pw";
+    if (d.endsWith(".biz")) return "biz";
+    if (d.endsWith(".org")) return "org";
+    if (d.endsWith(".net")) return "net";
+    if (d.endsWith(".info")) return "info";
     // Default: generic TLD eligibility
     return "com";
   }
@@ -209,32 +205,68 @@ export class LiquidClient {
     } catch (err: any) {
       const errMsg = String(err?.message || err || "").toLowerCase();
       if (errMsg.includes("type did not match") || errMsg.includes("registrant contact") || errMsg.includes("tld .id")) {
-        console.warn(`[registerDomain] Contact type mismatch for ${data.domain_name}, force-creating new .id contact...`);
+        const eligibility = this.getTldEligibility(data.domain_name);
+        console.warn(`[registerDomain] Contact type mismatch for ${data.domain_name}, needed eligibility=${eligibility}. Force-creating new contact...`);
         try {
           const custInfo = await this.getCustomer(customerId).catch(() => null);
-          const newContact = await this.createCustomerContact(customerId, {
+          if (custInfo) {
+            // Try creating a new contact under the existing customer first
+            const newContact = await this.createCustomerContact(customerId, {
+              name: custInfo?.name || "Registrant",
+              email: custInfo?.email || "registrant@ekstensi.id",
+              company: custInfo?.company || "Personal",
+              address: custInfo?.address_line_1 || "Indonesia",
+              city: custInfo?.city || "Jakarta",
+              state: custInfo?.state || "DKI Jakarta",
+              zipcode: custInfo?.zipcode || "10110",
+              phone: custInfo?.tel_no || "8123456789",
+              domain_name: data.domain_name,
+              eligibility_criteria: eligibility,
+            });
+            const newContactId = String(newContact?.contact_id || newContact?.id || "");
+            if (newContactId) {
+              payload.registrant_contact_id = newContactId;
+              payload.admin_contact_id = newContactId;
+              payload.billing_contact_id = newContactId;
+              payload.tech_contact_id = newContactId;
+              console.log(`[registerDomain] Retrying domain creation with new contact_id ${newContactId} (eligibility=${eligibility})...`);
+              return await this.request<any>("POST", "/domains", payload);
+            }
+          }
+          
+          // Fallback: create a new Liquid customer with correct eligibility, then register under that customer
+          console.warn(`[registerDomain] Contact creation failed, creating new Liquid customer with eligibility=${eligibility}...`);
+          const newCust = await this.createCustomer({
             name: custInfo?.name || "Registrant",
-            email: custInfo?.email || "registrant@ekstensi.id",
             company: custInfo?.company || "Personal",
+            email: custInfo?.email || "registrant@ekstensi.id",
             address: custInfo?.address_line_1 || "Indonesia",
             city: custInfo?.city || "Jakarta",
             state: custInfo?.state || "DKI Jakarta",
+            country: custInfo?.country_code || "ID",
             zipcode: custInfo?.zipcode || "10110",
+            tel_cc_no: String(custInfo?.tel_cc_no || "62"),
             phone: custInfo?.tel_no || "8123456789",
-            domain_name: data.domain_name,
-            eligibility_criteria: "co",
+            eligibility_criteria: eligibility,
           });
-          const newContactId = String(newContact?.contact_id || newContact?.id || "");
-          if (newContactId) {
-            payload.registrant_contact_id = newContactId;
-            payload.admin_contact_id = newContactId;
-            payload.billing_contact_id = newContactId;
-            payload.tech_contact_id = newContactId;
-            console.log(`[registerDomain] Retrying domain creation with new .id contact_id ${newContactId}...`);
+          const newCustId = String(newCust?.customer_id || newCust?.id || "");
+          if (newCustId) {
+            payload.customer_id = newCustId;
+            payload.registrant_contact_id = newCustId;
+            payload.admin_contact_id = newCustId;
+            payload.billing_contact_id = newCustId;
+            payload.tech_contact_id = newCustId;
+            console.log(`[registerDomain] Retrying domain creation under new customer_id ${newCustId} (eligibility=${eligibility})...`);
             return await this.request<any>("POST", "/domains", payload);
           }
         } catch (retryErr: any) {
-          console.error("[registerDomain] Force .id contact creation failed:", retryErr?.message || retryErr);
+          console.error("[registerDomain] Force contact/customer creation failed:", retryErr?.message || retryErr);
+          throw new AppError(
+            `Gagal membuat kontak .id untuk domain ${data.domain_name}. ` +
+            `Customer Anda perlu dibuat ulang dengan eligibility "${eligibility}". ` +
+            `Silakan lengkapi profil ulang atau hubungi admin.`,
+            400
+          );
         }
       }
       throw err;

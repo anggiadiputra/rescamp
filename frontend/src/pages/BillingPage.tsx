@@ -245,6 +245,7 @@ export default function BillingPage() {
 
   function handleInvoiceClick(t: Transaction) {
     const info = getTxnInfo(t);
+    if (!info.paymentLinkUrl) return;
     navigate(`/billing/pay/${info.orderId}`);
   }
 

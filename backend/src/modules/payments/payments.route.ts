@@ -56,29 +56,45 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
         const userId = Number((store as any)?.user?.sub);
         const { orderId } = params;
 
-        const allTx = await db
-          .select()
-          .from(transactions)
-          .where(eq(transactions.userId, userId));
-
         const cleanOrderId = String(orderId || "").trim();
-        // Parse "INV-000040" -> 40 or "000040" -> 40
         const numericMatch = cleanOrderId.replace(/^INV-0*/i, "").replace(/^0+/, "");
         const parsedNumericId = numericMatch ? parseInt(numericMatch, 10) : NaN;
 
-        const tx = allTx.find((t) => {
-          if (t.orderId && t.orderId === cleanOrderId) return true;
-          if (t.paymentId && t.paymentId === cleanOrderId) return true;
-          if (t.liquidTransactionId && String(t.liquidTransactionId) === cleanOrderId) return true;
-          if (String(t.id) === cleanOrderId) return true;
-          if (!isNaN(parsedNumericId) && t.id === parsedNumericId) return true;
-          if (t.description && t.description.toLowerCase().includes(cleanOrderId.toLowerCase())) return true;
-          if (t.metadata) {
-            const str = typeof t.metadata === "string" ? t.metadata : JSON.stringify(t.metadata);
-            if (str.includes(cleanOrderId)) return true;
-          }
-          return false;
-        });
+        const conditions: any[] = [
+          eq(transactions.orderId, cleanOrderId),
+          eq(transactions.paymentId, cleanOrderId),
+          eq(transactions.liquidTransactionId, cleanOrderId),
+        ];
+        if (!isNaN(parsedNumericId)) {
+          conditions.push(eq(transactions.id, parsedNumericId));
+        }
+
+        // Direct DB lookup for the specific transaction
+        const foundRows = await db
+          .select()
+          .from(transactions)
+          .where(or(...conditions))
+          .limit(1);
+
+        let tx = foundRows[0] || null;
+
+        // Fallback: search by user's transactions if direct lookup missed
+        if (!tx) {
+          const userTxList = await db
+            .select()
+            .from(transactions)
+            .where(eq(transactions.userId, userId))
+            .limit(100);
+
+          tx = userTxList.find((t) => {
+            if (t.description && t.description.toLowerCase().includes(cleanOrderId.toLowerCase())) return true;
+            if (t.metadata) {
+              const str = typeof t.metadata === "string" ? t.metadata : JSON.stringify(t.metadata);
+              if (str.includes(cleanOrderId)) return true;
+            }
+            return false;
+          }) || null;
+        }
 
         if (!tx) {
           set.status = 404;
