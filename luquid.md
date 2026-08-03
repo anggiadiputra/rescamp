@@ -1,15 +1,15 @@
-# LIQUID API (DomainsAS) Complete Documentation
+# LIQUID API (DomainsAS / Liqu.id) Complete Documentation
 
-**Base URL:** `https://api.domainsas.com/v1`  
+**Base URLs:** `https://api.liqu.id/v1` | `https://api.domainsas.com/v1`  
 **Authentication:** HTTP Basic Auth — `Username: Reseller ID`, `Password: API Key`  
-**Official Docs Endpoint:** `https://api.domainsas.com/docs#!/` (Swagger Specification: `https://api.domainsas.com/json`)  
-**Last Updated:** July 2026
+**Official Docs:** `https://api.liqu.id/docs` (Swagger Specification: `https://api.liqu.id/json`)  
+**Last Updated & Verified:** August 2026
 
 ---
 
 ## Overview
 
-Dokumentasi ini berisi daftar lengkap **93 endpoint** LIQUID API (DomainsAS) yang diambil langsung dari spesifikasi resmi Swagger API.
+Dokumentasi ini berisi daftar lengkap endpoint LIQUID API yang diverifikasi langsung dari spesifikasi Swagger resmi (`https://api.liqu.id/json`). All form/query parameters, HTTP methods, and TLD eligibility rules are synchronized with the live API specification.
 
 ## Table of Contents
 
