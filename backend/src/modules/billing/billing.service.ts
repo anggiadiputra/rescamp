@@ -38,22 +38,19 @@ export async function getBalance(user: { resellerId: string | null; apiKey: stri
 
 export async function getPrices(user: { resellerId: string | null; apiKey: string | null; role?: string }) {
   const liquid = getLiquid(user);
-  if (user.role === "customer") {
-    try {
-      const raw = await liquid.getCustomerPrices();
-      return formatCustomerPrices(raw);
-    } catch {
-      try {
-        const raw = await liquid.getPrices();
-        return raw;
-      } catch (err: any) {
-        console.warn("[billing.service] getPrices customer fallback triggered:", err?.message || err);
-        return {};
-      }
-    }
-  }
+
+  // Try customer prices first (GET /customers/prices) — works for all roles
   try {
-    return await liquid.getPrices();
+    const raw = await liquid.getCustomerPrices();
+    return formatCustomerPrices(raw);
+  } catch (err: any) {
+    console.warn("[billing.service] getCustomerPrices failed, trying account prices:", err?.message || err);
+  }
+
+  // Fallback: try reseller account prices (GET /account/prices)
+  try {
+    const raw = await liquid.getPrices();
+    return raw;
   } catch (err: any) {
     console.warn("[billing.service] getPrices fallback triggered:", err?.message || err);
     return {};
