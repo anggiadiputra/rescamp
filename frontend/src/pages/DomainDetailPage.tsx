@@ -4,7 +4,7 @@ import {
   Globe, ShieldCheck, Lock, Unlock, Key, RefreshCw, Server,
   AlertTriangle, Trash2, Copy, Check, ExternalLink, Calendar, User, ArrowLeft
 } from "lucide-react";
-import { Button, Badge, LoadingSpinner, Modal, InfoBanner, ConfirmDialog, toast, PaymentModal } from "../components/ui";
+import { Button, LoadingSpinner, Modal, InfoBanner, ConfirmDialog, toast, PaymentModal } from "../components/ui";
 import { api } from "../lib/api";
 import type { Domain } from "../lib/types";
 
@@ -237,13 +237,7 @@ export default function DomainDetailPage() {
     );
   }
 
-  // Days until expiry calculation
-  let daysLeft: number | null = null;
-  if (domain.expiryDate) {
-    const expTime = new Date(domain.expiryDate).getTime();
-    const nowTime = new Date().getTime();
-    daysLeft = Math.ceil((expTime - nowTime) / (1000 * 60 * 60 * 24));
-  }
+
 
   const activeNs = domain.nameservers?.length ? domain.nameservers : ["ns1.liquid.net", "ns2.liquid.net"];
 
@@ -252,47 +246,15 @@ export default function DomainDetailPage() {
       {msg && <InfoBanner type="error" message={msg} />}
 
       {/* Top Header Card */}
-      <div className="bg-white rounded-2xl border border-gray-200/80 p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <Link to="/domains" className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-            </Link>
-            <div className="p-2.5 rounded-xl bg-black text-white shadow-sm">
-              <Globe className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-2xl font-black text-gray-900 tracking-tight font-mono">{domain.domainName}</h1>
-                <Badge status={domain.status} />
-              </div>
-              <p className="text-xs text-gray-500 mt-1 flex items-center gap-2">
-                <span>Ekstensi: <strong className="uppercase font-semibold text-gray-700">.{domain.tld}</strong></span>
-                <span>•</span>
-                <span>Kadaluarsa: <strong className="text-gray-800">{domain.expiryDate || "-"}</strong></span>
-                {daysLeft !== null && (
-                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${daysLeft > 30 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : daysLeft > 0 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
-                    {daysLeft > 0 ? `${daysLeft} hari tersisa` : 'Expired'}
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
+      <div className="bg-white rounded-2xl border border-gray-200/80 p-6 shadow-sm flex items-center gap-3">
+        <Link to="/domains" className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+          <ArrowLeft className="w-4 h-4" />
+        </Link>
+        <div className="p-2.5 rounded-xl bg-black text-white shadow-sm">
+          <Globe className="w-6 h-6" />
         </div>
-
-        {/* Header Action Shortcuts */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <Link to={`/domains/${id}/dns`}>
-            <button className="px-4 py-2.5 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer">
-              <Server className="w-4 h-4" /> Kelola DNS Record
-            </button>
-          </Link>
-          <button
-            onClick={() => { setRenewYears(1); setRenewOpen(true); }}
-            className="px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-900 border border-gray-300 text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-2 cursor-pointer"
-          >
-            <RefreshCw className="w-4 h-4 text-emerald-600" /> Perpanjang Domain
-          </button>
+        <div>
+          <h1 className="text-2xl font-black text-gray-900 tracking-tight font-mono">{domain.domainName}</h1>
         </div>
       </div>
 
