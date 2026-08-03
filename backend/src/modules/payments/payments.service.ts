@@ -210,7 +210,12 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     }
   } catch (err: any) {
     console.error("[payments] Resellercamp initial invoice creation error:", err);
-    throw new AppError(`Gagal membuat order domain di Resellercamp: ${err?.message || err}. Silakan coba lagi.`, 502);
+    let rawMsg = String(err?.message || err || "");
+    let userMsg = rawMsg;
+    if (rawMsg.toLowerCase().includes("balance") || rawMsg.toLowerCase().includes("insufficient")) {
+      userMsg = "Saldo reseller di Resellercamp tidak mencukupi untuk memproses order ini. Silakan top up saldo reseller Anda terlebih dahulu.";
+    }
+    throw new AppError(`Gagal membuat order domain di Resellercamp: ${userMsg}`, 502);
   }
 
   // Guard: never let customer pay if Resellercamp invoice was not created
