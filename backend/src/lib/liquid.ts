@@ -96,7 +96,12 @@ export class LiquidClient {
     try {
       const list = await this.request<any>("GET", `/customers/${customerId}/contacts?status=Active`);
       const arr = Array.isArray(list) ? list : list?.data || list?.contacts || [];
-      const matched = arr.find((c: any) => String(c.eligibility_criteria || c.type || "").toLowerCase() === eligibility.toLowerCase());
+      const matched = arr.find((c: any) => {
+        const crit = Array.isArray(c.eligibility_criteria)
+          ? c.eligibility_criteria
+          : [String(c.eligibility_criteria || c.type || "")];
+        return crit.some((x: string) => String(x).toLowerCase() === eligibility.toLowerCase());
+      });
       if (matched) {
         const contactId = String(matched.contact_id || matched.id || "");
         if (contactId) {
