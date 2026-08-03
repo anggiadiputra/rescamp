@@ -126,6 +126,29 @@ async function upsertLiquidTransaction(userId: number, item: any) {
   }
 }
 
+/**
+ * Background sweeper: mark pending_payment transactions as expired once their
+ * expires_at passes. Runs every 15 minutes from backend/src/index.ts.
+ *
+ * CAS guards against a concurrent webhook that has just promoted the row to
+ * processing_domain — we only flip rows still pending_payment AND with
+ * expires_at at least 1 minute in the past (grace window).
+ */
+export async function sweepExpiredTransactions() {
+  const oneMinAgo = new Date(Date.now() - 60 * 1000);
+  const result: any = await db.update(transactions)
+    .set({ status: "expired", paymentStatus: "expired" })
+    .where(and(
+      eq(transactions.status, "pending_payment"),
+      sql`${transactions.expiresAt} IS NOT NULL AND ${transactions.expiresAt} < ${oneMinAgo}`
+    ));
+  const changed = result[0]?.affectedRows ?? result?.affectedRows ?? 0;
+  if (changed > 0) {
+    console.log(`[sweeper] expired ${changed} pending transaction(s)`);
+  }
+  return changed;
+}
+
 export async function listTransactions(
   userParam: number | { id: number; role?: string | null },
   params?: { type?: string; status?: string; category?: string; page?: number; per_page?: number },
