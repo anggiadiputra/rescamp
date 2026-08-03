@@ -184,11 +184,19 @@ export async function remove(ctx: any) {
 // For customer: auto-resolve or auto-create their LIQUID customer_id
 async function resolveCustomerId(u: any): Promise<number | undefined> {
   if (u.role !== "customer") return undefined;
-  let [cust] = await db.select({ id: customers.id, liquidCustomerId: customers.liquidCustomerId })
-    .from(customers).where(eq(customers.email, u.email));
+  let [cust] = await db.select({
+    id: customers.id,
+    liquidCustomerId: customers.liquidCustomerId,
+    company: customers.company,
+    address: customers.address,
+    city: customers.city,
+    state: customers.state,
+    zipcode: customers.zipcode,
+    phone: customers.phone,
+  }).from(customers).where(eq(customers.email, u.email));
 
   if (!cust) {
-    // Auto-create local customer profile if missing
+    // Auto-create local customer profile if missing — but require complete profile first
     const [res] = await db.insert(customers).values({
       userId: u.id,
       name: u.name || u.email.split("@")[0],
@@ -196,8 +204,15 @@ async function resolveCustomerId(u: any): Promise<number | undefined> {
       country: "ID",
     });
     const newId = Number(res.insertId);
-    return newId;
+    // Redirect user to complete profile before allowing domain orders
+    throw new AppError("Profile belum lengkap. Harap lengkapi profil Anda terlebih dahulu.", 400);
   }
+  
+  // Check if profile is complete (company, address, city, state, zipcode, phone must be filled)
+  if (!cust.company || !cust.address || !cust.city || !cust.state || !cust.zipcode || !cust.phone) {
+    throw new AppError("Profile belum lengkap. Harap lengkapi profil Anda terlebih dahulu.", 400);
+  }
+  
   return cust.id;
 }
 

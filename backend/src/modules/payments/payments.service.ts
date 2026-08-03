@@ -241,7 +241,8 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     const [cust] = await db.select({ userId: customers.userId }).from(customers).where(eq(customers.id, validCustomerId));
     if (cust?.userId) transactionUserId = cust.userId;
   }
-  const [insertRes] = await db.insert(transactions).values({
+  let txId: number;
+  const transactionData = {
     userId: transactionUserId,
     customerId: validCustomerId,
     type: payload.type,
@@ -253,8 +254,8 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     paymentLinkUrl: sumopodRes.payment_link_url,
     expiresAt: new Date(formattedExpiresAt),
     liquidTransactionId: liquidTransactionId ? String(liquidTransactionId) : null,
-    status: "pending_payment",
-    paymentStatus: "pending",
+    status: "pending_payment" as const,
+    paymentStatus: "pending" as const,
     description: `Domain ${payload.type} - ${fullDomain} (${years} yr) - ${orderId}`,
     metadata: JSON.stringify({
       orderId,
@@ -272,9 +273,34 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
       domainId: payload.domainId,
       expiresAt: formattedExpiresAt,
     }),
-  });
+  };
 
-  const txId = Number((insertRes as any).insertId);
+  const [existingTx] = liquidTransactionId
+    ? await db.select({ id: transactions.id }).from(transactions).where(eq(transactions.liquidTransactionId, String(liquidTransactionId))).limit(1)
+    : [null];
+
+  if (existingTx) {
+    await db.update(transactions).set(transactionData).where(eq(transactions.id, existingTx.id));
+    txId = existingTx.id;
+  } else {
+    try {
+      const [insertRes] = await db.insert(transactions).values(transactionData);
+      txId = Number((insertRes as any).insertId);
+    } catch (err: any) {
+      const isDup = err?.errno === 1062 || String(err?.code || "").includes("ER_DUP_ENTRY") || String(err?.message || "").includes("Duplicate entry");
+      if (isDup && liquidTransactionId) {
+        const [dupTx] = await db.select({ id: transactions.id }).from(transactions).where(eq(transactions.liquidTransactionId, String(liquidTransactionId))).limit(1);
+        if (dupTx) {
+          await db.update(transactions).set(transactionData).where(eq(transactions.id, dupTx.id));
+          txId = dupTx.id;
+        } else {
+          throw err;
+        }
+      } else {
+        throw err;
+      }
+    }
+  }
 
   return {
     transaction_id: txId,

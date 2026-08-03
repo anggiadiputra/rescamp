@@ -60,7 +60,18 @@ export class LiquidClient {
    */
   private getTldEligibility(domainName: string): string {
     const d = domainName.toLowerCase();
-    if (d.endsWith(".id")) return "co";
+    // Indonesian sub-TLDs — must be checked BEFORE .id (more specific first)
+    if (d.endsWith(".sch.id")) return "sch"; // Sekolah/pendidikan
+    if (d.endsWith(".ac.id")) return "ac"; // Akademik/pendidikan tinggi
+    if (d.endsWith(".go.id")) return "go"; // Pemerintahan
+    if (d.endsWith(".mil.id")) return "mil"; // Militer
+    if (d.endsWith(".co.id")) return "co"; // Komersial
+    if (d.endsWith(".or.id")) return "or"; // Organisasi
+    if (d.endsWith(".net.id")) return "net"; // Jaringan
+    if (d.endsWith(".web.id")) return "web"; // Web umum
+    if (d.endsWith(".biz.id")) return "biz"; // Bisnis
+    if (d.endsWith(".my.id")) return "my"; // Personal
+    if (d.endsWith(".id")) return "co"; // Generic .id fallback
     if (d.endsWith(".us")) return "us";
     if (d.endsWith(".asia")) return "asia";
     if (d.endsWith(".ca")) return "ca";

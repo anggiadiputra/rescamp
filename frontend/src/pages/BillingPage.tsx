@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { Card, LoadingSpinner, EmptyState, Modal, Pagination, Button, PaymentModal, SearchBar, toast } from "../components/ui";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
+import { Card, LoadingSpinner, EmptyState, Modal, Pagination, Button, SearchBar, toast } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import { useSettings } from "../contexts/SettingsContext";
@@ -159,6 +159,7 @@ export default function BillingPage() {
   const taxRate = parseFloat(String(settings?.tax_rate || "0")) || 0;
   const taxLabel = String(settings?.tax_label || "PPN");
   const isCustomer = user?.role === "customer";
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const returnStatus = searchParams.get("status");
@@ -176,16 +177,6 @@ export default function BillingPage() {
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<Transaction | null>(null);
-
-  const [paymentData, setPaymentData] = useState<{
-    open: boolean;
-    orderId: string;
-    paymentLinkUrl: string;
-    amount: number;
-    fee: number;
-    expiresAt?: string;
-    domainName: string;
-  }>({ open: false, orderId: "", paymentLinkUrl: "", amount: 0, fee: 0, expiresAt: "", domainName: "" });
 
   const [categoryTab, setCategoryTab] = useState<"retail" | "wholesale">("retail");
 
@@ -254,15 +245,7 @@ export default function BillingPage() {
 
   function handleInvoiceClick(t: Transaction) {
     const info = getTxnInfo(t);
-    setPaymentData({
-      open: true,
-      orderId: info.orderId,
-      paymentLinkUrl: info.paymentLinkUrl,
-      amount: info.amount,
-      fee: info.fee,
-      expiresAt: info.expiresAt,
-      domainName: info.domainName,
-    });
+    navigate(`/billing/pay/${info.orderId}`);
   }
 
   if (loading) return <LoadingSpinner />;
@@ -762,21 +745,6 @@ export default function BillingPage() {
           </div>
         )}
       </Modal>
-
-      <PaymentModal
-        open={paymentData.open}
-        onClose={() => setPaymentData({ ...paymentData, open: false })}
-        orderId={paymentData.orderId}
-        paymentLinkUrl={paymentData.paymentLinkUrl}
-        amount={paymentData.amount}
-        fee={paymentData.fee}
-        expiresAt={paymentData.expiresAt}
-        currency="IDR"
-        domainName={paymentData.domainName}
-        onSuccess={() => {
-          fetchTxns();
-        }}
-      />
     </div>
   );
 }

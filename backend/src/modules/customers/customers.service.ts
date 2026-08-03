@@ -180,6 +180,7 @@ export async function completeProfile(
       zipcode: data.zipcode,
       tel_cc_no: data.phone_cc,
       phone: data.phone,
+      eligibility_criteria: "co",
     });
     liquidCustomerId = liquidRes?.customer_id || liquidRes?.id || "";
   } catch (err: any) {
