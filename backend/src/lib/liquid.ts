@@ -92,19 +92,20 @@ export class LiquidClient {
     const eligibility = this.getTldEligibility(domainName);
     let custInfo: any = null;
 
-    // Step 1: Query API with eligibility_criteria filter (server-side — most reliable)
+    // Step 1: Query active contacts and find one matching eligibility_criteria
     try {
-      const list = await this.request<any>("GET", `/customers/${customerId}/contacts?eligibility_criteria=${eligibility}&status=Active`);
+      const list = await this.request<any>("GET", `/customers/${customerId}/contacts?status=Active`);
       const arr = Array.isArray(list) ? list : list?.data || list?.contacts || [];
-      if (arr.length > 0) {
-        const contactId = String(arr[0].contact_id || arr[0].id || "");
+      const matched = arr.find((c: any) => String(c.eligibility_criteria || c.type || "").toLowerCase() === eligibility.toLowerCase());
+      if (matched) {
+        const contactId = String(matched.contact_id || matched.id || "");
         if (contactId) {
-          console.log(`[resolveContact] Found contact ${contactId} (eligibility=${eligibility}) for ${domainName}`);
+          console.log(`[resolveContact] Found contact ${contactId} matching eligibility=${eligibility} for ${domainName}`);
           return contactId;
         }
       }
     } catch (e: any) {
-      console.warn(`[resolveContact] contacts?eligibility_criteria=${eligibility} failed:`, e?.message);
+      console.warn(`[resolveContact] contacts query failed:`, e?.message);
     }
 
     // Step 2: Try /contacts/default with eligibility_criteria (per luquid.md docs)
@@ -209,9 +210,9 @@ export class LiquidClient {
       return await this.request<any>("POST", "/domains", payload);
     } catch (err: any) {
       const errMsg = String(err?.message || err || "").toLowerCase();
-      if (errMsg.includes("type did not match") || errMsg.includes("registrant contact")) {
+      if (errMsg.includes("did not match") || errMsg.includes("registrant contact")) {
         const eligibility = this.getTldEligibility(data.domain_name);
-        console.warn(`[registerDomain] Contact type mismatch for ${data.domain_name}, needed eligibility=${eligibility}. Attempting fallback contact creation...`);
+        console.warn(`[registerDomain] Contact type mismatch for ${data.domain_name}, creating new contact with eligibility=${eligibility}...`);
         try {
           const custInfo = await this.getCustomer(customerId).catch(() => null);
           const newContact = await this.createCustomerContact(customerId, {
@@ -231,6 +232,7 @@ export class LiquidClient {
             payload.admin_contact_id = newContactId;
             payload.billing_contact_id = newContactId;
             payload.tech_contact_id = newContactId;
+            console.log(`[registerDomain] Retrying domain creation with fresh contact ${newContactId}...`);
             return await this.request<any>("POST", "/domains", payload);
           }
         } catch (retryErr: any) {
