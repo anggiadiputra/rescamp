@@ -16,8 +16,11 @@ export class LiquidClient {
   private async request<T>(method: HttpMethod, path: string, body?: Record<string, any>): Promise<T> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000); // 30s timeout
+    const url = `${this.baseURL}${path}`;
+    console.log(`[Resellercamp API Request] ${method} ${url}`, body ? JSON.stringify(body) : "");
+
     try {
-      const res = await fetch(`${this.baseURL}${path}`, {
+      const res = await fetch(url, {
         method,
         headers: {
           Authorization: this.authHeader,
@@ -29,18 +32,25 @@ export class LiquidClient {
       const text = await res.text();
       let data: any;
       try { data = JSON.parse(text); } catch { data = { message: text }; }
+
+      console.log(`[Resellercamp API Response] ${method} ${path} [HTTP ${res.status}]:`, typeof data === "object" ? JSON.stringify(data) : data);
+
       if (!res.ok) {
         const status = res.status === 401 || res.status === 403 ? 502 : res.status;
-        throw new AppError(data.message || "LIQUID API error", status);
+        const errMsg = data.message || data.error || data.error_message || data.description || text || "LIQUID API error";
+        throw new AppError(errMsg, status);
       }
       return data;
     } catch (err: any) {
-      if (err instanceof AppError) throw err;
+      if (err instanceof AppError) {
+        console.error(`[Resellercamp API Error] ${method} ${path}:`, err.message);
+        throw err;
+      }
       if (err.name === "AbortError") {
-        console.error(`[LiquidClient] Timeout on ${method} ${path}`);
+        console.error(`[Resellercamp API Timeout] ${method} ${path}`);
         throw new AppError("Resellercamp API request timed out (30s)", 504);
       }
-      console.error(`[LiquidClient] Connection error on ${method} ${path}:`, err);
+      console.error(`[Resellercamp API Connection Error] ${method} ${path}:`, err);
       throw new AppError(`Gagal terhubung ke Resellercamp API: ${err.message || "Network Error"}`, 502);
     } finally {
       clearTimeout(timeout);
