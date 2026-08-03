@@ -588,11 +588,11 @@ export default function DomainRegisterPage() {
               >
                 {submitting ? (
                   <>
-                    <LoadingSpinner size="sm" /> Processing Registration...
+                    <LoadingSpinner size="sm" /> Memproses Pembayaran...
                   </>
                 ) : (
                   <>
-                    Complete Registration for {selectedDomain.domain} <ArrowRight className="w-4 h-4 ml-1" />
+                    Lanjut Bayar - {selectedDomain.domain} <ArrowRight className="w-4 h-4 ml-1" />
                   </>
                 )}
               </Button>
