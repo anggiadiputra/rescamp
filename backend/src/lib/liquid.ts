@@ -170,7 +170,7 @@ export class LiquidClient {
     return this.request<any>("POST", `/customers/${customerId}/contacts`, {
       name: data.name || "Registrant",
       company: data.company || "Personal",
-      email: data.email,
+      email: data.email || "registrant@ekstensi.id",
       address_line_1: data.address || data.address_line_1 || "Indonesia",
       city: data.city || "Jakarta",
       state: data.state || "DKI Jakarta",
@@ -178,7 +178,7 @@ export class LiquidClient {
       zipcode: data.zipcode || "10110",
       tel_cc_no,
       tel_no: tel_no || "8123456789",
-      eligibility_criteria: data.eligibility_criteria || "com",
+      eligibility_criteria: data.eligibility_criteria || "co",
     });
   }
 
@@ -187,18 +187,23 @@ export class LiquidClient {
     // Always resolve correct contact per TLD — never trust frontend-supplied contact ID
     const contactId = await this.resolveContactIdForDomain(customerId, data.domain_name);
 
-    const payload = {
+    const payload: Record<string, string> = {
       domain_name: data.domain_name,
       customer_id: customerId,
       registrant_contact_id: contactId,
       admin_contact_id: data.admin_contact_id || contactId,
       billing_contact_id: data.billing_contact_id || contactId,
       tech_contact_id: data.tech_contact_id || contactId,
-      years: data.years || 1,
-      ns: data.ns || "",
-      purchase_privacy_protection: data.purchase_privacy_protection || data.privacy_protection ? "true" : "false",
+      years: String(data.years || 1),
       invoice_option: data.invoice_option || "keep_invoice",
     };
+
+    if (data.ns && String(data.ns).trim()) {
+      payload.ns = String(data.ns).trim();
+    }
+    if (data.purchase_privacy_protection || data.privacy_protection) {
+      payload.purchase_privacy_protection = "true";
+    }
 
     try {
       return await this.request<any>("POST", "/domains", payload);
