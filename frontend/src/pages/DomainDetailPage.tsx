@@ -520,7 +520,7 @@ export default function DomainDetailPage() {
               className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black font-semibold"
             >
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(y => (
-                <option key={y} value={y}>{y} Tahun (+ {y} tahun dari tanggal kadaluarsa)</option>
+                <option key={y} value={y}>{y} Tahun</option>
               ))}
             </select>
           </div>
