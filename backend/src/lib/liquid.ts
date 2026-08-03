@@ -258,18 +258,40 @@ export class LiquidClient {
     }
   }
   getDomain(domainId: string) {
-    return this.request<any>("GET", `/domains/${domainId}`);
+    return this.request<any>("GET", `/domains/${domainId}?fields=all`);
   }
   listDomains(params?: Record<string, string>) {
     const qs = params ? "?" + new URLSearchParams(params).toString() : "";
     return this.request<any>("GET", `/domains${qs}`);
   }
-  renewDomain(domainId: string, years: number, invoiceOption: string = "keep_invoice", expiryDate?: string | null) {
-    // current_date = domain's current expiry date, required by Resellercamp API
-    const currentDate = expiryDate ? expiryDate.split("T")[0] : new Date().toISOString().split("T")[0];
+  async renewDomain(domainId: string, years: number, invoiceOption: string = "keep_invoice", expiryDate?: string | null) {
+    let epochSec = "";
+    if (expiryDate) {
+      if (!isNaN(Number(expiryDate)) && String(expiryDate).length <= 11) {
+        epochSec = String(expiryDate);
+      } else {
+        const parsed = Math.floor(new Date(expiryDate).getTime() / 1000);
+        if (!isNaN(parsed) && parsed > 0) epochSec = String(parsed);
+      }
+    }
+
+    if (!epochSec) {
+      try {
+        const details = await this.getDomain(domainId);
+        if (details?.endtime) epochSec = String(details.endtime);
+      } catch (e: any) {
+        console.warn("[renewDomain] Failed to fetch endtime via getDomain:", e?.message);
+      }
+    }
+
+    if (!epochSec) {
+      epochSec = String(Math.floor(Date.now() / 1000));
+    }
+
+    console.log(`[renewDomain] Ordering renew for domainId=${domainId}, years=${years}, current_date (epochSec)=${epochSec}`);
     return this.request<any>("POST", `/domains/${domainId}/renew`, {
-      years,
-      current_date: currentDate,
+      years: String(years),
+      current_date: epochSec,
       invoice_option: invoiceOption,
     });
   }
