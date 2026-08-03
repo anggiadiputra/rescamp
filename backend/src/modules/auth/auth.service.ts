@@ -506,8 +506,6 @@ export async function forgotPassword(email: string) {
 
   return {
     message: "Link & Kode OTP reset password telah berhasil dikirim",
-    resetLink,
-    otpCode,
   };
 }
 

@@ -7,7 +7,7 @@ import { Mail, CheckCircle2 } from "lucide-react";
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sentData, setSentData] = useState<any>(null);
+  const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -16,15 +16,15 @@ export default function ForgotPasswordPage() {
     setError("");
     setLoading(true);
     try {
-      const res: any = await api.post("/auth/forgot-password", { email });
-      setSentData(res.data || res);
+      await api.post("/auth/forgot-password", { email });
+      setSent(true);
     } catch (err: any) {
       setError(err.message || "Gagal mengirim link reset");
     }
     setLoading(false);
   }
 
-  if (sentData) {
+  if (sent) {
     return (
       <div className="max-w-md mx-auto mt-16 px-4">
         <Card>
@@ -32,17 +32,8 @@ export default function ForgotPasswordPage() {
             <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
             <h1 className="text-xl font-bold text-gray-900">Link & Kode Reset Terkirim!</h1>
             <p className="text-xs text-gray-500 mt-2">
-              Email <strong>{email}</strong> telah dikirimi instruksi reset password. Silakan cek inbox/spam email Anda.
+              Email <strong>{email}</strong> telah dikirimi instruksi reset password. Silakan cek inbox/spam email Anda untuk link dan kode OTP.
             </p>
-
-            {sentData.resetLink && (
-              <div className="mt-4 p-3 bg-gray-50 rounded-lg text-left border border-gray-200 space-y-2">
-                <p className="text-xs font-semibold text-gray-700">Akses Langsung Halaman Reset:</p>
-                <a href={sentData.resetLink} className="inline-block px-4 py-2 bg-black text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition">
-                  Buka Halaman Reset Password →
-                </a>
-              </div>
-            )}
 
             <div className="mt-4 flex justify-between items-center text-xs">
               <Link to="/reset-password" className="text-black font-semibold hover:underline">Masukkan Kode Token / OTP →</Link>

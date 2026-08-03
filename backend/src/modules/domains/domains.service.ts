@@ -450,7 +450,14 @@ export async function deleteDomainRecord(userId: number, domainId: number) {
 
 export async function bulkAvailability(user: { resellerId: string; apiKey: string; role?: string }, keyword: string) {
   const liquid = getLiquid(user);
-  const defaultTlds = ["com", "xyz", "id", "co.id", "web.id", "or.id", "ac.id", "sch.id", "biz.id", "my.id", "ponpes.id"];
+
+  // Extract base keyword and requested TLD if user searched with extension (e.g. "nama.web.id")
+  const cleanInput = keyword.trim().toLowerCase();
+  const parts = cleanInput.split(".");
+  const baseKeyword = parts[0];
+  const requestedTld = parts.length > 1 ? parts.slice(1).join(".") : null;
+
+  const defaultTlds = ["com", "id", "co.id", "web.id", "my.id", "or.id", "ac.id", "sch.id", "biz.id", "ponpes.id", "xyz", "net", "org"];
   let prices: any = {};
   try {
     const raw = await liquid.getCustomerPrices();
@@ -459,24 +466,36 @@ export async function bulkAvailability(user: { resellerId: string; apiKey: strin
     prices = {};
   }
 
-  let tldsToQuery = defaultTlds;
+  // Merge default TLDs with custom priced TLDs so default extensions like web.id are never lost
+  const tldSet = new Set<string>(defaultTlds);
   if (prices && typeof prices === "object") {
     const custKeys = Object.keys(prices).filter(k => k !== "addons");
-    if (custKeys.length > 0) {
-      tldsToQuery = custKeys;
+    for (const k of custKeys) {
+      if (k) tldSet.add(k.toLowerCase());
+    }
+  }
+
+  let tldsToQuery = Array.from(tldSet);
+
+  // If user searched for a specific TLD (e.g. "web.id"), ensure it is in the list and placed first
+  if (requestedTld) {
+    if (!tldsToQuery.includes(requestedTld)) {
+      tldsToQuery.unshift(requestedTld);
+    } else {
+      tldsToQuery = [requestedTld, ...tldsToQuery.filter(t => t !== requestedTld)];
     }
   }
 
   const results = await Promise.all(
     tldsToQuery.map(async (tld) => {
       try {
-        const res = await liquid.checkAvailability(`${keyword}.${tld}`);
+        const res = await liquid.checkAvailability(`${baseKeyword}.${tld}`);
         const arr = Array.isArray(res) ? res : [];
         const first = arr[0];
         const status = first ? (Object.values(first)[0] as any)?.status : "error";
         const tldPrice = prices[tld] || {};
         return {
-          domain: `${keyword}.${tld}`,
+          domain: `${baseKeyword}.${tld}`,
           tld,
           available: status === "available",
           status,
@@ -489,7 +508,7 @@ export async function bulkAvailability(user: { resellerId: string; apiKey: strin
           currency: tldPrice.currency || "IDR",
         };
       } catch {
-        return { domain: `${keyword}.${tld}`, tld, available: false, status: "error", price: null, renew_price: null, transfer_price: null, privacy_protect: "70.00", currency: "IDR" };
+        return { domain: `${baseKeyword}.${tld}`, tld, available: false, status: "error", price: null, renew_price: null, transfer_price: null, privacy_protect: "70.00", currency: "IDR" };
       }
     })
   );
