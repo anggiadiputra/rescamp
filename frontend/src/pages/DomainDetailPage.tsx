@@ -106,19 +106,11 @@ export default function DomainDetailPage() {
       const paymentInfo = res?.data || res;
       const paymentLinkUrl = paymentInfo?.paymentLinkUrl || paymentInfo?.payment_link_url;
       const orderId = paymentInfo?.orderId || paymentInfo?.order_id;
-      const expiresAt = paymentInfo?.expiresAt || paymentInfo?.expires_at;
 
-      if (paymentLinkUrl) {
-        setPaymentData({
-          open: true,
-          orderId: orderId || "",
-          paymentLinkUrl: paymentLinkUrl,
-          amount: paymentInfo.amount,
-          fee: paymentInfo.fee || 0,
-          expiresAt: expiresAt,
-          domainName: domain?.domainName || "",
-        });
-        window.open(paymentLinkUrl, "_blank");
+      if (orderId) {
+        nav(`/billing/pay/${orderId}`);
+      } else if (paymentLinkUrl) {
+        window.location.href = paymentLinkUrl;
       } else {
         toast("Perpanjangan domain berhasil diproses!");
         await fetchDomain();
