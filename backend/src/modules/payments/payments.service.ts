@@ -1,6 +1,6 @@
 import { db } from "../../db";
 import { transactions, domains, users, customers } from "../../db/schema";
-import { eq, and, like, sql, or } from "drizzle-orm";
+import { eq, and, sql, or } from "drizzle-orm";
 import { sumopodClient } from "../../lib/sumopod";
 import { LiquidClient } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
@@ -213,7 +213,8 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
   }
 
   // --- Step 3: Create Payment Link on Sumopod Payment Gateway ---
-  const orderId = `EXT-${payload.type.toUpperCase().slice(0, 3)}-${Date.now()}`;
+  // N21: append UUID entropy so concurrent same-ms submits never collide
+  const orderId = `EXT-${payload.type.toUpperCase().slice(0, 3)}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   const sumopodRes = await sumopodClient.createPayment({
     orderId,
     amount: payload.amount,
@@ -242,6 +243,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     currency: "IDR",
     paymentGateway: "sumopod",
     paymentId: sumopodRes.payment_id,
+    orderId,
     paymentLinkUrl: sumopodRes.payment_link_url,
     liquidTransactionId: liquidTransactionId ? String(liquidTransactionId) : null,
     status: "pending_payment",
@@ -297,34 +299,38 @@ export async function processWebhookPayload(payload: any) {
     return { status: "missing_order_id" };
   }
 
-  // Multi-strategy transaction lookup
+  // N16: exact-match lookup — orderId/paymentId match against dedicated columns only.
+// LIKE on description was matching substring collisions across transactions.
   let tx: any = null;
-  if (orderId) {
-    const [byDesc] = await db
-      .select()
-      .from(transactions)
-      .where(and(eq(transactions.paymentGateway, "sumopod"), like(transactions.description, `%${orderId}%`)))
-      .limit(1);
-    tx = byDesc || null;
-  }
-
-  if (!tx && paymentId) {
+  if (paymentId) {
     const [byPayId] = await db.select().from(transactions).where(eq(transactions.paymentId, paymentId)).limit(1);
     tx = byPayId || null;
   }
 
-  if (!tx) {
-    const all = await db.select().from(transactions).where(eq(transactions.paymentGateway, "sumopod"));
-    tx = all.find((t) => {
-      if (t.paymentId && (t.paymentId === paymentId || t.paymentId === orderId)) return true;
-      if (String(t.id) === String(orderId)) return true;
-      if (t.description?.includes(orderId)) return true;
-      if (t.metadata) {
-        const str = typeof t.metadata === "string" ? t.metadata : JSON.stringify(t.metadata);
-        if (str.includes(orderId)) return true;
-      }
-      return false;
-    }) as any;
+  if (!tx && orderId) {
+    // Try the indexed orderId column (preferred)
+    const [byOrderId] = await db.select().from(transactions)
+      .where(and(eq(transactions.paymentGateway, "sumopod"), eq(transactions.orderId, orderId)))
+      .limit(1);
+    tx = byOrderId || null;
+  }
+
+  if (!tx && orderId) {
+    // Fallback: exact match on metadata.orderId (for rows inserted before the column existed)
+    const [byMeta] = await db.select().from(transactions)
+      .where(and(
+        eq(transactions.paymentGateway, "sumopod"),
+        sql`JSON_UNQUOTE(JSON_EXTRACT(${transactions.metadata}, '$.orderId')) = ${orderId}`,
+      ))
+      .limit(1);
+    tx = byMeta || null;
+  }
+
+  if (!tx && orderId) {
+    const [byTxId] = await db.select().from(transactions)
+      .where(and(eq(transactions.paymentGateway, "sumopod"), eq(transactions.id, parseInt(String(orderId), 10) || -1)))
+      .limit(1);
+    tx = byTxId || null;
   }
 
   if (!tx) {
@@ -438,9 +444,19 @@ export async function processWebhookPayload(payload: any) {
       if (domainId) {
         const [targetDomain] = await db.select().from(domains).where(eq(domains.id, domainId));
         if (targetDomain) {
-          await db.update(domains).set({
-            years: sql`${domains.years} + ${meta.years || 1}`,
-          }).where(eq(domains.id, domainId));
+          // N6: idempotency — only bump years if not already processed for this transaction
+          // (prevents double-bump if a second webhook replay for the same tx arrives,
+          // or if the same tx.id was processed by a concurrent webhook/poll path).
+          const yearsToAdd = meta.years || 1;
+          if (meta.yearsRenewed !== yearsToAdd) {
+            meta.yearsRenewed = yearsToAdd;
+            await db.update(transactions)
+              .set({ metadata: JSON.stringify(meta) })
+              .where(and(eq(transactions.id, tx.id), sql`JSON_EXTRACT(${transactions.metadata}, '$.yearsRenewed') IS NULL`));
+            await db.update(domains)
+              .set({ years: sql`${domains.years} + ${yearsToAdd}` })
+              .where(eq(domains.id, domainId));
+          }
         }
       }
     }

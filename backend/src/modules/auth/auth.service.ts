@@ -40,7 +40,12 @@ export async function register(data: {
     );
     if (!record) throw new AppError("Kode OTP verifikasi tidak valid", 401);
     if (new Date() > record.expiresAt) throw new AppError("Kode OTP sudah kadaluarsa", 401);
-    await db.update(otpCodes).set({ used: true }).where(eq(otpCodes.id, record.id));
+    // N1: CAS — if a concurrent caller already consumed this code, affectedRows=0 → reject
+    const markUsed: any = await db.update(otpCodes).set({ used: true })
+      .where(and(eq(otpCodes.id, record.id), eq(otpCodes.used, false)));
+    if ((markUsed[0]?.affectedRows ?? 0) === 0) {
+      throw new AppError("Kode OTP sudah digunakan", 401);
+    }
   } else {
     // If an OTP was issued for this email, require code verification
     const [record] = await db.select().from(otpCodes).where(
@@ -106,7 +111,9 @@ export async function register(data: {
           });
           const lCustId = String(liqCust?.customer_id || liqCust?.id || "");
           if (lCustId) {
-             await db.update(customers).set({ liquidCustomerId: lCustId }).where(eq(customers.email, data.email));
+            // N2: CAS — only backfill if not already set (e.g. by an in-flight order path)
+            await db.update(customers).set({ liquidCustomerId: lCustId })
+              .where(and(eq(customers.email, data.email), sql`${customers.liquidCustomerId} IS NULL`));
           }
         } catch (e) { console.error("[auth] LIQUID customer auto-create failed:", e); }
       })();
@@ -413,25 +420,11 @@ function generateResetToken(): string {
 }
 
 export async function sendLoginOtp(email: string, password: string) {
-  let [user] = await db.select().from(users).where(eq(users.email, email));
-
-  // If not found in users table, check if customer exists in customers table
-  if (!user) {
-    const [cust] = await db.select().from(customers).where(eq(customers.email, email));
-    if (cust) {
-      const passwordHash = await hashPassword(password);
-      const [res] = await db.insert(users).values({
-        email: cust.email,
-        name: cust.name,
-        passwordHash,
-        role: "customer",
-      });
-      const newUserId = Number(res.insertId);
-      await db.update(customers).set({ userId: newUserId }).where(eq(customers.id, cust.id));
-      [user] = await db.select().from(users).where(eq(users.id, newUserId));
-    }
-  }
-
+  // N4: never auto-create a user from a customer record — that path was an
+  // account takeover (attacker supplied password became the user's password).
+  // User must register via /auth/register first; if email is only in `customers`
+  // (legacy data, no users row), reject and direct them to register.
+  const [user] = await db.select().from(users).where(eq(users.email, email));
   if (!user) throw new AppError("Email tidak ditemukan. Silakan daftar terlebih dahulu.", 400);
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) throw new AppError("Password salah", 401);
@@ -460,7 +453,12 @@ export async function verifyLoginOtp(email: string, code: string) {
   if (!record) throw new AppError("Kode OTP tidak valid atau sudah digunakan", 401);
   if (new Date() > record.expiresAt) throw new AppError("Kode OTP sudah kadaluarsa. Silakan minta kode baru.", 401);
 
-  await db.update(otpCodes).set({ used: true }).where(eq(otpCodes.id, record.id));
+  // N1: CAS — concurrent caller cannot consume the same code twice
+  const markUsed: any = await db.update(otpCodes).set({ used: true })
+    .where(and(eq(otpCodes.id, record.id), eq(otpCodes.used, false)));
+  if ((markUsed[0]?.affectedRows ?? 0) === 0) {
+    throw new AppError("Kode OTP sudah digunakan", 401);
+  }
 
   const [user] = await db.select().from(users).where(eq(users.email, cleanEmail));
   if (!user) throw new AppError("User tidak ditemukan", 404);

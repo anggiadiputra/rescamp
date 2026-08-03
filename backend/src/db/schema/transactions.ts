@@ -1,4 +1,4 @@
-import { mysqlTable, int, varchar, decimal, text, timestamp, mysqlEnum, uniqueIndex } from "drizzle-orm/mysql-core";
+import { mysqlTable, int, varchar, decimal, text, timestamp, mysqlEnum, uniqueIndex, index } from "drizzle-orm/mysql-core";
 import { users } from "./users";
 import { customers } from "./customers";
 import { domains } from "./domains";
@@ -14,6 +14,7 @@ export const transactions = mysqlTable("transactions", {
   status: mysqlEnum("status", ["pending_payment", "processing_domain", "completed", "failed", "cancelled", "expired", "action_required"]).default("pending_payment"),
   paymentGateway: varchar("payment_gateway", { length: 50 }).default("sumopod"),
   paymentId: varchar("payment_id", { length: 100 }),
+  orderId: varchar("order_id", { length: 100 }),
   paymentLinkUrl: text("payment_link_url"),
   paymentStatus: mysqlEnum("payment_status", ["pending", "completed", "failed", "expired"]).default("pending"),
   metadata: text("metadata"),
@@ -22,4 +23,5 @@ export const transactions = mysqlTable("transactions", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   liquidTxnIdUnique: uniqueIndex("liquid_transaction_id_unique").on(table.liquidTransactionId),
+  orderIdIdx: index("order_id_idx").on(table.orderId),
 }));

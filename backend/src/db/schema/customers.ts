@@ -1,4 +1,4 @@
-import { mysqlTable, int, varchar, text, char, timestamp, index } from "drizzle-orm/mysql-core";
+import { mysqlTable, int, varchar, text, char, timestamp, index, uniqueIndex } from "drizzle-orm/mysql-core";
 import { users } from "./users";
 
 export const customers = mysqlTable("customers", {
@@ -19,5 +19,7 @@ export const customers = mysqlTable("customers", {
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 }, (table) => ({
   userIdIdx: index("user_id_idx").on(table.userId),
-  emailIdx: index("email_idx").on(table.email)
+  // N4: enforce email uniqueness so two-tab / two-path customer creation can't dup
+  emailIdx: index("email_idx").on(table.email),
+  emailUnique: uniqueIndex("customers_email_unique").on(table.email),
 }));

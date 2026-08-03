@@ -62,11 +62,6 @@ async function upsertLiquidTransaction(userId: number, item: any) {
   const liquidTxnId = String(item.transaction_id || item.id || "");
   if (!liquidTxnId) return;
 
-  const existing = await db.select({ id: transactions.id }).from(transactions)
-    .where(sql`JSON_EXTRACT(${transactions.metadata}, '$.liquidTransactionId') = ${liquidTxnId}`)
-    .limit(1);
-  if (existing.length > 0) return;
-
   const amountVal = Math.abs(Number(item.amount || item.net_amount || 0));
   const statusMap: Record<string, string> = {
     paid: "completed", completed: "completed", success: "completed",
@@ -79,6 +74,24 @@ async function upsertLiquidTransaction(userId: number, item: any) {
     note: "debit", privacy_protect: "privacy",
   };
   const typeVal = typeMap[String(item.transaction_type || item.type || "domain").toLowerCase()] || "register";
+
+  // N14: lookup on the indexed `liquidTransactionId` column (was JSON_EXTRACT on metadata — no index)
+  // and filter by userId so we don't match a row owned by a different user.
+  const [existing] = await db.select({ id: transactions.id, status: transactions.status })
+    .from(transactions)
+    .where(and(eq(transactions.liquidTransactionId, liquidTxnId), eq(transactions.userId, userId)))
+    .limit(1);
+
+  if (existing) {
+    // N14: only sync Liquid-side transitions for transactions still pending locally.
+    // Never overwrite `completed`/`processing_domain`/`action_required` — those are the source of truth.
+    if (existing.status === "pending_payment" && (statusVal === "cancelled" || statusVal === "expired" || statusVal === "failed")) {
+      await db.update(transactions)
+        .set({ status: statusVal as any, paymentStatus: statusVal as any })
+        .where(and(eq(transactions.id, existing.id), eq(transactions.status, "pending_payment")));
+    }
+    return;
+  }
 
   try {
     await db.insert(transactions).values({

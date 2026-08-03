@@ -1,5 +1,5 @@
 import { db } from "../../db";
-import { domains, users, customers } from "../../db/schema";
+import { domains, users, customers, transactions } from "../../db/schema";
 import { eq, and, like, inArray, or, sql } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
@@ -339,6 +339,10 @@ export async function renewDomain(user: { resellerId: string | null; apiKey: str
 
 export async function updateLock(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, lock: boolean) {
   const domain = await getDomain(userId, domainId);
+  // N5: short-circuit if already in desired state (concurrent tab toggle)
+  if (Boolean(domain.locked) === lock) {
+    return { locked: lock, alreadyInState: true };
+  }
   try {
     if (lock) await getLiquid(user).lockDomain(String(domain.liquidOrderId || domain.domainName));
     else await getLiquid(user).unlockDomain(String(domain.liquidOrderId || domain.domainName));
@@ -354,7 +358,13 @@ export async function updateLock(user: { resellerId: string | null; apiKey: stri
     }
     throw err;
   }
-  await db.update(domains).set({ locked: lock ? 1 : 0 }).where(eq(domains.id, domain.id));
+  // N5: CAS — only write if local state still matches the expected pre-state
+  const res: any = await db.update(domains)
+    .set({ locked: lock ? 1 : 0 })
+    .where(and(eq(domains.id, domain.id), eq(domains.locked, lock ? 0 : 1)));
+  if ((res[0]?.affectedRows ?? 0) === 0) {
+    return { locked: Boolean(domain.locked), alreadyInState: true };
+  }
   return { locked: lock };
 }
 
@@ -377,6 +387,10 @@ export async function updateAuthCode(user: { resellerId: string | null; apiKey: 
 
 export async function toggleTheftProtection(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, enable: boolean) {
   const domain = await getDomain(userId, domainId);
+  // N5: short-circuit if already in desired state
+  if (Boolean(domain.theftProtection) === enable) {
+    return { theftProtection: enable, alreadyInState: true };
+  }
   try {
     if (enable) await getLiquid(user).enableTheftProtection(String(domain.liquidOrderId || domain.domainName));
     else await getLiquid(user).disableTheftProtection(String(domain.liquidOrderId || domain.domainName));
@@ -392,7 +406,13 @@ export async function toggleTheftProtection(user: { resellerId: string | null; a
     }
     throw err;
   }
-  await db.update(domains).set({ theftProtection: enable ? 1 : 0 }).where(eq(domains.id, domain.id));
+  // N5: CAS
+  const res: any = await db.update(domains)
+    .set({ theftProtection: enable ? 1 : 0 })
+    .where(and(eq(domains.id, domain.id), eq(domains.theftProtection, enable ? 0 : 1)));
+  if ((res[0]?.affectedRows ?? 0) === 0) {
+    return { theftProtection: Boolean(domain.theftProtection), alreadyInState: true };
+  }
   return { theftProtection: enable };
 }
 
@@ -405,9 +425,21 @@ export async function restoreDomain(user: { resellerId: string | null; apiKey: s
 
 export async function toggleSuspend(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, suspend: boolean) {
   const domain = await getDomain(userId, domainId);
+  // N5: short-circuit if already in desired state
+  const desiredStatus = suspend ? "suspended" : "active";
+  if (domain.status === desiredStatus) {
+    return { status: domain.status, alreadyInState: true };
+  }
   if (suspend) await getLiquid(user).suspendDomain(String(domain.liquidOrderId || domain.domainName));
   else await getLiquid(user).unsuspendDomain(String(domain.liquidOrderId || domain.domainName));
-  await db.update(domains).set({ status: suspend ? "suspended" : "active" }).where(eq(domains.id, domain.id));
+  // N5: CAS
+  const res: any = await db.update(domains)
+    .set({ status: desiredStatus as any })
+    .where(and(eq(domains.id, domain.id), eq(domains.status, domain.status as any)));
+  if ((res[0]?.affectedRows ?? 0) === 0) {
+    return { status: domain.status, alreadyInState: true };
+  }
+  return { status: desiredStatus };
 }
 
 export async function deleteDomainRecord(userId: number, domainId: number) {
@@ -528,7 +560,7 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
         const tld = parts.slice(1).join(".");
 
         const rawStatus = (item.status || "").toLowerCase().trim();
-        const status = statusMap[rawStatus] || "active";
+        let status = statusMap[rawStatus] || "active";
 
         let matchedCustomerId: number | null = null;
         let matchedUserId: number = u.id;
@@ -569,7 +601,24 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
         const regDate = ((item.creation_time || item.creation_date) ? new Date(item.creation_time || item.creation_date).toISOString().split("T")[0] : null) as string | null;
         const expDate = (item.expiry_date ? new Date(item.expiry_date).toISOString().split("T")[0] : null) as string | null;
 
-        const [existing] = await db.select().from(domains).where(eq(domains.domainName, fullDomainName)).limit(1);
+        const preExisting = await db.select().from(domains).where(eq(domains.domainName, fullDomainName)).limit(1);
+        const existing = preExisting[0] || null;
+
+        // N7: skip downgrade — if local row is active/pending and a completed transaction
+        // exists for this domain, the user has paid; don't let a Liquid-side lag or
+        // transitional status (e.g. "pending delete restorable") downgrade to expired.
+        if (existing && (existing.status === "active" || existing.status === "pending")) {
+          if (status === "expired" || status === "suspended") {
+            const [paidTx] = await db.select({ id: transactions.id })
+              .from(transactions)
+              .where(and(
+                eq(transactions.domainId, existing.id),
+                eq(transactions.status, "completed"),
+              ))
+              .limit(1);
+            if (paidTx) status = existing.status;
+          }
+        }
 
         if (existing) {
           await db.update(domains).set({
