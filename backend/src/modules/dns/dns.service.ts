@@ -14,9 +14,17 @@ async function getDomain(userId: number, domainId: number) {
   return domain;
 }
 
+function mapDnsType(type: string): string {
+  const t = type.toLowerCase();
+  if (t === "a") return "ip";
+  if (t === "aaaa") return "ipv6";
+  return t;
+}
+
 export async function listRecords(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, type: string) {
   const domain = await getDomain(userId, domainId);
-  const res = await getLiquid(user).getDnsRecords(String(domain.liquidOrderId || domain.domainName), type);
+  const liquidType = mapDnsType(type);
+  const res = await getLiquid(user).getDnsRecords(String(domain.liquidOrderId || domain.domainName), liquidType);
   return Array.isArray(res) ? res : res?.records || res?.data || [];
 }
 
@@ -25,7 +33,7 @@ export async function addRecord(
   type: string, data: { hostname: string; value: string; ttl?: number },
 ) {
   const domain = await getDomain(userId, domainId);
-  return getLiquid(user).addDnsRecord(String(domain.liquidOrderId || domain.domainName), type, data);
+  return getLiquid(user).addDnsRecord(String(domain.liquidOrderId || domain.domainName), mapDnsType(type), data);
 }
 
 export async function updateRecord(
@@ -33,7 +41,7 @@ export async function updateRecord(
   type: string, oldHost: string, oldValue: string, data: { hostname: string; value: string; ttl?: number },
 ) {
   const domain = await getDomain(userId, domainId);
-  return getLiquid(user).updateDnsRecord(String(domain.liquidOrderId || domain.domainName), type, oldHost, oldValue, data);
+  return getLiquid(user).updateDnsRecord(String(domain.liquidOrderId || domain.domainName), mapDnsType(type), oldHost, oldValue, data);
 }
 
 export async function deleteRecord(
@@ -41,5 +49,5 @@ export async function deleteRecord(
   type: string, hostname: string, value: string,
 ) {
   const domain = await getDomain(userId, domainId);
-  return getLiquid(user).deleteDnsRecord(String(domain.liquidOrderId || domain.domainName), type, hostname, value);
+  return getLiquid(user).deleteDnsRecord(String(domain.liquidOrderId || domain.domainName), mapDnsType(type), hostname, value);
 }
