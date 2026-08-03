@@ -61,13 +61,21 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
           .from(transactions)
           .where(eq(transactions.userId, userId));
 
+        const cleanOrderId = String(orderId || "").trim();
+        // Parse "INV-000040" -> 40 or "000040" -> 40
+        const numericMatch = cleanOrderId.replace(/^INV-0*/i, "").replace(/^0+/, "");
+        const parsedNumericId = numericMatch ? parseInt(numericMatch, 10) : NaN;
+
         const tx = allTx.find((t) => {
-          if (t.paymentId && t.paymentId === orderId) return true;
-          if (String(t.id) === String(orderId)) return true;
-          if (t.description?.includes(orderId)) return true;
+          if (t.orderId && t.orderId === cleanOrderId) return true;
+          if (t.paymentId && t.paymentId === cleanOrderId) return true;
+          if (t.liquidTransactionId && String(t.liquidTransactionId) === cleanOrderId) return true;
+          if (String(t.id) === cleanOrderId) return true;
+          if (!isNaN(parsedNumericId) && t.id === parsedNumericId) return true;
+          if (t.description && t.description.toLowerCase().includes(cleanOrderId.toLowerCase())) return true;
           if (t.metadata) {
             const str = typeof t.metadata === "string" ? t.metadata : JSON.stringify(t.metadata);
-            if (str.includes(orderId)) return true;
+            if (str.includes(cleanOrderId)) return true;
           }
           return false;
         });
