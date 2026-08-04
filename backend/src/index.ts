@@ -10,7 +10,11 @@ import { forwardingRoutes } from "./modules/forwarding/forwarding.route";
 import { paymentRoutes } from "./modules/payments/payments.route";
 import { settingsRoutes } from "./modules/settings/settings.route";
 import { sweepExpiredTransactions, sweepActionRequiredRetries } from "./modules/billing/billing.service";
+import { ensureDatabaseSchema } from "./db";
 import { AppError } from "./lib/error";
+
+// Ensure MySQL database schema (ENUMS) match codebase
+ensureDatabaseSchema().catch((e) => console.warn("[db] ensureDatabaseSchema failed:", e));
 
 const app = new Elysia()
   .use(cors({ origin: env.CORS_ORIGIN }))
