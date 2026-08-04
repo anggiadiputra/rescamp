@@ -2,14 +2,17 @@ import { LiquidClient } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { db } from "../../db";
 import { domains } from "../../db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 
 function getLiquid(user: { resellerId: string | null; apiKey: string | null }): LiquidClient {
   return new LiquidClient(user.resellerId || "", user.apiKey || "");
 }
 
 async function getDomain(userId: number, domainId: number) {
-  const [domain] = await db.select().from(domains).where(and(eq(domains.id, domainId), eq(domains.userId, userId)));
+  const [domain] = await db.select().from(domains).where(and(
+    or(eq(domains.id, domainId), eq(domains.liquidOrderId, String(domainId))),
+    eq(domains.userId, userId),
+  ));
   if (!domain) throw new AppError("Domain not found", 404);
   return domain;
 }

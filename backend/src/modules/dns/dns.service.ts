@@ -16,11 +16,29 @@ function mapDnsType(type: string): string {
   return t;
 }
 
+// Resellercamp returns per-type field names (e.g. "ip" for A records, "ipv6" for AAAA).
+// Normalize to { hostname, value, ttl } for the frontend.
+function normalizeRecord(record: any, type: string): { hostname: string; value: string; ttl: number } {
+  const hostname = record.hostname ?? record.host ?? "@";
+  const ttl = Number(record.ttl) || 3600;
+  // value field varies by record type
+  const value = record.value
+    ?? record.ip        // A
+    ?? record.ipv6      // AAAA
+    ?? record.target    // CNAME, MX, NS, SRV
+    ?? record.text      // TXT
+    ?? record.rdata
+    ?? record.content
+    ?? "";
+  return { hostname, value, ttl };
+}
+
 export async function listRecords(user: { resellerId: string | null; apiKey: string | null }, userParam: any, domainLookup: string | number, type: string) {
   const domain = await getDomain(userParam, domainLookup);
   const liquidType = mapDnsType(type);
   const res = await getLiquid(user).getDnsRecords(String(domain.liquidOrderId || domain.domainName), liquidType);
-  return Array.isArray(res) ? res : res?.records || res?.data || [];
+  const raw: any[] = Array.isArray(res) ? res : res?.records || res?.data || [];
+  return raw.map((r) => normalizeRecord(r, type));
 }
 
 export async function addRecord(
