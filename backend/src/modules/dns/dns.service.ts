@@ -37,7 +37,9 @@ export async function listRecords(user: { resellerId: string | null; apiKey: str
   const domain = await getDomain(userParam, domainLookup);
   const liquidType = mapDnsType(type);
   const res = await getLiquid(user).getDnsRecords(String(domain.liquidOrderId || domain.domainName), liquidType);
+  console.log("[dns] raw response:", JSON.stringify(res, null, 2));
   const raw: any[] = Array.isArray(res) ? res : res?.records || res?.data || [];
+  console.log("[dns] first record:", JSON.stringify(raw[0]));
   return raw.map((r) => normalizeRecord(r, type));
 }
 
