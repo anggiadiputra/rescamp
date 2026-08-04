@@ -176,17 +176,25 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
           }
         }
 
+        let parsedMeta: any = {};
+        if (tx.metadata) {
+          try { parsedMeta = JSON.parse(tx.metadata as string); } catch {}
+        }
+
         return {
           data: {
             id: tx.id,
+            orderId: tx.orderId || parsedMeta?.orderId || cleanOrderId,
             status: currentStatus,
             paymentStatus: currentPaymentStatus,
             paymentId: tx.paymentId,
-            paymentLinkUrl: tx.paymentLinkUrl,
+            paymentLinkUrl: tx.paymentLinkUrl || parsedMeta?.paymentLinkUrl,
             amount: tx.amount,
             currency: tx.currency,
             createdAt: tx.createdAt,
             expiresAt,
+            description: tx.description,
+            metadata: parsedMeta,
           },
         };
       },
