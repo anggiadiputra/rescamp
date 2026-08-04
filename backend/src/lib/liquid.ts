@@ -572,13 +572,20 @@ export function formatCustomerPrices(raw: Record<string, any>): Record<string, a
     return res;
   };
 
+  const parsePrice = (val: any) => {
+    if (!val) return null;
+    const num = Number(val);
+    if (isNaN(num)) return null;
+    return num < 1000 ? Math.round(num * 1000) : Math.round(num);
+  };
+
   for (const item of Object.values(raw)) {
     if (!item || typeof item !== "object" || !item.tld_label) continue;
     const tld = item.tld_label.replace(/^\./, "").toLowerCase();
-    const createPrice = item.create?.["1"] || item.create?.[1] || null;
-    const renewPrice = item.renew?.["1"] || item.renew?.[1] || null;
-    const transferPrice = item.transfer?.["1"] || item.transfer?.[1] || null;
-    const restorePrice = item.restore?.["1"] || item.restore?.[1] || null;
+    const createPrice = parsePrice(item.create?.["1"] || item.create?.[1]);
+    const renewPrice = parsePrice(item.renew?.["1"] || item.renew?.[1]);
+    const transferPrice = parsePrice(item.transfer?.["1"] || item.transfer?.[1]);
+    const restorePrice = parsePrice(item.restore?.["1"] || item.restore?.[1]);
 
     result[tld] = {
       price_new: createPrice,
@@ -588,7 +595,7 @@ export function formatCustomerPrices(raw: Record<string, any>): Record<string, a
       price_restore: restorePrice,
       create_years: formatYearsMap(item.create),
       renew_years: formatYearsMap(item.renew),
-      privacy_protect: item.privacy_protect || null,
+      privacy_protect: parsePrice(item.privacy_protect) || 70000,
       currency: "IDR",
     };
   }
