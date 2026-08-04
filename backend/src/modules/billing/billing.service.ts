@@ -63,9 +63,11 @@ async function upsertLiquidTransaction(userId: number, item: any) {
 
   const amountVal = Math.abs(Number(item.amount || item.net_amount || 0));
   const statusMap: Record<string, string> = {
-    paid: "completed", completed: "completed", success: "completed",
-    pending: "pending_payment", unpaid: "pending_payment",
-    cancelled: "cancelled", failed: "failed", expired: "expired",
+    paid: "completed", completed: "completed", success: "completed", done: "completed", approved: "completed",
+    pending: "pending_payment", unpaid: "pending_payment", processing: "pending_payment",
+    cancelled: "cancelled", cancel: "cancelled", refunded: "cancelled", refund: "cancelled",
+    expired: "expired", timeout: "expired",
+    failed: "failed", rejected: "failed",
   };
   const statusVal = statusMap[String(item.status || "").toLowerCase()] || "pending_payment";
   const typeMap: Record<string, string> = {
@@ -96,12 +98,11 @@ async function upsertLiquidTransaction(userId: number, item: any) {
     .limit(1);
 
   if (existing) {
-    // N14: only sync Liquid-side transitions for transactions still pending locally.
-    // Never overwrite `completed`/`processing_domain`/`action_required` — those are the source of truth.
-    if (existing.status === "pending_payment" && (statusVal === "cancelled" || statusVal === "expired" || statusVal === "failed")) {
+    // Update local status if Resellercamp status differs
+    if (existing.status !== statusVal) {
       await db.update(transactions)
         .set({ status: statusVal as any, paymentStatus: statusVal as any })
-        .where(and(eq(transactions.id, existing.id), eq(transactions.status, "pending_payment")));
+        .where(eq(transactions.id, existing.id));
     }
     return;
   }
@@ -258,7 +259,8 @@ export async function sweepExpiredTransactions() {
     .set({ status: "expired", paymentStatus: "expired" })
     .where(and(
       eq(transactions.status, "pending_payment"),
-      sql`${transactions.expiresAt} IS NOT NULL AND ${transactions.expiresAt} < ${oneMinAgo}`
+      sql`${transactions.expiresAt} IS NOT NULL AND ${transactions.expiresAt} < ${oneMinAgo}`,
+      sql`(${transactions.metadata} IS NULL OR ${transactions.metadata} NOT LIKE '%"syncedFromLiquid":true%')`
     ));
   const changed = result[0]?.affectedRows ?? result?.affectedRows ?? 0;
   if (changed > 0) {
@@ -284,7 +286,7 @@ export async function listTransactions(
     allowedUserIds = [userId, ...childUsers.map((c) => c.id)];
   }
 
-  // Auto-expire pending_payment transactions created more than 1 hour ago
+  // Auto-expire retail pending_payment transactions created more than 1 hour ago (excluding Resellercamp synced rows)
   try {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     await db.update(transactions)
@@ -292,7 +294,8 @@ export async function listTransactions(
       .where(and(
         inArray(transactions.userId, allowedUserIds),
         eq(transactions.status, "pending_payment"),
-        sql`${transactions.createdAt} < ${oneHourAgo}`
+        sql`${transactions.createdAt} < ${oneHourAgo}`,
+        sql`(${transactions.metadata} IS NULL OR ${transactions.metadata} NOT LIKE '%"syncedFromLiquid":true%')`
       ));
   } catch (e) {
     console.warn("[billing] auto-expire check failed:", e);

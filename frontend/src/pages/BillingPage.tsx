@@ -108,10 +108,13 @@ function getEffectiveStatus(t: Transaction): string {
   if (t.status === "completed") return "completed";
   if (t.status === "cancelled" || t.status === "expired" || t.status === "failed") return t.status;
   if (t.status === "pending_payment" || (t as any).paymentStatus === "pending") {
-    const info = getTxnInfo(t);
-    const targetTime = parseTargetTime(info.expiresAt);
-    if (Date.now() > targetTime) {
-      return "expired";
+    const isSynced = (t as any).isWholesale || (t as any).invoiceType === "wholesale" || (typeof t.metadata === "string" && t.metadata.includes('"syncedFromLiquid":true'));
+    if (!isSynced) {
+      const info = getTxnInfo(t);
+      const targetTime = parseTargetTime(info.expiresAt);
+      if (Date.now() > targetTime) {
+        return "expired";
+      }
     }
     return "pending_payment";
   }

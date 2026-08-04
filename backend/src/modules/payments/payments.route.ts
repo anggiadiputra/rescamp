@@ -163,7 +163,8 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
           }
         }
 
-        if (isPastExpiry && (currentStatus === "pending_payment" || currentPaymentStatus === "pending")) {
+        const isSyncedFromLiquid = metaObj?.syncedFromLiquid === true;
+        if (!isSyncedFromLiquid && isPastExpiry && (currentStatus === "pending_payment" || currentPaymentStatus === "pending")) {
           // CAS: only expire if still pending — a concurrent webhook may have just completed it
           const res: any = await db.update(transactions)
             .set({ status: "expired", paymentStatus: "expired" })
