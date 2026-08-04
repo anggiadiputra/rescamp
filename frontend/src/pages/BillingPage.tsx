@@ -205,7 +205,7 @@ export default function BillingPage() {
   }, [page, statusFilter, isCustomer, perPage, categoryTab]);
 
   useEffect(() => {
-    if (returnOrderId && returnStatus === "success") {
+    if (returnOrderId) {
       api.get(`/payments/status/${returnOrderId}`).catch(() => {}).finally(() => {
         fetchTxns();
       });
