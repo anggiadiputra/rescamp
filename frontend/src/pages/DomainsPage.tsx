@@ -73,9 +73,9 @@ export default function DomainsPage() {
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col sm:flex-row items-center gap-3">
         <SearchBar value={search} onChange={setSearch} placeholder="Search domains..." />
         <div className="flex gap-1.5 flex-wrap">
-          {["", "active", "pending", "expired", "suspended"].map((s) => (
+          {["", "active", "pending", "expired", "suspended", "cancelled"].map((s) => (
             <button key={s} onClick={() => { setStatusFilter(s); setPage(1); }}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-colors ${statusFilter === s ? "bg-black text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors ${statusFilter === s ? "bg-black text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
               {s || "all"}
             </button>
           ))}
