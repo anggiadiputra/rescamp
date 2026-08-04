@@ -457,7 +457,8 @@ export async function bulkAvailability(user: { resellerId: string; apiKey: strin
   const baseKeyword = parts[0];
   const requestedTld = parts.length > 1 ? parts.slice(1).join(".") : null;
 
-  const defaultTlds = ["com", "id", "co.id", "web.id", "my.id", "or.id", "ac.id", "sch.id", "biz.id", "ponpes.id", "xyz", "net", "org"];
+  // Only default to TLDs that are active in Resellercamp prices (COM, ID, CO.ID, MY.ID, OR.ID, AC.ID, SCH.ID, XYZ)
+  const defaultTlds = ["com", "id", "co.id", "my.id", "or.id", "ac.id", "sch.id", "xyz"];
   let prices: any = {};
   try {
     const raw = await liquid.getCustomerPrices();
@@ -466,13 +467,17 @@ export async function bulkAvailability(user: { resellerId: string; apiKey: strin
     prices = {};
   }
 
-  // Merge default TLDs with custom priced TLDs so default extensions like web.id are never lost
-  const tldSet = new Set<string>(defaultTlds);
+  // Merge default TLDs with custom priced TLDs returned by Resellercamp API
+  const tldSet = new Set<string>();
   if (prices && typeof prices === "object") {
     const custKeys = Object.keys(prices).filter(k => k !== "addons");
     for (const k of custKeys) {
       if (k) tldSet.add(k.toLowerCase());
     }
+  }
+  // Fallback to defaultTlds if prices returned empty
+  if (tldSet.size === 0) {
+    for (const t of defaultTlds) tldSet.add(t);
   }
 
   let tldsToQuery = Array.from(tldSet);
@@ -513,7 +518,8 @@ export async function bulkAvailability(user: { resellerId: string; apiKey: strin
     })
   );
 
-  return results;
+  // Filter out any TLD results that returned an API error (e.g. "not sale" or invalid TLD)
+  return results.filter(r => r.status !== "error");
 }
 
 export async function syncDomainsFromLiquid(userParam: { id: number; role?: string | null; resellerId?: string | null; apiKey?: string | null }) {
