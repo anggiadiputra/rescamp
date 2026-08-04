@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import { sumopodClient } from "../../lib/sumopod";
 import { processWebhookPayload } from "./payments.service";
 import { db } from "../../db";
-import { transactions } from "../../db/schema";
+import { transactions, domains } from "../../db/schema";
 import { eq, and, or } from "drizzle-orm";
 import { authGuard } from "../../middleware/auth";
 
