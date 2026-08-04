@@ -321,18 +321,16 @@ export default function DnsManagePage() {
                           <button
                             type="button"
                             onClick={() => openEdit(r)}
-                            className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200/60 bg-white shadow-2xs"
-                            title="Edit Record"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-gray-700 hover:text-black bg-white hover:bg-gray-50 border border-gray-200 rounded-lg shadow-2xs transition-colors"
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
+                            <Edit2 className="w-3.5 h-3.5 text-gray-500" /> Edit
                           </button>
                           <button
                             type="button"
                             onClick={() => deleteRecord(r)}
-                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors border border-red-100 bg-white shadow-2xs"
-                            title="Delete Record"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-red-600 hover:text-red-700 bg-red-50/50 hover:bg-red-50 border border-red-100 rounded-lg shadow-2xs transition-colors"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5 text-red-500" /> Delete
                           </button>
                         </div>
                       </td>

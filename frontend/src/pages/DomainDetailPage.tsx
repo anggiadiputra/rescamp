@@ -268,7 +268,7 @@ export default function DomainDetailPage() {
             </h2>
             {domain.liquidOrderId && (
               <span className="text-[11px] font-mono bg-gray-100 px-2 py-0.5 rounded text-gray-600">
-                Order ID: #{domain.liquidOrderId}
+                Domain ID: #{domain.liquidOrderId}
               </span>
             )}
           </div>
@@ -301,8 +301,9 @@ export default function DomainDetailPage() {
             </div>
             <div className="p-3 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
               <span className="text-gray-400 block text-[11px]">Theft Protection</span>
-              <span className={`font-bold ${domain.theftProtection ? "text-emerald-600" : "text-gray-500"}`}>
-                {domain.theftProtection ? "🛡️ Aktif" : "Non-Aktif"}
+              <span className={`font-bold flex items-center gap-1.5 ${domain.theftProtection ? "text-emerald-600" : "text-gray-500"}`}>
+                <ShieldCheck className={`w-3.5 h-3.5 ${domain.theftProtection ? "text-emerald-600" : "text-gray-400"}`} />
+                {domain.theftProtection ? "Aktif" : "Non-Aktif"}
               </span>
             </div>
           </div>
