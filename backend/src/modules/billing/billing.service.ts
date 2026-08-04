@@ -1,6 +1,6 @@
 import { db } from "../../db";
 import { transactions, users, customers, domains } from "../../db/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, or, isNotNull } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 
@@ -282,8 +282,13 @@ export async function listTransactions(
 
   let allowedUserIds = [userId];
   if (userRole === "reseller") {
-    const childUsers = await db.select({ id: users.id }).from(users).where(eq(users.parentResellerId, userId));
-    allowedUserIds = [userId, ...childUsers.map((c) => c.id)];
+    const childUsers = await db.select({ id: users.id }).from(users).where(
+      or(
+        eq(users.parentResellerId, userId),
+        eq(users.role, "customer")
+      )
+    );
+    allowedUserIds = Array.from(new Set([userId, ...childUsers.map((c) => c.id)]));
   }
 
   // Auto-expire retail pending_payment transactions created more than 1 hour ago (excluding Resellercamp synced rows)
@@ -326,7 +331,14 @@ export async function listTransactions(
     console.warn("[billing] sync from Liquid warning:", e);
   }
 
-  let where = inArray(transactions.userId, allowedUserIds);
+  let userCondition = inArray(transactions.userId, allowedUserIds);
+  if (userRole === "reseller" && params?.category === "retail") {
+    userCondition = or(
+      inArray(transactions.userId, allowedUserIds),
+      isNotNull(transactions.customerId)
+    ) as any;
+  }
+  let where = userCondition;
   if (params?.type) where = and(where, eq(transactions.type, params.type as any)) as any;
   if (params?.status) where = and(where, eq(transactions.status, params.status as any)) as any;
   if (params?.category === "retail") {
