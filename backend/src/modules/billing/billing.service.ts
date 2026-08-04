@@ -271,13 +271,13 @@ export async function sweepExpiredTransactions() {
 
 export async function listTransactions(
   userParam: number | { id: number; role?: string | null },
-  params?: { type?: string; status?: string; category?: string; page?: number; per_page?: number },
+  params?: { type?: string; status?: string; category?: string; search?: string; page?: number | string; per_page?: number | string },
 ) {
   const userId = typeof userParam === "object" ? userParam.id : userParam;
   const userRole = typeof userParam === "object" ? userParam.role : "reseller";
 
-  const page = params?.page || 1;
-  const perPage = params?.per_page || 20;
+  const page = Number(params?.page) || 1;
+  const perPage = Number(params?.per_page) || 20;
   const offset = (page - 1) * perPage;
 
   let allowedUserIds = [userId];
@@ -333,6 +333,13 @@ export async function listTransactions(
     where = and(where, sql`(${transactions.metadata} IS NULL OR ${transactions.metadata} NOT LIKE '%"syncedFromLiquid":true%')`) as any;
   } else if (params?.category === "wholesale") {
     where = and(where, sql`${transactions.metadata} LIKE '%"syncedFromLiquid":true%'`) as any;
+  }
+  if (params?.search && String(params.search).trim()) {
+    const q = `%${String(params.search).trim()}%`;
+    where = and(
+      where,
+      sql`(${transactions.description} LIKE ${q} OR ${transactions.orderId} LIKE ${q} OR ${transactions.paymentId} LIKE ${q} OR ${transactions.liquidTransactionId} LIKE ${q})`
+    ) as any;
   }
 
   const [rows, countResult] = await Promise.all([

@@ -567,24 +567,80 @@ export function PaymentModal({
   );
 }
 
-export function Pagination({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (p: number) => void }) {
+export function Pagination({
+  page,
+  totalPages,
+  onPage,
+  totalItems,
+  perPage,
+}: {
+  page: number;
+  totalPages: number;
+  onPage: (p: number) => void;
+  totalItems?: number;
+  perPage?: number;
+}) {
   if (totalPages <= 1) return null;
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (page > 3) pages.push("...");
+      const start = Math.max(2, page - 1);
+      const end = Math.min(totalPages - 1, page + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (page < totalPages - 2) pages.push("...");
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
+  const startItem = (page - 1) * (perPage || 20) + 1;
+  const endItem = Math.min(page * (perPage || 20), totalItems || page * (perPage || 20));
+
   return (
-    <div className="flex items-center gap-1.5">
-      <button disabled={page <= 1} onClick={() => onPage(page - 1)}
-        className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-white transition-colors disabled:opacity-40">
-        <ChevronLeft className="w-4 h-4" />
-      </button>
-      {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-        <button key={p} onClick={() => onPage(p)}
-          className={`w-8 h-8 rounded-lg text-xs font-semibold transition-colors ${p === page ? "bg-black text-white" : "border border-gray-200 text-gray-600 hover:bg-white"}`}>
-          {p}
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 w-full">
+      {totalItems !== undefined && (
+        <span className="text-xs text-gray-500 font-medium">
+          Menampilkan <strong className="font-bold text-gray-900">{startItem}-{endItem}</strong> dari <strong className="font-bold text-gray-900">{totalItems}</strong> data
+        </span>
+      )}
+      <div className="flex items-center gap-1.5 ml-auto">
+        <button
+          disabled={page <= 1}
+          onClick={() => onPage(page - 1)}
+          className="h-8 px-2.5 rounded-lg border border-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <ChevronLeft className="w-3.5 h-3.5 mr-0.5 inline" /> Prev
         </button>
-      ))}
-      <button disabled={page >= totalPages} onClick={() => onPage(page + 1)}
-        className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-white transition-colors disabled:opacity-40">
-        <ChevronRight className="w-4 h-4" />
-      </button>
+        {getPageNumbers().map((p, idx) =>
+          typeof p === "number" ? (
+            <button
+              key={idx}
+              onClick={() => onPage(p)}
+              className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                p === page ? "bg-black text-white shadow-2xs" : "border border-gray-200 text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {p}
+            </button>
+          ) : (
+            <span key={idx} className="w-6 text-center text-xs text-gray-400 font-bold">
+              ...
+            </span>
+          )
+        )}
+        <button
+          disabled={page >= totalPages}
+          onClick={() => onPage(page + 1)}
+          className="h-8 px-2.5 rounded-lg border border-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Next <ChevronRight className="w-3.5 h-3.5 ml-0.5 inline" />
+        </button>
+      </div>
     </div>
   );
 }
