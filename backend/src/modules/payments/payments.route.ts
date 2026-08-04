@@ -3,7 +3,7 @@ import { sumopodClient } from "../../lib/sumopod";
 import { processWebhookPayload } from "./payments.service";
 import { db } from "../../db";
 import { transactions, domains } from "../../db/schema";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, or, like } from "drizzle-orm";
 import { authGuard } from "../../middleware/auth";
 
 export const paymentRoutes = new Elysia({ prefix: "/payments" })
@@ -78,13 +78,29 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
 
         let tx = foundRows[0] || null;
 
-        // Fallback: search by user's transactions if direct lookup missed
+        // Fallback A: SQL LIKE search on description/metadata — works even if transaction
+        // was saved under a different userId (e.g. customer's userId, not reseller's userId)
+        if (!tx) {
+          const likeRows = await db
+            .select()
+            .from(transactions)
+            .where(
+              or(
+                like(transactions.description, `%${cleanOrderId}%`),
+                like(transactions.metadata, `%${cleanOrderId}%`),
+              )
+            )
+            .limit(1);
+          tx = likeRows[0] || null;
+        }
+
+        // Fallback B: in-memory scan of requesting user's own transactions (legacy path)
         if (!tx) {
           const userTxList = await db
             .select()
             .from(transactions)
             .where(eq(transactions.userId, userId))
-            .limit(100);
+            .limit(200);
 
           tx = userTxList.find((t) => {
             if (t.description && t.description.toLowerCase().includes(cleanOrderId.toLowerCase())) return true;
