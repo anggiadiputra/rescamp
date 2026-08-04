@@ -25,13 +25,13 @@ async function getResellerCreds(ctx: any) {
 
 export async function list(ctx: any) {
   const { user, creds } = await getResellerCreds(ctx);
-  const records = await svc.listRecords(creds, user.id, parseInt(ctx.params.id), ctx.params.type);
+  const records = await svc.listRecords(creds, user, ctx.params.id, ctx.params.type);
   return { data: records };
 }
 
 export async function add(ctx: any) {
   const { user, creds } = await getResellerCreds(ctx);
-  const record = await svc.addRecord(creds, user.id, parseInt(ctx.params.id), ctx.params.type, ctx.body);
+  const record = await svc.addRecord(creds, user, ctx.params.id, ctx.params.type, ctx.body);
   ctx.set.status = 201;
   return { data: record };
 }
@@ -39,7 +39,7 @@ export async function add(ctx: any) {
 export async function update(ctx: any) {
   const { user, creds } = await getResellerCreds(ctx);
   const record = await svc.updateRecord(
-    creds, user.id, parseInt(ctx.params.id), ctx.params.type,
+    creds, user, ctx.params.id, ctx.params.type,
     ctx.params.oldHost, ctx.params.oldValue, ctx.body,
   );
   return { data: record };
@@ -47,6 +47,7 @@ export async function update(ctx: any) {
 
 export async function remove(ctx: any) {
   const { user, creds } = await getResellerCreds(ctx);
-  await svc.deleteRecord(creds, user.id, parseInt(ctx.params.id), ctx.params.type, ctx.params.hostname, ctx.params.value);
+  await svc.deleteRecord(creds, user, ctx.params.id, ctx.params.type, ctx.params.hostname, ctx.params.value);
   return new Response(null, { status: 204 });
 }
+
