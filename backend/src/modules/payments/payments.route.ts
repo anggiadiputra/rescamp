@@ -134,18 +134,27 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
               await db.update(transactions)
                 .set({ status: "cancelled", paymentStatus: "cancelled" })
                 .where(eq(transactions.id, tx.id));
+              if (tx.domainId) {
+                await db.update(domains).set({ status: "cancelled" }).where(eq(domains.id, tx.domainId));
+              }
               currentStatus = "cancelled";
               currentPaymentStatus = "cancelled";
             } else if (statusUpper === "EXPIRED" || statusUpper === "TIMEOUT") {
               await db.update(transactions)
                 .set({ status: "expired", paymentStatus: "expired" })
                 .where(eq(transactions.id, tx.id));
+              if (tx.domainId) {
+                await db.update(domains).set({ status: "expired" }).where(eq(domains.id, tx.domainId));
+              }
               currentStatus = "expired";
               currentPaymentStatus = "expired";
             } else if (statusUpper === "FAILED" || statusUpper === "REJECTED") {
               await db.update(transactions)
                 .set({ status: "failed", paymentStatus: "failed" })
                 .where(eq(transactions.id, tx.id));
+              if (tx.domainId) {
+                await db.update(domains).set({ status: "failed" }).where(eq(domains.id, tx.domainId));
+              }
               currentStatus = "failed";
               currentPaymentStatus = "failed";
             }

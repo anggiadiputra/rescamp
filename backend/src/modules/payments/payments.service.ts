@@ -378,15 +378,20 @@ export async function processWebhookPayload(payload: any) {
   }
 
   // Out-of-Order Webhook Guard
-  if (eventType === "payment.failed" || eventType === "payment.expired") {
+  if (eventType === "payment.failed" || eventType === "payment.expired" || eventType === "payment.cancelled" || eventType === "payment.canceled") {
     if (tx.paymentStatus === "completed" || tx.status === "completed" || tx.status === "processing_domain") {
       return { status: "ignored_already_completed" };
     }
+    const finalStatus = eventType.includes("cancel") ? "cancelled" : eventType === "payment.failed" ? "failed" : "expired";
     await db.update(transactions).set({
-      paymentStatus: eventType === "payment.failed" ? "failed" : "expired",
-      status: eventType === "payment.failed" ? "failed" : "expired",
+      paymentStatus: finalStatus as any,
+      status: finalStatus as any,
     }).where(eq(transactions.id, tx.id));
-    return { status: "updated_failed" };
+
+    if (tx.domainId) {
+      await db.update(domains).set({ status: finalStatus as any }).where(eq(domains.id, tx.domainId));
+    }
+    return { status: `updated_${finalStatus}` };
   }
 
   if (eventType !== "payment.completed" && eventType !== "payment.success" && eventType !== "payment_completed") {

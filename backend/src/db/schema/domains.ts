@@ -11,7 +11,7 @@ export const domains = mysqlTable("domains", {
   registrationDate: date("registration_date", { mode: "string" }),
   expiryDate: date("expiry_date", { mode: "string" }),
   years: tinyint("years").default(1),
-  status: mysqlEnum("status", ["active", "pending", "expired", "suspended", "transferred"]).default("pending"),
+  status: mysqlEnum("status", ["active", "pending", "expired", "suspended", "transferred", "cancelled"]).default("pending"),
   autoRenew: tinyint("auto_renew").default(0),
   locked: tinyint("locked").default(0),
   theftProtection: tinyint("theft_protection").default(0),
