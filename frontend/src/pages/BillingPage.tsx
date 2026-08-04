@@ -4,7 +4,7 @@ import { Card, LoadingSpinner, EmptyState, Modal, Pagination, Button, SearchBar,
 import { api } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import { useSettings } from "../contexts/SettingsContext";
-import { Printer, CheckCircle2, Receipt, AlertTriangle, X, Lock, AlertCircle, RefreshCw, ShoppingBag, CreditCard } from "lucide-react";
+import { Printer, CheckCircle2, Receipt, AlertTriangle, X, AlertCircle, RefreshCw, ShoppingBag, CreditCard } from "lucide-react";
 import type { Transaction, PaginatedResponse } from "../lib/types";
 
 function fmtPrice(amount: any, currency: string = "IDR"): string {
@@ -252,27 +252,30 @@ export default function BillingPage() {
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-gray-900">Billing & Transaksi</h1>
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Billing & Transaksi</h1>
+          <p className="text-sm text-gray-500 mt-1">Kelola faktur tagihan, pembayaran, dan riwayat transaksi pendaftaran domain Anda.</p>
+        </div>
         {!isCustomer && balance.balance !== "0.00" && (
-          <div className="text-xs font-semibold text-gray-600 bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200">
-            Saldo Deposit Resellercamp: <span className="font-bold text-black font-mono">{balance.currency} {Number(balance.balance).toLocaleString("id-ID")}</span>
+          <div className="text-xs sm:text-sm font-semibold text-gray-700 bg-gray-100 px-3.5 py-2 rounded-xl border border-gray-200 shadow-2xs">
+            Saldo Deposit Resellercamp: <span className="font-bold text-black">{balance.currency} {Number(balance.balance).toLocaleString("id-ID")}</span>
           </div>
         )}
       </div>
 
       {returnStatus === "success" && (
-        <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl shadow-sm space-y-3 animate-fade-in text-emerald-950">
+        <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl shadow-xs space-y-3 animate-fade-in text-emerald-950">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
               <div className="p-2 bg-emerald-100 rounded-xl text-emerald-700 shrink-0 mt-0.5">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-emerald-900">Pembayaran Berhasil Dikonfirmasi! 🎉</h3>
-                <p className="text-xs text-emerald-800 mt-0.5">
-                  Tagihan <strong className="font-mono">{returnOrderId || "Sumopod"}</strong> telah berhasil dibayar. Domain Anda sedang diproses dan diaktifkan secara otomatis.
+                <h3 className="text-base sm:text-lg font-bold text-emerald-900">Pembayaran Berhasil Dikonfirmasi! 🎉</h3>
+                <p className="text-xs sm:text-sm text-emerald-800 mt-0.5">
+                  Tagihan <strong className="font-semibold">{returnOrderId || "Sumopod"}</strong> telah berhasil dibayar. Domain Anda sedang diproses dan diaktifkan secara otomatis.
                 </p>
               </div>
             </div>
@@ -281,10 +284,10 @@ export default function BillingPage() {
             </button>
           </div>
           <div className="flex items-center gap-3 pt-1">
-            <Link to="/domains" className="px-4 py-2 bg-black hover:bg-gray-800 text-white font-bold text-xs rounded-lg transition-colors">
+            <Link to="/domains" className="px-4 py-2 bg-black hover:bg-gray-800 text-white font-bold text-xs sm:text-sm rounded-xl transition-colors shadow-2xs">
               Lihat Daftar Domain Saya →
             </Link>
-            <button onClick={clearReturnStatus} className="px-4 py-2 border border-emerald-300 hover:bg-emerald-100 text-emerald-900 font-semibold text-xs rounded-lg transition-colors">
+            <button onClick={clearReturnStatus} className="px-4 py-2 border border-emerald-300 hover:bg-emerald-100 text-emerald-900 font-semibold text-xs sm:text-sm rounded-xl transition-colors">
               Tutup Notifikasi
             </button>
           </div>
@@ -292,16 +295,16 @@ export default function BillingPage() {
       )}
 
       {returnStatus === "cancel" && (
-        <div className="p-5 bg-amber-50 border border-amber-200 rounded-2xl shadow-sm space-y-3 animate-fade-in text-amber-950">
+        <div className="p-5 bg-amber-50 border border-amber-200 rounded-2xl shadow-xs space-y-3 animate-fade-in text-amber-950">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
               <div className="p-2 bg-amber-100 rounded-xl text-amber-700 shrink-0 mt-0.5">
                 <AlertTriangle className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-amber-900">Pembayaran Dibatalkan</h3>
-                <p className="text-xs text-amber-800 mt-0.5">
-                  Tagihan <strong className="font-mono">{returnOrderId || "Sumopod"}</strong> belum diselesaikan atau dibatalkan saat di halaman Sumopod. Anda dapat melakukan pembayaran ulang kapan saja.
+                <h3 className="text-base sm:text-lg font-bold text-amber-900">Pembayaran Dibatalkan</h3>
+                <p className="text-xs sm:text-sm text-amber-800 mt-0.5">
+                  Tagihan <strong className="font-semibold">{returnOrderId || "Sumopod"}</strong> belum diselesaikan atau dibatalkan saat di halaman Sumopod. Anda dapat melakukan pembayaran ulang kapan saja.
                 </p>
               </div>
             </div>
@@ -310,10 +313,10 @@ export default function BillingPage() {
             </button>
           </div>
           <div className="flex items-center gap-3 pt-1">
-            <Link to="/domains/register" className="px-4 py-2 bg-black hover:bg-gray-800 text-white font-bold text-xs rounded-lg transition-colors">
+            <Link to="/domains/register" className="px-4 py-2 bg-black hover:bg-gray-800 text-white font-bold text-xs sm:text-sm rounded-xl transition-colors shadow-2xs">
               Kembali ke Pencarian Domain
             </Link>
-            <button onClick={clearReturnStatus} className="px-4 py-2 border border-amber-300 hover:bg-amber-100 text-amber-900 font-semibold text-xs rounded-lg transition-colors">
+            <button onClick={clearReturnStatus} className="px-4 py-2 border border-amber-300 hover:bg-amber-100 text-amber-900 font-semibold text-xs sm:text-sm rounded-xl transition-colors">
               Tutup
             </button>
           </div>
@@ -321,47 +324,47 @@ export default function BillingPage() {
       )}
 
       {/* Filter & Search Bar */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col sm:flex-row items-center gap-3">
-        <SearchBar value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Cari invoice..." />
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4 flex flex-col sm:flex-row items-center gap-3">
+        <SearchBar value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Cari invoice berdasarkan nomor atau deskripsi..." />
         <div className="flex gap-1.5 flex-wrap">
           {["", "pending_payment", "completed", "expired", "cancelled", "failed"].map((s) => (
             <button key={s} onClick={() => { setStatusFilter(s); setPage(1); }}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-colors ${
-                statusFilter === s ? "bg-black text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors ${
+                statusFilter === s ? "bg-black text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}>
               {s === "" ? "all" : s === "pending_payment" ? "pending" : s}
             </button>
           ))}
         </div>
-        <Button variant="outline" onClick={doBillingSync} disabled={billingSyncing} className="ml-auto shrink-0">
-          <RefreshCw className={`w-3.5 h-3.5 inline mr-1 ${billingSyncing ? "animate-spin" : ""}`} />
-          {billingSyncing ? "Sync..." : "Sync Resellercamp"}
+        <Button variant="outline" onClick={doBillingSync} disabled={billingSyncing} className="ml-auto shrink-0 text-xs sm:text-sm !py-2">
+          <RefreshCw className={`w-4 h-4 inline mr-1.5 ${billingSyncing ? "animate-spin" : ""}`} />
+          {billingSyncing ? "Syncing..." : "Sync Resellercamp"}
         </Button>
       </div>
 
-      <Card className="p-6 bg-white border border-gray-200 rounded-2xl shadow-sm space-y-4">
+      <Card className="p-6 bg-white border border-gray-200/80 rounded-2xl shadow-xs space-y-4">
         {!isCustomer && (
           <div className="flex flex-wrap border-b border-gray-100 pb-3 gap-2">
             <button
               onClick={() => { setCategoryTab("retail"); setPage(1); }}
-              className={`py-2 px-4 font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
+              className={`py-2.5 px-4 font-bold text-xs sm:text-sm rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
                 categoryTab === "retail"
-                  ? "bg-gray-900 text-white shadow-sm"
+                  ? "bg-gray-900 text-white shadow-xs"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              <ShoppingBag className="w-3.5 h-3.5" />
+              <ShoppingBag className="w-4 h-4" />
               Invoice Penjualan Customer (Retail)
             </button>
             <button
               onClick={() => { setCategoryTab("wholesale"); setPage(1); }}
-              className={`py-2 px-4 font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
+              className={`py-2.5 px-4 font-bold text-xs sm:text-sm rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
                 categoryTab === "wholesale"
-                  ? "bg-gray-900 text-white shadow-sm"
+                  ? "bg-gray-900 text-white shadow-xs"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              <CreditCard className="w-3.5 h-3.5" />
+              <CreditCard className="w-4 h-4" />
               Mutasi &amp; Deposit Saldo Reseller (Wholesale)
             </button>
           </div>
@@ -369,14 +372,14 @@ export default function BillingPage() {
 
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-bold text-gray-900">
+            <h2 className="text-base sm:text-lg font-bold text-gray-900">
               {isCustomer
                 ? "Riwayat Tagihan & Invoice"
                 : categoryTab === "retail"
                 ? "Invoice Penjualan Customer (Retail)"
                 : "Mutasi & Potong Saldo Reseller (Wholesale)"}
             </h2>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
               {isCustomer
                 ? "Daftar seluruh transaksi pendaftaran, perpanjangan, dan transfer domain Anda."
                 : categoryTab === "retail"
@@ -404,28 +407,28 @@ export default function BillingPage() {
         ) : (
           <>
             <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-gray-50/80 border-b border-gray-100">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Invoice #</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Description</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Berlaku Hingga</th>
-                    <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Amount</th>
-                    <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
+                  <tr className="bg-gray-50/70 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    <th className="px-5 py-4">Invoice #</th>
+                    <th className="px-5 py-4">Date</th>
+                    <th className="px-5 py-4">Description</th>
+                    <th className="px-5 py-4">Berlaku Hingga</th>
+                    <th className="px-5 py-4 text-right">Amount</th>
+                    <th className="px-5 py-4 text-center">Status</th>
+                    <th className="px-5 py-4 text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
+                <tbody className="divide-y divide-gray-100 bg-white text-sm">
                   {filtered.map((t) => (
-                    <tr key={t.id} className="hover:bg-gray-50/60 transition-colors">
-                      <td className="px-5 py-3.5 text-xs font-mono font-bold text-gray-900">
+                    <tr key={t.id} className="hover:bg-gray-50/70 transition-colors group">
+                      <td className="px-5 py-4 text-sm font-bold text-gray-900">
                         #{getInvoiceNumber(t)}
                       </td>
-                      <td className="px-5 py-3.5 text-xs text-gray-600">
+                      <td className="px-5 py-4 text-sm text-gray-600">
                         {new Date(t.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
                       </td>
-                      <td className="px-5 py-3.5 text-xs text-gray-800 font-medium">
+                      <td className="px-5 py-4 text-sm text-gray-800 font-medium">
                         {(() => {
                           const fallback = t.description || `${t.type === "domain" ? "Domain Registration Order" : "Service Order"}`;
                           if ((t as any).isWholesale || (t as any).invoiceType === "wholesale") return fallback;
@@ -436,7 +439,7 @@ export default function BillingPage() {
                           return `${typeLabel} - ${info.domainName} (${info.years} yr) - ${info.registerDate} → ${info.expiryDate}`;
                         })()}
                       </td>
-                      <td className="px-5 py-3.5 text-xs text-gray-600">
+                      <td className="px-5 py-4 text-sm text-gray-600">
                         {(() => {
                           const info = getTxnInfo(t);
                           if (!info.expiresAt) return "—";
@@ -445,26 +448,26 @@ export default function BillingPage() {
                           return dt.toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
                         })()}
                       </td>
-                      <td className="px-5 py-3.5 text-xs text-gray-900 font-bold text-right font-mono">
+                      <td className="px-5 py-4 text-sm text-gray-900 font-bold text-right">
                         {fmtPrice(t.amount)}
                       </td>
-                      <td className="px-5 py-3.5 text-center">
+                      <td className="px-5 py-4 text-center">
                         {renderStatusBadge(t)}
                       </td>
-                      <td className="px-5 py-3.5 text-right">
+                      <td className="px-5 py-4 text-right">
                         {isPending(t) ? (
                           <button
                             onClick={() => handleInvoiceClick(t)}
-                            className="px-3 py-1.5 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-md transition-all shadow-xs inline-flex items-center gap-1.5"
+                            className="px-3.5 py-2 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-lg transition-all shadow-2xs inline-flex items-center gap-1.5 cursor-pointer"
                           >
-                            <Lock className="w-3.5 h-3.5" /> Bayar Sekarang
+                            <CreditCard className="w-3.5 h-3.5" /> Bayar Sekarang
                           </button>
                         ) : (
                           <button
                             onClick={() => openInvoice(t)}
-                            className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-semibold rounded-md transition-colors"
+                            className="px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 hover:text-black text-xs font-bold rounded-lg transition-colors shadow-2xs inline-flex items-center gap-1.5 cursor-pointer"
                           >
-                            View Invoice
+                            <Receipt className="w-3.5 h-3.5 text-gray-500" /> View Invoice
                           </button>
                         )}
                       </td>
@@ -476,12 +479,12 @@ export default function BillingPage() {
 
             <div className="md:hidden space-y-3">
               {filtered.map((t) => (
-                <div key={t.id} className="rounded-xl border border-gray-200 bg-white p-4 space-y-2">
+                <div key={t.id} className="rounded-xl border border-gray-200 bg-white p-4 space-y-2.5 shadow-2xs">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-mono font-bold text-gray-900">#{getInvoiceNumber(t)}</span>
+                    <span className="text-sm font-bold text-gray-900">#{getInvoiceNumber(t)}</span>
                     {renderStatusBadge(t)}
                   </div>
-                  <p className="text-xs text-gray-600">
+                  <p className="text-xs text-gray-700 font-medium">
                     {(() => {
                       const fallback = t.description || "Service Order";
                       if ((t as any).isWholesale || (t as any).invoiceType === "wholesale") return fallback;
@@ -492,23 +495,23 @@ export default function BillingPage() {
                       return `${typeLabel} - ${info.domainName} (${info.years} yr) - ${info.registerDate} → ${info.expiryDate}`;
                     })()}
                   </p>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between pt-1 border-t border-gray-100">
                     <span className="text-xs text-gray-500">{new Date(t.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
-                    <span className="text-sm font-bold font-mono text-gray-900">{fmtPrice(t.amount)}</span>
+                    <span className="text-sm font-bold text-gray-900">{fmtPrice(t.amount)}</span>
                   </div>
                   {isPending(t) ? (
                     <button
                       onClick={() => handleInvoiceClick(t)}
-                      className="w-full mt-1 px-3 py-2.5 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-lg transition-all shadow-xs flex items-center justify-center gap-1.5"
+                      className="w-full mt-1 px-3 py-2.5 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-xl transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <Lock className="w-3.5 h-3.5" /> Bayar Sekarang
+                      <CreditCard className="w-4 h-4" /> Bayar Sekarang
                     </button>
                   ) : (
                     <button
                       onClick={() => openInvoice(t)}
-                      className="w-full mt-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-semibold rounded-lg transition-colors"
+                      className="w-full mt-1 px-3 py-2.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-xl transition-colors shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      View Invoice
+                      <Receipt className="w-4 h-4 text-gray-500" /> View Invoice
                     </button>
                   )}
                 </div>
