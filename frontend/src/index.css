@@ -62,4 +62,8 @@
   html, body {
     font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
   }
+
+  code, kbd, samp, pre, .font-mono {
+    font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif !important;
+  }
 }
