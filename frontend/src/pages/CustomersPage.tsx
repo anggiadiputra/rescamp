@@ -137,59 +137,73 @@ export default function CustomersPage() {
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Customers</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Kelola akun customer Anda. Setiap customer baru otomatis terhubung ke Resellercamp via Liquid API.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Customers</h1>
+          <p className="text-sm text-gray-500 mt-1">Kelola akun customer Anda. Setiap customer baru otomatis terhubung ke Resellercamp via Liquid API.</p>
         </div>
       </div>
 
       {/* Search & Action Bar */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col sm:flex-row items-center gap-3">
-        <SearchBar value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Cari customer..." />
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={doSync} disabled={syncing}>
-            <RefreshCw className={`w-3.5 h-3.5 inline mr-1 ${syncing ? "animate-spin" : ""}`} />
-            {syncing ? "Sync..." : "Sync"}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <SearchBar value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Cari customer berdasarkan nama, email, perusahaan..." />
+        <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
+          <Button variant="outline" onClick={doSync} disabled={syncing} className="shadow-2xs text-xs sm:text-sm !py-2.5">
+            <RefreshCw className={`w-4 h-4 inline mr-1.5 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Syncing..." : "Sync Customers"}
           </Button>
-          <Button onClick={openCreate}><Plus className="w-3.5 h-3.5 inline mr-1" /> Tambah</Button>
+          <Button onClick={openCreate} className="bg-black hover:bg-gray-800 text-white text-xs sm:text-sm !py-2.5 shadow-sm">
+            <Plus className="w-4 h-4 inline mr-1.5" /> Tambah Customer
+          </Button>
         </div>
       </div>
 
       {customers.length === 0 && !search ? (
-        <EmptyState icon={User} title="No customers yet" description="Add your first customer to start registering domains" action={{ label: "Add Customer", onClick: openCreate }} />
+        <EmptyState icon={User} title="Belum Ada Customer" description="Tambahkan customer pertama Anda untuk mulai mendaftarkan domain" action={{ label: "Tambah Customer", onClick: openCreate }} />
       ) : customers.length === 0 && search ? (
-        <EmptyState icon={User} title="No customers found" description="Try a different search term" />
+        <EmptyState icon={User} title="Customer Tidak Ditemukan" description="Coba gunakan kata kunci pencarian yang berbeda" />
       ) : (
-        <Card className="p-0">
+        <Card className="p-0 overflow-hidden border border-gray-200/80 shadow-xs rounded-2xl">
           <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Customer / Company</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Phone</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Location</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                <tr className="bg-gray-50/70 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  <th className="px-5 py-4">Customer / Company</th>
+                  <th className="px-5 py-4">Email</th>
+                  <th className="px-5 py-4">Phone</th>
+                  <th className="px-5 py-4">Location</th>
+                  <th className="px-5 py-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-100 text-sm">
                 {customers.map((c) => (
-                  <tr key={c.id} className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => setOverviewId(c.id)}>
-                    <td className="px-4 py-3">
-                      <p className="text-xs text-gray-900 font-bold">{c.name}</p>
-                      {c.company && <p className="text-[11px] text-gray-500">{c.company}</p>}
+                  <tr key={c.id} className="hover:bg-gray-50/70 transition-colors cursor-pointer group" onClick={() => setOverviewId(c.id)}>
+                    <td className="px-5 py-4">
+                      <p className="text-sm text-gray-900 font-bold group-hover:text-black">{c.name}</p>
+                      {c.company && <p className="text-xs text-gray-500 font-medium">{c.company}</p>}
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-600 font-mono">{c.email}</td>
-                    <td className="px-4 py-3 text-xs text-gray-600 font-mono">{c.phone || "-"}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
+                    <td className="px-5 py-4 text-sm text-gray-700 font-medium">{c.email}</td>
+                    <td className="px-5 py-4 text-sm text-gray-700 font-medium">{c.phone || "-"}</td>
+                    <td className="px-5 py-4 text-sm text-gray-600">
                       {[c.city, c.country].filter(Boolean).join(", ") || c.country}
                     </td>
-                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <button onClick={() => openEdit(c)} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-700 hover:text-black hover:bg-gray-100 rounded-lg font-semibold transition-colors"><Pencil className="w-3 h-3" /> Edit</button>
-                      <button onClick={() => { setDeleteId(c.id); setDeleteName(c.name); }} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg font-semibold transition-colors ml-1"><Trash2 className="w-3 h-3" /> Hapus</button>
+                    <td className="px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEdit(c)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-700 hover:text-black bg-white hover:bg-gray-50 border border-gray-200 rounded-lg shadow-2xs transition-colors"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-gray-500" /> Edit
+                        </button>
+                        <button
+                          onClick={() => { setDeleteId(c.id); setDeleteName(c.name); }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-600 hover:text-red-700 bg-red-50/60 hover:bg-red-50 border border-red-100 rounded-lg shadow-2xs transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-500" /> Hapus
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -198,19 +212,19 @@ export default function CustomersPage() {
           </div>
 
           {/* Mobile cards */}
-          <div className="block md:hidden space-y-3 pb-4">
+          <div className="block md:hidden space-y-3 p-4">
             {customers.map((c) => (
-              <div key={c.id} className="rounded-xl p-3 shadow-sm border bg-white space-y-1.5 cursor-pointer" onClick={() => setOverviewId(c.id)}>
+              <div key={c.id} className="rounded-xl p-4 shadow-2xs border border-gray-200 bg-white space-y-2 cursor-pointer hover:border-gray-300 transition-colors" onClick={() => setOverviewId(c.id)}>
                 <div className="flex justify-between items-start">
-                  <p className="text-sm font-bold text-gray-900">{c.name}</p>
-                  <span className="text-[10px] font-bold uppercase bg-gray-100 px-2 py-0.5 rounded text-gray-600 shrink-0 ml-2">{c.country}</span>
+                  <p className="text-base font-bold text-gray-900">{c.name}</p>
+                  <span className="text-xs font-bold uppercase bg-gray-100 px-2.5 py-1 rounded text-gray-700 shrink-0 ml-2 border border-gray-200">{c.country}</span>
                 </div>
-                {c.company && <p className="text-xs text-gray-500">{c.company}</p>}
-                <p className="text-xs text-gray-600 font-mono truncate">{c.email}</p>
-                {c.phone && <p className="text-xs text-gray-500 font-mono">{c.phone}</p>}
-                <div className="pt-1 flex gap-2" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => openEdit(c)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"><Pencil className="w-3.5 h-3.5" /> Edit</button>
-                  <button onClick={() => { setDeleteId(c.id); setDeleteName(c.name); }} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"><Trash2 className="w-3.5 h-3.5" /> Hapus</button>
+                {c.company && <p className="text-xs font-semibold text-gray-500">{c.company}</p>}
+                <p className="text-sm text-gray-700 truncate font-medium">{c.email}</p>
+                {c.phone && <p className="text-xs text-gray-500 font-medium">{c.phone}</p>}
+                <div className="pt-2 flex gap-2 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
+                  <button onClick={() => openEdit(c)} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg shadow-2xs transition-colors"><Pencil className="w-3.5 h-3.5 text-gray-500" /> Edit</button>
+                  <button onClick={() => { setDeleteId(c.id); setDeleteName(c.name); }} className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-red-600 bg-red-50/60 border border-red-100 hover:bg-red-50 rounded-lg shadow-2xs transition-colors"><Trash2 className="w-3.5 h-3.5 text-red-500" /> Hapus</button>
                 </div>
               </div>
             ))}
@@ -218,8 +232,8 @@ export default function CustomersPage() {
 
           {/* Pagination */}
           {total > perPage && (
-            <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50">
-              <span className="text-xs text-gray-500">
+            <div className="flex items-center justify-between px-5 py-4 border-t border-gray-100 bg-gray-50">
+              <span className="text-xs sm:text-sm text-gray-600 font-medium">
                 Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} of {total}
               </span>
               <Pagination page={page} totalPages={Math.ceil(total / perPage)} onPage={setPage} />
