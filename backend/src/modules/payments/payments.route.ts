@@ -130,6 +130,24 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
                 currentStatus = refreshed.status;
                 currentPaymentStatus = refreshed.paymentStatus;
               }
+            } else if (statusUpper === "CANCELLED" || statusUpper === "CANCELED") {
+              await db.update(transactions)
+                .set({ status: "cancelled", paymentStatus: "cancelled" })
+                .where(eq(transactions.id, tx.id));
+              currentStatus = "cancelled";
+              currentPaymentStatus = "cancelled";
+            } else if (statusUpper === "EXPIRED" || statusUpper === "TIMEOUT") {
+              await db.update(transactions)
+                .set({ status: "expired", paymentStatus: "expired" })
+                .where(eq(transactions.id, tx.id));
+              currentStatus = "expired";
+              currentPaymentStatus = "expired";
+            } else if (statusUpper === "FAILED" || statusUpper === "REJECTED") {
+              await db.update(transactions)
+                .set({ status: "failed", paymentStatus: "failed" })
+                .where(eq(transactions.id, tx.id));
+              currentStatus = "failed";
+              currentPaymentStatus = "failed";
             }
           } catch (e) {
             console.warn("[payments/status] Proactive status check failed:", e);
