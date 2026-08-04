@@ -153,7 +153,7 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
                 .set({ status: "failed", paymentStatus: "failed" })
                 .where(eq(transactions.id, tx.id));
               if (tx.domainId) {
-                await db.update(domains).set({ status: "failed" }).where(eq(domains.id, tx.domainId));
+                await db.update(domains).set({ status: "cancelled" }).where(eq(domains.id, tx.domainId));
               }
               currentStatus = "failed";
               currentPaymentStatus = "failed";
