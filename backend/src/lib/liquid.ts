@@ -566,7 +566,7 @@ export function formatCustomerPrices(raw: Record<string, any>): Record<string, a
     for (const [yr, val] of Object.entries(yearsMap)) {
       if (val) {
         const numVal = Number(val);
-        res[Number(yr)] = numVal < 1000 ? numVal * 1000 : numVal;
+        res[Number(yr)] = Math.round(numVal * 1000);
       }
     }
     return res;
@@ -576,7 +576,7 @@ export function formatCustomerPrices(raw: Record<string, any>): Record<string, a
     if (!val) return null;
     const num = Number(val);
     if (isNaN(num)) return null;
-    return num < 1000 ? Math.round(num * 1000) : Math.round(num);
+    return Math.round(num * 1000);
   };
 
   for (const item of Object.values(raw)) {
