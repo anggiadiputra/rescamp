@@ -227,18 +227,20 @@ export default function DnsManagePage() {
                       <td className="px-4 py-3 text-xs text-gray-600 font-mono break-all">{r.value}</td>
                       <td className="px-4 py-3 text-xs text-gray-500">{r.ttl}</td>
                       <td className="px-4 py-3 text-right space-x-1">
-                        <button
+                        <Button
+                          variant="secondary"
                           onClick={() => openEdit(r)}
-                          className="px-2 py-1 text-xs font-semibold text-gray-600 hover:text-black hover:bg-gray-100 rounded-lg transition-colors"
+                          className="!px-2 !py-1 !text-[10px] !font-bold uppercase"
                         >
                           Edit
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="danger"
                           onClick={() => deleteRecord(r)}
-                          className="px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="!px-2 !py-1 !text-[10px] !font-bold uppercase"
                         >
                           Delete
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -265,18 +267,20 @@ export default function DnsManagePage() {
                     {r.value}
                   </p>
                   <div className="flex items-center gap-2 pt-1">
-                    <button
+                    <Button
+                      variant="secondary"
                       onClick={() => openEdit(r)}
-                      className="flex-1 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                      className="flex-1 !px-3 !py-1.5 !text-xs !font-semibold"
                     >
                       Edit
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="danger"
                       onClick={() => deleteRecord(r)}
-                      className="px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                      className="!px-3 !py-1.5 !text-xs !font-semibold"
                     >
                       Delete
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ))}
