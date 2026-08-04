@@ -70,10 +70,17 @@ export class LiquidClient {
    */
   private getTldEligibility(domainName: string): string {
     const d = domainName.toLowerCase();
-    // Sub-TLD .id (misal .co.id, .web.id, .my.id, .sch.id, dll) butuh eligibility "co" atau "sch"
+    if (d.endsWith(".co.id")) return "co";
+    if (d.endsWith(".ac.id")) return "ac";
+    if (d.endsWith(".or.id")) return "or";
     if (d.endsWith(".sch.id")) return "sch";
-    if (d.match(/\.[a-z0-9-]+\.id$/i)) return "co";
-    // Bare domain .id (misal: sepertibiasah.id) TIDAK menggunakan eligibility_criteria (bebas / default contact)
+    if (d.endsWith(".my.id")) return "my";
+    if (d.endsWith(".web.id")) return "web";
+    if (d.endsWith(".biz.id")) return "biz";
+    if (d.endsWith(".ponpes.id")) return "ponpes";
+    if (d.endsWith(".go.id")) return "go";
+    if (d.endsWith(".mil.id")) return "mil";
+    if (d.endsWith(".des.id")) return "des";
     if (d.endsWith(".id")) return "";
 
     if (d.endsWith(".us")) return "us";
@@ -197,7 +204,7 @@ export class LiquidClient {
       tel_no = phone.substring(1);
     }
 
-    return this.request<any>("POST", `/customers/${customerId}/contacts`, {
+    const payload: Record<string, any> = {
       name: data.name || "Registrant",
       company: data.company || "Personal",
       email: data.email || "registrant@ekstensi.id",
@@ -208,8 +215,13 @@ export class LiquidClient {
       zipcode: data.zipcode || "10110",
       tel_cc_no,
       tel_no: tel_no || "8123456789",
-      eligibility_criteria: data.eligibility_criteria || "co",
-    });
+    };
+
+    if (data.eligibility_criteria) {
+      payload.eligibility_criteria = data.eligibility_criteria;
+    }
+
+    return this.request<any>("POST", `/customers/${customerId}/contacts`, payload);
   }
 
   async registerDomain(data: Record<string, any>) {
