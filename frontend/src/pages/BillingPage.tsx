@@ -167,7 +167,8 @@ export default function BillingPage() {
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [balance, setBalance] = useState({ balance: "0.00", currency: "IDR" });
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
@@ -181,7 +182,7 @@ export default function BillingPage() {
   const [categoryTab, setCategoryTab] = useState<"retail" | "wholesale">("retail");
 
   const fetchTxns = useCallback(() => {
-    setLoading(true);
+    setTableLoading(true);
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
     if (statusFilter) params.set("status", statusFilter);
     if (!isCustomer) params.set("category", categoryTab);
@@ -201,7 +202,10 @@ export default function BillingPage() {
         const b = typeof bal === "object" ? bal : { balance: String(bal), currency: "IDR" };
         setBalance(b);
       }
-    }).finally(() => setLoading(false));
+    }).finally(() => {
+      setTableLoading(false);
+      setInitialLoading(false);
+    });
   }, [page, statusFilter, isCustomer, perPage, categoryTab]);
 
   useEffect(() => {
@@ -249,7 +253,7 @@ export default function BillingPage() {
     navigate(`/billing/pay/${info.orderId}`);
   }
 
-  if (loading) return <LoadingSpinner />;
+  if (initialLoading) return <LoadingSpinner />;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -354,7 +358,7 @@ export default function BillingPage() {
               }`}
             >
               <ShoppingBag className="w-4 h-4" />
-              Invoice Penjualan Customer (Retail)
+              Invoice Customer
             </button>
             <button
               onClick={() => { setCategoryTab("wholesale"); setPage(1); }}
@@ -365,7 +369,7 @@ export default function BillingPage() {
               }`}
             >
               <CreditCard className="w-4 h-4" />
-              Mutasi &amp; Deposit Saldo Reseller (Wholesale)
+              Mutasi &amp; Deposit Reseller
             </button>
           </div>
         )}
@@ -389,48 +393,110 @@ export default function BillingPage() {
           </div>
         </div>
 
-        {(() => {
-          const filtered = search
-            ? transactions.filter((t) =>
-                (t.description || "").toLowerCase().includes(search.toLowerCase())
-              )
-            : transactions;
-
-          return filtered.length === 0 ? (
-          <div className="py-12">
-            <EmptyState
-              icon={Receipt}
-              title={isCustomer ? "No invoices found" : "No transactions yet"}
-              description={isCustomer ? "Your domain registration invoices will appear here once registered." : "System transactions will appear here."}
-            />
+        {tableLoading ? (
+          <div className="py-16 flex flex-col items-center justify-center gap-3">
+            <LoadingSpinner size="md" />
+            <span className="text-xs sm:text-sm text-gray-500 font-medium">Memuat data transaksi...</span>
           </div>
         ) : (
-          <>
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50/70 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    <th className="px-5 py-4">Invoice #</th>
-                    <th className="px-5 py-4">Date</th>
-                    <th className="px-5 py-4">Description</th>
-                    <th className="px-5 py-4">Berlaku Hingga</th>
-                    <th className="px-5 py-4 text-right">Amount</th>
-                    <th className="px-5 py-4 text-center">Status</th>
-                    <th className="px-5 py-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 bg-white text-sm">
+          (() => {
+            const filtered = search
+              ? transactions.filter((t) =>
+                  (t.description || "").toLowerCase().includes(search.toLowerCase())
+                )
+              : transactions;
+
+            return filtered.length === 0 ? (
+              <div className="py-12">
+                <EmptyState
+                  icon={Receipt}
+                  title={isCustomer ? "No invoices found" : "No transactions yet"}
+                  description={isCustomer ? "Your domain registration invoices will appear here once registered." : "System transactions will appear here."}
+                />
+              </div>
+            ) : (
+              <>
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50/70 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        <th className="px-5 py-4">Invoice #</th>
+                        <th className="px-5 py-4">Date</th>
+                        <th className="px-5 py-4">Description</th>
+                        <th className="px-5 py-4">Berlaku Hingga</th>
+                        <th className="px-5 py-4 text-right">Amount</th>
+                        <th className="px-5 py-4 text-center">Status</th>
+                        <th className="px-5 py-4 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 bg-white text-sm">
+                      {filtered.map((t) => (
+                        <tr key={t.id} className="hover:bg-gray-50/70 transition-colors group">
+                          <td className="px-5 py-4 text-sm font-bold text-gray-900">
+                            #{getInvoiceNumber(t)}
+                          </td>
+                          <td className="px-5 py-4 text-sm text-gray-600">
+                            {new Date(t.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                          </td>
+                          <td className="px-5 py-4 text-sm text-gray-800 font-medium">
+                            {(() => {
+                              const fallback = t.description || `${t.type === "domain" ? "Domain Registration Order" : "Service Order"}`;
+                              if ((t as any).isWholesale || (t as any).invoiceType === "wholesale") return fallback;
+                              if (t.type !== "register" && t.type !== "transfer" && t.type !== "renew") return fallback;
+                              const info = getTxnInfo(t);
+                              if (!info.registerDate || !info.expiryDate) return fallback;
+                              const typeLabel = t.type === "register" ? "Domain register" : t.type === "transfer" ? "Domain transfer" : "Domain renewal";
+                              return `${typeLabel} - ${info.domainName} (${info.years} yr) - ${info.registerDate} → ${info.expiryDate}`;
+                            })()}
+                          </td>
+                          <td className="px-5 py-4 text-sm text-gray-600">
+                            {(() => {
+                              const info = getTxnInfo(t);
+                              if (!info.expiresAt) return "—";
+                              const dt = new Date(info.expiresAt);
+                              if (isNaN(dt.getTime())) return "—";
+                              return dt.toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+                            })()}
+                          </td>
+                          <td className="px-5 py-4 text-sm text-gray-900 font-bold text-right">
+                            {fmtPrice(t.amount)}
+                          </td>
+                          <td className="px-5 py-4 text-center">
+                            {renderStatusBadge(t)}
+                          </td>
+                          <td className="px-5 py-4 text-right">
+                            {isPending(t) ? (
+                              <button
+                                onClick={() => handleInvoiceClick(t)}
+                                className="px-3.5 py-2 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-lg transition-all shadow-2xs inline-flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <CreditCard className="w-3.5 h-3.5" /> Bayar Sekarang
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => openInvoice(t)}
+                                className="px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 hover:text-black text-xs font-bold rounded-lg transition-colors shadow-2xs inline-flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Receipt className="w-3.5 h-3.5 text-gray-500" /> Invoice
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="md:hidden space-y-3">
                   {filtered.map((t) => (
-                    <tr key={t.id} className="hover:bg-gray-50/70 transition-colors group">
-                      <td className="px-5 py-4 text-sm font-bold text-gray-900">
-                        #{getInvoiceNumber(t)}
-                      </td>
-                      <td className="px-5 py-4 text-sm text-gray-600">
-                        {new Date(t.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
-                      </td>
-                      <td className="px-5 py-4 text-sm text-gray-800 font-medium">
+                    <div key={t.id} className="rounded-xl border border-gray-200 bg-white p-4 space-y-2.5 shadow-2xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold text-gray-900">#{getInvoiceNumber(t)}</span>
+                        {renderStatusBadge(t)}
+                      </div>
+                      <p className="text-xs text-gray-700 font-medium">
                         {(() => {
-                          const fallback = t.description || `${t.type === "domain" ? "Domain Registration Order" : "Service Order"}`;
+                          const fallback = t.description || "Service Order";
                           if ((t as any).isWholesale || (t as any).invoiceType === "wholesale") return fallback;
                           if (t.type !== "register" && t.type !== "transfer" && t.type !== "renew") return fallback;
                           const info = getTxnInfo(t);
@@ -438,93 +504,39 @@ export default function BillingPage() {
                           const typeLabel = t.type === "register" ? "Domain register" : t.type === "transfer" ? "Domain transfer" : "Domain renewal";
                           return `${typeLabel} - ${info.domainName} (${info.years} yr) - ${info.registerDate} → ${info.expiryDate}`;
                         })()}
-                      </td>
-                      <td className="px-5 py-4 text-sm text-gray-600">
-                        {(() => {
-                          const info = getTxnInfo(t);
-                          if (!info.expiresAt) return "—";
-                          const dt = new Date(info.expiresAt);
-                          if (isNaN(dt.getTime())) return "—";
-                          return dt.toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-                        })()}
-                      </td>
-                      <td className="px-5 py-4 text-sm text-gray-900 font-bold text-right">
-                        {fmtPrice(t.amount)}
-                      </td>
-                      <td className="px-5 py-4 text-center">
-                        {renderStatusBadge(t)}
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        {isPending(t) ? (
-                          <button
-                            onClick={() => handleInvoiceClick(t)}
-                            className="px-3.5 py-2 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-lg transition-all shadow-2xs inline-flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <CreditCard className="w-3.5 h-3.5" /> Bayar Sekarang
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => openInvoice(t)}
-                            className="px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 hover:text-black text-xs font-bold rounded-lg transition-colors shadow-2xs inline-flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <Receipt className="w-3.5 h-3.5 text-gray-500" /> View Invoice
-                          </button>
-                        )}
-                      </td>
-                    </tr>
+                      </p>
+                      <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                        <span className="text-xs text-gray-500">{new Date(t.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
+                        <span className="text-sm font-bold text-gray-900">{fmtPrice(t.amount)}</span>
+                      </div>
+                      {isPending(t) ? (
+                        <button
+                          onClick={() => handleInvoiceClick(t)}
+                          className="w-full mt-1 px-3 py-2.5 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-xl transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <CreditCard className="w-4 h-4" /> Bayar Sekarang
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => openInvoice(t)}
+                          className="w-full mt-1 px-3 py-2.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-xl transition-colors shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Receipt className="w-4 h-4 text-gray-500" /> Invoice
+                        </button>
+                      )}
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="md:hidden space-y-3">
-              {filtered.map((t) => (
-                <div key={t.id} className="rounded-xl border border-gray-200 bg-white p-4 space-y-2.5 shadow-2xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-gray-900">#{getInvoiceNumber(t)}</span>
-                    {renderStatusBadge(t)}
-                  </div>
-                  <p className="text-xs text-gray-700 font-medium">
-                    {(() => {
-                      const fallback = t.description || "Service Order";
-                      if ((t as any).isWholesale || (t as any).invoiceType === "wholesale") return fallback;
-                      if (t.type !== "register" && t.type !== "transfer" && t.type !== "renew") return fallback;
-                      const info = getTxnInfo(t);
-                      if (!info.registerDate || !info.expiryDate) return fallback;
-                      const typeLabel = t.type === "register" ? "Domain register" : t.type === "transfer" ? "Domain transfer" : "Domain renewal";
-                      return `${typeLabel} - ${info.domainName} (${info.years} yr) - ${info.registerDate} → ${info.expiryDate}`;
-                    })()}
-                  </p>
-                  <div className="flex items-center justify-between pt-1 border-t border-gray-100">
-                    <span className="text-xs text-gray-500">{new Date(t.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</span>
-                    <span className="text-sm font-bold text-gray-900">{fmtPrice(t.amount)}</span>
-                  </div>
-                  {isPending(t) ? (
-                    <button
-                      onClick={() => handleInvoiceClick(t)}
-                      className="w-full mt-1 px-3 py-2.5 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-xl transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <CreditCard className="w-4 h-4" /> Bayar Sekarang
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => openInvoice(t)}
-                      className="w-full mt-1 px-3 py-2.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-xl transition-colors shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <Receipt className="w-4 h-4 text-gray-500" /> View Invoice
-                    </button>
-                  )}
                 </div>
-              ))}
-            </div>
 
-            {total > perPage && (
-              <div className="pt-4 flex justify-end">
-                <Pagination page={page} totalPages={Math.ceil(total / perPage)} onPage={setPage} />
-              </div>
-            )}
-          </>
-        );})()}
+                {total > perPage && (
+                  <div className="pt-4 flex justify-end">
+                    <Pagination page={page} totalPages={Math.ceil(total / perPage)} onPage={setPage} />
+                  </div>
+                )}
+              </>
+            );
+          })()
+        )}
       </Card>
 
       <Modal open={detailOpen} onClose={() => setDetailOpen(false)} title={(detail as any)?.isWholesale || (detail as any)?.invoiceType === "wholesale" ? "Reseller Wholesale Balance Receipt" : "Official Tax Invoice & Receipt"} size="2xl">
