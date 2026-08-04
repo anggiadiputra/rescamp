@@ -16,7 +16,7 @@ export const transactions = mysqlTable("transactions", {
   paymentId: varchar("payment_id", { length: 100 }),
   orderId: varchar("order_id", { length: 100 }),
   paymentLinkUrl: text("payment_link_url"),
-  paymentStatus: mysqlEnum("payment_status", ["pending", "completed", "failed", "expired"]).default("pending"),
+  paymentStatus: mysqlEnum("payment_status", ["pending", "completed", "failed", "expired", "cancelled"]).default("pending"),
   metadata: text("metadata"),
   liquidTransactionId: varchar("liquid_transaction_id", { length: 100 }),
   description: text("description"),

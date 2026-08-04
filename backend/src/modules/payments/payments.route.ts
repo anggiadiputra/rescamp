@@ -3,7 +3,7 @@ import { sumopodClient } from "../../lib/sumopod";
 import { processWebhookPayload } from "./payments.service";
 import { db } from "../../db";
 import { transactions } from "../../db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 import { authGuard } from "../../middleware/auth";
 
 export const paymentRoutes = new Elysia({ prefix: "/payments" })
