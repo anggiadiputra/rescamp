@@ -7,10 +7,13 @@ import {
 import { Button, LoadingSpinner, Modal, InfoBanner, ConfirmDialog, toast, PaymentModal } from "../components/ui";
 import { api } from "../lib/api";
 import type { Domain } from "../lib/types";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function DomainDetailPage() {
   const nav = useNavigate();
   const { id } = useParams();
+  const { user } = useAuth();
+  const isReseller = user?.role === "reseller";
   const [domain, setDomain] = useState<Domain | null>(null);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
@@ -494,14 +497,16 @@ export default function DomainDetailPage() {
               <ShieldCheck className="w-4.5 h-4.5 text-blue-600" />
               {domain.theftProtection ? "Matikan Theft Protection" : "Aktifkan Theft Protection"}
             </button>
-            <button
-              onClick={toggleSuspend}
-              disabled={suspendLoading}
-              className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs sm:text-sm font-bold rounded-xl border border-amber-200 transition-colors flex items-center gap-2 cursor-pointer"
-            >
-              <AlertTriangle className="w-4.5 h-4.5 text-amber-600" />
-              {domain.status === "suspended" ? "Unsuspend Domain" : "Suspend Domain"}
-            </button>
+            {isReseller && (
+              <button
+                onClick={toggleSuspend}
+                disabled={suspendLoading}
+                className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs sm:text-sm font-bold rounded-xl border border-amber-200 transition-colors flex items-center gap-2 cursor-pointer"
+              >
+                <AlertTriangle className="w-4.5 h-4.5 text-amber-600" />
+                {domain.status === "suspended" ? "Unsuspend Domain" : "Suspend Domain"}
+              </button>
+            )}
           </div>
 
           <button
