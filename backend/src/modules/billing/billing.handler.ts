@@ -46,6 +46,19 @@ export async function transactions(ctx: any) {
   return result;
 }
 
+export async function listTransactionsRemote(ctx: any) {
+  const creds = await getResellerCreds(ctx);
+  const page = Math.max(1, parseInt(String(ctx.query.page || "1"), 10) || 1);
+  const perPage = Math.min(100, Math.max(1, parseInt(String(ctx.query.per_page || "50"), 10) || 50));
+  const result = await svc.listTransactionsFromLiquid(creds, page, perPage);
+  ctx.set.status = 200;
+  return {
+    data: result.items,
+    meta: { total: result.total, page, perPage, reachedEnd: result.reachedEnd },
+    source: "liquid",
+  };
+}
+
 export async function transactionDetail(ctx: any) {
   const user = await getUser(ctx);
   const txn = await svc.getTransaction(user, parseInt(ctx.params.id));

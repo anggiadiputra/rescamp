@@ -188,12 +188,23 @@ export default function BillingPage() {
   const fetchTxns = useCallback(() => {
     setTableLoading(true);
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
-    if (statusFilter) params.set("status", statusFilter);
-    if (!isCustomer) params.set("category", categoryTab);
-    if (search.trim()) params.set("search", search.trim());
+    // Wholesale tab: live Resellercamp account/transactions (no DB cache, no status/search server params).
+    // Retail tab: DB cache (locally created invoices).
+    const isWholesale = !isCustomer && categoryTab === "wholesale";
+
+    let url: string;
+    if (isWholesale) {
+      // /billing/transactions/remote has no server-side status/search/sort — keep them off the wire.
+      url = `/billing/transactions/remote?${params}`;
+    } else {
+      if (statusFilter) params.set("status", statusFilter);
+      if (!isCustomer) params.set("category", categoryTab);
+      if (search.trim()) params.set("search", search.trim());
+      url = `/billing/transactions?${params}`;
+    }
 
     const promises: Promise<any>[] = [
-      api.get<PaginatedResponse<Transaction>>(`/billing/transactions?${params}`).catch(() => ({ data: [], meta: { total: 0 } })),
+      api.get<PaginatedResponse<Transaction>>(url).catch(() => ({ data: [], meta: { total: 0 } })),
     ];
 
     if (!isCustomer) {
@@ -245,11 +256,12 @@ export default function BillingPage() {
     try {
       const d = await api.get<Transaction>(`/billing/transactions/${txn.id}`);
       setDetail(d);
-      setDetailOpen(true);
     } catch {
+      // Live /billing/transactions/remote rows use a string Liquid id which /billing/transactions/:id cannot resolve.
+      // Fallback to the row we already fetched so the modal still has data.
       setDetail(txn);
-      setDetailOpen(true);
     }
+    setDetailOpen(true);
   }
 
   function handleInvoiceClick(t: Transaction) {

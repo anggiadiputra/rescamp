@@ -363,6 +363,88 @@ export async function listTransactions(
   return { data: rows, meta: { total, page, perPage } };
 }
 
+// Proxy list reseller account transactions directly from Resellercamp (no DB cache).
+export async function listTransactionsFromLiquid(
+  creds: { resellerId: string; apiKey: string },
+  page: number,
+  perPage: number,
+) {
+  if (!creds?.resellerId || !creds?.apiKey) {
+    throw new AppError("Resellercamp credentials not configured", 400);
+  }
+  const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
+  const raw = await liquid.getTransactions({
+    limit: String(perPage),
+    page_no: String(page),
+  });
+  const list: any[] = Array.isArray(raw) ? raw : raw?.data || raw?.transactions || [];
+
+  const statusMap: Record<string, string> = {
+    paid: "completed", completed: "completed", success: "completed", done: "completed", approved: "completed",
+    pending: "pending_payment", unpaid: "pending_payment", processing: "pending_payment",
+    cancelled: "cancelled", cancel: "cancelled", refunded: "cancelled", refund: "cancelled",
+    expired: "expired", timeout: "expired",
+    failed: "failed", rejected: "failed",
+  };
+  const typeMap: Record<string, string> = {
+    domain: "register",
+    deposit: "fund",
+    fund: "fund",
+    note: "debit",
+    privacy_protect: "privacy",
+  };
+
+  const items = list
+    .map((item: any) => {
+      const txnId = String(item.transaction_id || item.id || "");
+      if (!txnId) return null;
+      const amountVal = Math.abs(Number(item.amount || item.net_amount || 0));
+      const statusVal = statusMap[String(item.status || "").toLowerCase()] || "pending_payment";
+      const typeVal = typeMap[String(item.transaction_type || item.type || "domain").toLowerCase()] || "register";
+
+      let expiresAt: Date | null = null;
+      if (item.expiry_date) {
+        const d = new Date(item.expiry_date);
+        if (!isNaN(d.getTime())) expiresAt = d;
+      }
+      if (!expiresAt && item.date_created) {
+        const d = new Date(item.date_created);
+        if (!isNaN(d.getTime())) expiresAt = new Date(d.getTime() + 60 * 60 * 1000);
+      }
+      const expiresAtIso = expiresAt ? expiresAt.toISOString() : new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const createdAtIso = item.date_created || item.creation_time || new Date().toISOString();
+
+      return {
+        id: txnId,
+        liquidTransactionId: txnId,
+        type: typeVal,
+        status: statusVal,
+        amount: String(amountVal),
+        currency: item.currency || "IDR",
+        description: item.description || item.details || `Resellercamp #${txnId}`,
+        paymentId: null,
+        orderId: null,
+        domainId: null,
+        customerId: null,
+        metadata: JSON.stringify({
+          syncedFromLiquid: true,
+          transaction_type: item.transaction_type,
+          expiresAt: expiresAtIso,
+        }),
+        createdAt: createdAtIso,
+        expiresAt: expiresAtIso,
+        isWholesale: true,
+        invoiceType: item.transaction_type || "wholesale",
+      };
+    })
+    .filter(Boolean);
+
+  const reachedEnd = list.length < perPage;
+  const total = reachedEnd ? (page - 1) * perPage + list.length : page * perPage + 1;
+
+  return { items, total, reachedEnd };
+}
+
 export async function getTransaction(userParam: number | { id: number; role?: string | null }, txnId: number) {
   const userId = typeof userParam === "object" ? userParam.id : userParam;
   const userRole = typeof userParam === "object" ? userParam.role : "reseller";
