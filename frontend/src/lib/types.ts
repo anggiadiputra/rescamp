@@ -17,6 +17,8 @@ export interface Domain {
   theftProtection: number;
   privacyProtection: number;
   liquidOrderId: string | null;
+  suspendReason?: string | null;
+  suspendedAt?: string | null;
   nameservers: string[] | null;
   customerId: number | null;
   customerName?: string | null;

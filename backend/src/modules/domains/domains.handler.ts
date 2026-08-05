@@ -163,9 +163,13 @@ export async function restore(ctx: any) {
 
 export async function suspend(ctx: any) {
   const u = await getUser(ctx);
-  await svc.toggleSuspend(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), true);
-  ctx.set.status = 204;
-  return;
+  const reason = String(ctx.body?.reason || "").trim();
+  if (reason.length < 5) {
+    throw new AppError("Reason is required (min 5 chars)", 400);
+  }
+  const result = await svc.toggleSuspend(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), true, reason);
+  ctx.set.status = 200;
+  return { data: result };
 }
 export async function unsuspend(ctx: any) {
   const u = await getUser(ctx);

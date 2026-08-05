@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { domainRegisterSchema, domainRenewSchema, nameserverSchema, authCodeSchema } from "./domains.schema";
+import { domainRegisterSchema, domainRenewSchema, nameserverSchema, authCodeSchema, suspendSchema } from "./domains.schema";
 import * as h from "./domains.handler";
 import { authGuard } from "../../middleware/auth";
 import { dnsRoutes } from "../dns/dns.route";
@@ -27,7 +27,7 @@ export const domainRoutes = new Elysia({ prefix: "/domains" })
       .put("/:id/theft-protection", h.enableTheft as any, { detail: { tags: ["Domains"], summary: "Enable theft protection" } })
       .delete("/:id/theft-protection", h.disableTheft as any, { detail: { tags: ["Domains"], summary: "Disable theft protection" } })
       .post("/:id/restore", h.restore as any, { detail: { tags: ["Domains"], summary: "Restore domain" } })
-      .put("/:id/suspended", h.suspend as any, { detail: { tags: ["Domains"], summary: "Suspend domain" } })
+      .put("/:id/suspended", h.suspend as any, { body: suspendSchema, detail: { tags: ["Domains"], summary: "Suspend domain (reason required)" } })
       .delete("/:id/suspended", h.unsuspend as any, { detail: { tags: ["Domains"], summary: "Unsuspend domain" } })
       .delete("/:id", h.remove as any, { detail: { tags: ["Domains"], summary: "Delete domain" } })
       // Mount DNS + Forwarding sub-routes under :id

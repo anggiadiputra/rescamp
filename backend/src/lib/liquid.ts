@@ -362,11 +362,17 @@ export class LiquidClient {
   restoreDomain(domainId: string, invoiceOption: string = "keep_invoice") {
     return this.request<any>("POST", `/domains/${domainId}/restore`, { invoice_option: invoiceOption });
   }
-  suspendDomain(domainId: string) {
-    return this.request<any>("PUT", `/domains/${domainId}/suspended`);
+  suspendDomain(domainId: string, reason?: string) {
+    return this.request<any>("PUT", `/domains/${domainId}/suspended`, {
+      reason: reason || "",
+    });
   }
   unsuspendDomain(domainId: string) {
     return this.request<any>("DELETE", `/domains/${domainId}/suspended`);
+  }
+  /** Retrieve current suspend status (incl. reason) for a domain. */
+  getSuspendStatus(domainId: string) {
+    return this.request<any>("GET", `/domains/${domainId}/suspended`);
   }
 
   // --- DNS ---

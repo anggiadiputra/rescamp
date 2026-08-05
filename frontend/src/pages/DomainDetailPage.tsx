@@ -43,6 +43,10 @@ export default function DomainDetailPage() {
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [suspendOpen, setSuspendOpen] = useState(false);
+  const [suspendReason, setSuspendReason] = useState("");
+  const [suspendError, setSuspendError] = useState("");
+  const [unsuspendOpen, setUnsuspendOpen] = useState(false);
   const [suspendLoading, setSuspendLoading] = useState(false);
   const [lockLoading, setLockLoading] = useState(false);
   const [theftLoading, setTheftLoading] = useState(false);
@@ -153,16 +157,43 @@ export default function DomainDetailPage() {
     setAuthLoading(false);
   }
 
-  async function toggleSuspend() {
+  function toggleSuspend() {
+    if (!domain) return;
+    if (domain.status === "suspended") {
+      setUnsuspendOpen(true);
+    } else {
+      setSuspendReason("");
+      setSuspendError("");
+      setSuspendOpen(true);
+    }
+  }
+
+  async function submitSuspend() {
+    const reason = suspendReason.trim();
+    if (reason.length < 5) {
+      setSuspendError("Alasan minimal 5 karakter");
+      return;
+    }
+    setSuspendLoading(true);
+    setSuspendError("");
+    try {
+      await api.put(`/domains/${id}/suspended`, { reason });
+      toast("Domain berhasil di-suspend");
+      setSuspendOpen(false);
+      setSuspendReason("");
+      await fetchDomain();
+    } catch (e: any) {
+      setSuspendError(e.message || "Gagal mengubah status suspend domain");
+    }
+    setSuspendLoading(false);
+  }
+
+  async function confirmUnsuspend() {
     setSuspendLoading(true);
     try {
-      if (domain?.status === "suspended") {
-        await api.delete(`/domains/${id}/suspended`);
-        toast("Domain berhasil di-unsuspend (Aktif kembali)");
-      } else {
-        await api.put(`/domains/${id}/suspended`);
-        toast("Domain berhasil di-suspend");
-      }
+      await api.delete(`/domains/${id}/suspended`);
+      toast("Domain berhasil di-unsuspend (Aktif kembali)");
+      setUnsuspendOpen(false);
       await fetchDomain();
     } catch (e: any) {
       toast(e.message || "Gagal mengubah status suspend domain", "error");
@@ -257,6 +288,29 @@ export default function DomainDetailPage() {
           <h1 className="text-2xl font-black text-gray-900 tracking-tight font-mono">{domain.domainName}</h1>
         </div>
       </div>
+
+      {/* Suspended Banner — visible to customer & reseller when domain is suspended */}
+      {domain.status === "suspended" && (
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5 shadow-sm flex items-start gap-3">
+          <div className="p-2 bg-rose-600 text-white rounded-xl shrink-0">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-black text-rose-900 uppercase tracking-wider">Domain Sedang Di-Suspend</h3>
+            <p className="text-xs text-rose-700 mt-0.5">
+              {domain.suspendedAt
+                ? `Domain ini di-suspend sejak ${new Date(domain.suspendedAt).toLocaleString("id-ID", { dateStyle: "long", timeStyle: "short" })}.`
+                : "Domain ini sedang dalam status suspend."}
+            </p>
+            {domain.suspendReason && (
+              <div className="mt-3 p-3 bg-white/70 border border-rose-200 rounded-lg">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 block">Alasan Suspend</span>
+                <p className="text-sm text-rose-900 font-medium mt-1 whitespace-pre-wrap break-words">{domain.suspendReason}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Main Grid: Details & Nameservers */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -560,6 +614,56 @@ export default function DomainDetailPage() {
         onConfirm={doDelete}
         onClose={() => setDeleteOpen(false)}
         loading={deleteLoading}
+      />
+
+      {/* Suspend Reason Modal */}
+      <Modal open={suspendOpen} onClose={() => !suspendLoading && setSuspendOpen(false)} title="Suspend Domain">
+        <div className="space-y-4 text-left">
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800">Nama Domain</span>
+            <p className="text-sm font-black text-amber-950 font-mono">{domain.domainName}</p>
+          </div>
+          <p className="text-xs text-gray-600 leading-relaxed">
+            Domain akan di-suspend di Resellercamp dan alasan akan dicatat. Alasan ini akan ditampilkan ke customer.
+          </p>
+          <div>
+            <label className="text-xs font-bold text-gray-600 uppercase tracking-wider block mb-1">
+              Alasan Suspend <span className="text-rose-600">*</span>
+            </label>
+            <textarea
+              value={suspendReason}
+              onChange={(e) => { setSuspendReason(e.target.value); if (suspendError) setSuspendError(""); }}
+              placeholder="Contoh: Pelanggaran TOS, domain mengandung kata terlarang..."
+              rows={4}
+              maxLength={500}
+              className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black resize-none"
+            />
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-[11px] text-gray-500">Minimal 5 karakter</span>
+              <span className="text-[11px] text-gray-500">{suspendReason.length}/500</span>
+            </div>
+            {suspendError && (
+              <p className="text-xs text-rose-600 font-semibold mt-1.5">{suspendError}</p>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" onClick={() => setSuspendOpen(false)} disabled={suspendLoading}>Batal</Button>
+            <Button onClick={submitSuspend} disabled={suspendLoading}>
+              {suspendLoading ? "Memproses..." : "Suspend Domain"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Unsuspend Confirm */}
+      <ConfirmDialog
+        open={unsuspendOpen}
+        title="Unsuspend Domain"
+        message={`Aktifkan kembali domain ${domain.domainName}? Domain akan live normal di Resellercamp.`}
+        onConfirm={confirmUnsuspend}
+        onClose={() => setUnsuspendOpen(false)}
+        loading={suspendLoading}
+        confirmText="Unsuspend"
       />
 
       {/* Payment Gateway Modal */}

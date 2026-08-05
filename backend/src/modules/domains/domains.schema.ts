@@ -26,3 +26,7 @@ export const nameserverSchema = t.Object({
 export const authCodeSchema = t.Object({
   auth_code: t.String({ minLength: 1 }),
 });
+
+export const suspendSchema = t.Object({
+  reason: t.String({ minLength: 5, maxLength: 500 }),
+});

@@ -516,7 +516,7 @@ export async function restoreDomain(user: { id?: number; resellerId: string | nu
   return res;
 }
 
-export async function toggleSuspend(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, suspend: boolean) {
+export async function toggleSuspend(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, suspend: boolean, reason?: string) {
   const domain = await getDomain(userId, domainId);
   // N5: short-circuit if already in desired state
   const desiredStatus = suspend ? "suspended" : "active";
@@ -524,16 +524,48 @@ export async function toggleSuspend(user: { id?: number; resellerId: string | nu
     return { status: domain.status, alreadyInState: true };
   }
   const liquid = await getLiquid(user);
-  if (suspend) await liquid.suspendDomain(String(domain.liquidOrderId || domain.domainName));
-  else await liquid.unsuspendDomain(String(domain.liquidOrderId || domain.domainName));
+  const ref = String(domain.liquidOrderId || domain.domainName);
+  if (suspend) await liquid.suspendDomain(ref, reason);
+  else await liquid.unsuspendDomain(ref);
+
+  // Build update payload — persist reason and timestamp on suspend, clear on unsuspend.
+  const updatePayload: any = { status: desiredStatus };
+  if (suspend) {
+    updatePayload.suspendReason = reason || null;
+    updatePayload.suspendedAt = new Date();
+  } else {
+    updatePayload.suspendReason = null;
+    updatePayload.suspendedAt = null;
+  }
+
   // N5: CAS
   const res: any = await db.update(domains)
-    .set({ status: desiredStatus as any })
+    .set(updatePayload)
     .where(and(eq(domains.id, domain.id), eq(domains.status, domain.status as any)));
   if ((res[0]?.affectedRows ?? 0) === 0) {
     return { status: domain.status, alreadyInState: true };
   }
-  return { status: desiredStatus };
+
+  // After suspend, probe Resellercamp to canonicalize reason + suspendedAt (Liquid may adjust both).
+  // Non-fatal: if the probe fails we keep the local values we just wrote.
+  if (suspend) {
+    try {
+      const status = await liquid.getSuspendStatus(ref);
+      const canonicalReason = status?.reason || status?.data?.reason || reason || null;
+      const canonicalTs = status?.suspended_at || status?.data?.suspended_at || status?.data?.created_at || null;
+      const canonicalDate = canonicalTs ? new Date(canonicalTs) : null;
+      const finalUpdate: any = {};
+      if (canonicalReason) finalUpdate.suspendReason = canonicalReason;
+      if (canonicalDate && !isNaN(canonicalDate.getTime())) finalUpdate.suspendedAt = canonicalDate;
+      if (Object.keys(finalUpdate).length > 0) {
+        await db.update(domains).set(finalUpdate).where(eq(domains.id, domain.id));
+      }
+    } catch (e: any) {
+      console.warn(`[toggleSuspend] Resellercamp suspend status probe failed for domain ${domain.id}:`, e?.message || e);
+    }
+  }
+
+  return { status: desiredStatus, reason: suspend ? (reason || null) : null };
 }
 
 export async function deleteDomainRecord(userId: number, domainId: number) {
