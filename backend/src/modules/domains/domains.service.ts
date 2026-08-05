@@ -389,7 +389,8 @@ export async function getDomain(userParam: any, lookup: string | number) {
   const domainName = (liquidItem.domain_name || liquidItem.name || liquidItem.domain || "").toLowerCase().trim();
   if (!domainName) throw new AppError("Domain not found", 404);
   const liquidStatus = String(liquidItem.status || "").toLowerCase().trim();
-  const mappedStatus = statusMap[liquidStatus] || "active";
+  const liquidFlagSuspended = liquidItem.suspended === true || String(liquidItem.suspended).toLowerCase() === "true";
+  const mappedStatus = (liquidFlagSuspended || statusMap[liquidStatus] === "suspended") ? "suspended" : (statusMap[liquidStatus] || "active");
 
   const liquidDomainId = String(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || lookupStr);
   let suspendReason: string | null = null;
@@ -863,8 +864,13 @@ export async function listDomainsFromLiquid(
     list.map(async (item: any) => {
       const name = (item.domain_name || item.name || item.domain || "").toLowerCase().trim();
       if (!name) return null;
-      const status = statusMap[(item.status || "").toLowerCase().trim()] || "active";
       const domainId = String(item.domain_id || item.order_id || item.id || "");
+      // Resellercamp's /domains list reports order_status="live" even when suspended;
+      // the boolean `suspended: true` is the source of truth for live suspensions.
+      const liquidFlagSuspended = item.suspended === true || String(item.suspended).toLowerCase() === "true";
+      const status = (liquidFlagSuspended || statusMap[(item.status || "").toLowerCase().trim()] === "suspended")
+        ? "suspended"
+        : (statusMap[(item.status || "").toLowerCase().trim()] || "active");
 
       let suspendReason: string | null = null;
       let suspendedAt: string | null = null;
