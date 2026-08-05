@@ -249,23 +249,3 @@ export default function BillingPayPage() {
     </div>
   );
 }
-{
-  isPaid && (
-    <div className="text-center">
-      <Link to="/domains" className="inline-flex items-center gap-2 px-6 py-3 bg-black hover:bg-gray-800 text-white font-bold text-sm rounded-xl transition-colors">
-        <CheckCircle2 className="w-4 h-4" />
-        Lihat Domain Saya
-      </Link>
-    </div>
-  )
-}
-
-<div className="flex items-center justify-center gap-1.5 pt-2 text-[10px] text-gray-400">
-  <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
-  <span>Transaksi aman &amp; terenkripsi · SSL 256-bit</span>
-</div>
-        </div >
-      </Card >
-    </div >
-  );
-}
