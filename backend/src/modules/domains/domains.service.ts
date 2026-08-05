@@ -903,6 +903,36 @@ export async function listDomainsFromLiquid(
   );
   const items = mapped.filter(Boolean);
 
+  // Overlay local DB suspend state — Resellercamp's /domains list does not always
+  // reflect suspension immediately, so trust our local writes (suspend/unsuspend).
+  const liquidIds = items.map((it: any) => it.liquidOrderId).filter(Boolean);
+  if (liquidIds.length > 0) {
+    const localRows: any[] = await db
+      .select({
+        liquidOrderId: domains.liquidOrderId,
+        status: domains.status,
+        suspendReason: domains.suspendReason,
+        suspendedAt: domains.suspendedAt,
+      })
+      .from(domains)
+      .where(inArray(domains.liquidOrderId, liquidIds));
+    const byId = new Map(localRows.map((r) => [String(r.liquidOrderId), r]));
+    for (const it of items as any[]) {
+      const local = byId.get(String(it.liquidOrderId));
+      if (!local) continue;
+      if (local.status === "suspended") {
+        it.status = "suspended";
+        if (local.suspendReason) it.suspendReason = local.suspendReason;
+        if (local.suspendedAt) it.suspendedAt = new Date(local.suspendedAt).toISOString();
+      } else if (local.status === "active" && it.status === "suspended") {
+        // Local was unsuspended — Resellercamp still reports suspended. Trust local.
+        it.status = "active";
+        it.suspendReason = null;
+        it.suspendedAt = null;
+      }
+    }
+  }
+
   // Total estimate: if page returned less than perPage, we reached the end.
   const reachedEnd = list.length < perPage;
   const total = reachedEnd ? (page - 1) * perPage + list.length : page * perPage + 1;
