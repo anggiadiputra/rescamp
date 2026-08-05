@@ -663,7 +663,6 @@ export default function DomainDetailPage() {
         onConfirm={confirmUnsuspend}
         onClose={() => setUnsuspendOpen(false)}
         loading={suspendLoading}
-        confirmText="Unsuspend"
       />
 
       {/* Payment Gateway Modal */}
