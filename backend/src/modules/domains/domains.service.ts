@@ -347,6 +347,7 @@ export async function getDomain(userParam: any, lookup: string | number) {
 
     return {
       ...domain,
+      _local: true,
       domainId: domain.id,
       liquidOrderId: domain.liquidOrderId || null,
       customerId: domain.customerId || cust?.id || null,
@@ -395,7 +396,28 @@ export async function getDomain(userParam: any, lookup: string | number) {
   const liquidDomainId = String(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || lookupStr);
   let suspendReason: string | null = null;
   let suspendedAt: string | null = null;
-  if (mappedStatus === "suspended") {
+  let mappedStatusFinal = mappedStatus;
+
+  // Overlay suspend from any local row matching this liquidOrderId — covers the case
+  // where the lookup hit the live fallback (no local row for this user) but a reseller-
+  // owned local row still records the suspend. Resellercamp's /domains list/dashboard
+  // lookup doesn't always reflect suspension immediately.
+  try {
+    const [localRow] = await db
+      .select({ status: domains.status, suspendReason: domains.suspendReason, suspendedAt: domains.suspendedAt })
+      .from(domains)
+      .where(eq(domains.liquidOrderId, liquidDomainId))
+      .limit(1);
+    if (localRow?.status === "suspended") {
+      mappedStatusFinal = "suspended";
+      suspendReason = localRow.suspendReason ?? null;
+      suspendedAt = localRow.suspendedAt ? new Date(localRow.suspendedAt).toISOString() : null;
+    }
+  } catch {
+    // ignore
+  }
+
+  if (mappedStatusFinal === "suspended" && !suspendReason) {
     try {
       const s = await liquid.getSuspendStatus(liquidDomainId);
       const payload = (s && typeof s === "object" && (s as any).data) ? (s as any).data : s;
@@ -409,6 +431,7 @@ export async function getDomain(userParam: any, lookup: string | number) {
   }
 
   return {
+    _local: false,
     id: Number(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || lookupNum) || 0,
     domainId: Number(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || lookupNum) || 0,
     domainName,
@@ -416,7 +439,7 @@ export async function getDomain(userParam: any, lookup: string | number) {
     registrationDate: liquidItem.creation_time || liquidItem.creation_date || null,
     expiryDate: liquidItem.expiry_date || null,
     years: Number(liquidItem.no_of_years || 1),
-    status: mappedStatus,
+    status: mappedStatusFinal,
     suspendReason,
     suspendedAt,
     autoRenew: liquidItem.renewal_mode === "auto" || liquidItem.renewal_mode === "auto_renew" ? 1 : 0,
@@ -536,7 +559,7 @@ export async function restoreDomain(user: { id?: number; resellerId: string | nu
 }
 
 export async function toggleSuspend(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, suspend: boolean, reason?: string) {
-  const domain = await getDomain(userId, domainId);
+  let domain = await getDomain(userId, domainId) as any;
   // N5: short-circuit if already in desired state
   const desiredStatus = suspend ? "suspended" : "active";
   if (domain.status === desiredStatus) {
@@ -544,6 +567,38 @@ export async function toggleSuspend(user: { id?: number; resellerId: string | nu
   }
   const liquid = await getLiquid(user);
   const ref = String(domain.liquidOrderId || domain.domainName);
+  // ponytail: if no local row exists for this domain (e.g. reseller never clicked Sync),
+  // upsert one from Resellercamp so the suspend state is persisted locally and survives
+  // list/dashboard re-renders (overlay key on liquidOrderId). upgrade path: a shared
+  // domain_suspensions table keyed only by liquidOrderId would let this work even when
+  // accessCondition in getDomain blocks the local row entirely.
+  if (!domain._local && ref) {
+    try {
+      const liquidItem = await liquid.getDomain(ref);
+      if (liquidItem) {
+        const fullDomainName = (liquidItem.domain_name || liquidItem.name || "").toLowerCase().trim();
+        const orderIdStr = String(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || "");
+        if (fullDomainName) {
+          const tld = fullDomainName.split(".").slice(1).join(".");
+          await db.insert(domains).values({
+            userId: userId,
+            customerId: liquidItem.customer_id ? Number(liquidItem.customer_id) : null,
+            domainName: fullDomainName,
+            tld,
+            years: Number(liquidItem.no_of_years || 1),
+            status: "active",
+            locked: liquidItem.locked === "true" || liquidItem.locked === true ? 1 : 0,
+            liquidOrderId: orderIdStr || null,
+            registrationDate: liquidItem.creation_time || null,
+            expiryDate: liquidItem.expiry_date || null,
+          } as any).onDuplicateKeyUpdate({ set: { domainName: sql`${domains.domainName}` } });
+          domain = await getDomain(userId, domainId);
+        }
+      }
+    } catch (e: any) {
+      // Fall through — best-effort; suspend/unsuspend will still execute against Resellercamp.
+    }
+  }
   if (suspend) await liquid.suspendDomain(ref, reason);
   else await liquid.unsuspendDomain(ref);
 
