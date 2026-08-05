@@ -560,18 +560,15 @@ export async function restoreDomain(user: { id?: number; resellerId: string | nu
 
 export async function toggleSuspend(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, suspend: boolean, reason?: string) {
   let domain = await getDomain(userId, domainId) as any;
-  // N5: short-circuit if already in desired state
-  const desiredStatus = suspend ? "suspended" : "active";
-  if (domain.status === desiredStatus) {
-    return { status: domain.status, alreadyInState: true };
-  }
   const liquid = await getLiquid(user);
   const ref = String(domain.liquidOrderId || domain.domainName);
-  // ponytail: if no local row exists for this domain (e.g. reseller never clicked Sync),
-  // upsert one from Resellercamp so the suspend state is persisted locally and survives
-  // list/dashboard re-renders (overlay key on liquidOrderId). upgrade path: a shared
-  // domain_suspensions table keyed only by liquidOrderId would let this work even when
-  // accessCondition in getDomain blocks the local row entirely.
+  // Root-cause fix: Resellercamp's /domains LIST endpoint reports `suspended: false` even
+  // for domains that are actually suspended (the `/domains/{id}` DETAIL and `/domains/{id}/suspended`
+  // endpoints do reflect it correctly). The `domains/remote` overlay that list/dashboard rely on
+  // can only re-flip status from local DB; if the local row never existed (reseller never synced),
+  // the list shows "active" and the suspend banner vanishes after the next refresh.
+  // Solution: ensure a local row exists BEFORE the short-circuit so the overlay has data to consult,
+  // and skip the short-circuit when the status came from the live fallback (untrusted source).
   if (!domain._local && ref) {
     try {
       const liquidItem = await liquid.getDomain(ref);
@@ -596,8 +593,15 @@ export async function toggleSuspend(user: { id?: number; resellerId: string | nu
         }
       }
     } catch (e: any) {
-      // Fall through — best-effort; suspend/unsuspend will still execute against Resellercamp.
+      // Fall through — best-effort; the list overlay won't have a local row, but the suspend
+      // call against Resellercamp still goes through.
     }
+  }
+  // N5: short-circuit only when sourced from a real local row. Live-fallback status is
+  // Resellercamp's list endpoint, which is unreliable for suspend — always proceed.
+  const desiredStatus = suspend ? "suspended" : "active";
+  if (domain._local && domain.status === desiredStatus) {
+    return { status: domain.status, alreadyInState: true };
   }
   if (suspend) await liquid.suspendDomain(ref, reason);
   else await liquid.unsuspendDomain(ref);
