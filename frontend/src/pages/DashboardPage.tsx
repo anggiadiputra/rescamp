@@ -25,7 +25,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const promises: Promise<any>[] = [
-      api.get<PaginatedResponse<Domain>>("/domains?per_page=5").catch(() => ({ data: [] })),
+      // All roles: fetch live Resellercamp for dashboard counts to match dashboard reseller.
+      api.get<PaginatedResponse<Domain>>("/domains/remote?per_page=5").catch(() => ({ data: [] })),
     ];
 
     if (!isCustomer) {
@@ -134,9 +135,9 @@ export default function DashboardPage() {
           ) : (
             <div className="divide-y divide-gray-100">
               {domains.slice(0, 5).map((d) => (
-                <div key={d.id} className="py-3 flex items-center justify-between">
+                <div key={d.liquidOrderId || d.id} className="py-3 flex items-center justify-between">
                   <div>
-                    <Link to={`/domains/${d.id}`} className="text-sm font-mono font-bold text-gray-900 hover:text-black">
+                    <Link to={`/domains/${d.liquidOrderId || d.id}`} className="text-sm font-mono font-bold text-gray-900 hover:text-black">
                       {d.domainName}
                     </Link>
                     <p className="text-[11px] text-gray-400 mt-0.5">Expires: {d.expiryDate || "-"}</p>
