@@ -391,6 +391,22 @@ export async function getDomain(userParam: any, lookup: string | number) {
   const liquidStatus = String(liquidItem.status || "").toLowerCase().trim();
   const mappedStatus = statusMap[liquidStatus] || "active";
 
+  const liquidDomainId = String(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || lookupStr);
+  let suspendReason: string | null = null;
+  let suspendedAt: string | null = null;
+  if (mappedStatus === "suspended") {
+    try {
+      const s = await liquid.getSuspendStatus(liquidDomainId);
+      const payload = (s && typeof s === "object" && (s as any).data) ? (s as any).data : s;
+      const reason = (payload && (payload.reason ?? payload.suspend_reason ?? payload.message)) ?? null;
+      const at = (payload && (payload.suspended_at ?? payload.suspend_at ?? payload.timestamp ?? payload.created_at)) ?? null;
+      suspendReason = reason ? String(reason) : null;
+      suspendedAt = at ? String(at) : null;
+    } catch {
+      // ignore
+    }
+  }
+
   return {
     id: Number(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || lookupNum) || 0,
     domainId: Number(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || lookupNum) || 0,
@@ -400,11 +416,13 @@ export async function getDomain(userParam: any, lookup: string | number) {
     expiryDate: liquidItem.expiry_date || null,
     years: Number(liquidItem.no_of_years || 1),
     status: mappedStatus,
+    suspendReason,
+    suspendedAt,
     autoRenew: liquidItem.renewal_mode === "auto" || liquidItem.renewal_mode === "auto_renew" ? 1 : 0,
     locked: liquidItem.status === "transferlock" || liquidItem.locked === "true" || liquidItem.locked === true ? 1 : 0,
     theftProtection: liquidItem.theft_protection === "true" || liquidItem.theft_protection === true ? 1 : 0,
     privacyProtection: liquidItem.privacy_protection === "true" || liquidItem.privacy_protection === true ? 1 : 0,
-    liquidOrderId: String(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || lookupStr),
+    liquidOrderId: liquidDomainId,
     nameservers: liquidItem.nameservers || null,
     customerId: liquidItem.customer_id ? Number(liquidItem.customer_id) : null,
     customerName: liquidItem.customer_name || null,
@@ -841,16 +859,35 @@ export async function listDomainsFromLiquid(
     cancelled: "expired",
   };
 
-  const items = list
-    .map((item: any) => {
+  const mapped = await Promise.all(
+    list.map(async (item: any) => {
       const name = (item.domain_name || item.name || item.domain || "").toLowerCase().trim();
       if (!name) return null;
       const status = statusMap[(item.status || "").toLowerCase().trim()] || "active";
+      const domainId = String(item.domain_id || item.order_id || item.id || "");
+
+      let suspendReason: string | null = null;
+      let suspendedAt: string | null = null;
+      if (status === "suspended" && domainId) {
+        try {
+          const s = await liquid.getSuspendStatus(domainId);
+          const payload = (s && typeof s === "object" && (s as any).data) ? (s as any).data : s;
+          const reason = (payload && (payload.reason ?? payload.suspend_reason ?? payload.message)) ?? null;
+          const at = (payload && (payload.suspended_at ?? payload.suspend_at ?? payload.timestamp ?? payload.created_at)) ?? null;
+          suspendReason = reason ? String(reason) : null;
+          suspendedAt = at ? String(at) : null;
+        } catch {
+          // ignore — surface as unsuspended-detail; status still "suspended"
+        }
+      }
+
       return {
-        liquidOrderId: String(item.domain_id || item.order_id || item.id || ""),
+        liquidOrderId: domainId,
         domainName: name,
-        tld: name.split(".").slice(1).join("."),
+        tld: name.split(".").slice(1).join(""),
         status,
+        suspendReason,
+        suspendedAt,
         registrationDate: item.creation_time || item.creation_date || null,
         expiryDate: item.expiry_date || null,
         autoRenew: item.renewal_mode === "auto" || item.renewal_mode === "auto_renew" ? 1 : 0,
@@ -862,8 +899,9 @@ export async function listDomainsFromLiquid(
         customerEmail: item.customer_email || null,
         nameservers: item.nameservers || null,
       };
-    })
-    .filter(Boolean);
+    }),
+  );
+  const items = mapped.filter(Boolean);
 
   // Total estimate: if page returned less than perPage, we reached the end.
   const reachedEnd = list.length < perPage;
