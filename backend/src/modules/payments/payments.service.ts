@@ -400,7 +400,9 @@ export async function processWebhookPayload(payload: any) {
   }
 
   // Race Condition Fix: Idempotency Guard
-  const updateResult: any = await db
+  // Allow reclaim from pending_payment OR expired/failed (e.g. auto-expire fired before Sumopod webhook arrived).
+  // Ignore only if already in a terminal/locked state (completed/processing_domain).
+  const reclaimResult: any = await db
     .update(transactions)
     .set({
       paymentStatus: "completed",
@@ -409,12 +411,16 @@ export async function processWebhookPayload(payload: any) {
     .where(
       and(
         eq(transactions.id, tx.id),
-        eq(transactions.status, "pending_payment")
+        or(
+          eq(transactions.status, "pending_payment"),
+          eq(transactions.status, "expired"),
+          eq(transactions.status, "failed"),
+        ) as any
       )
     );
 
-  const affectedRows = updateResult[0]?.affectedRows ?? updateResult?.affectedRows ?? 0;
-  // Whoever wins the CAS (pending_payment -> processing_domain) processes the payment;
+  const affectedRows = reclaimResult[0]?.affectedRows ?? reclaimResult?.affectedRows ?? 0;
+  // Whoever wins the CAS (→ processing_domain) processes the payment;
   // a concurrent duplicate webhook/poll that loses must bail regardless of its stale read.
   if (affectedRows === 0) {
     return { status: "already_processing" };

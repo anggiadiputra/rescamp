@@ -131,7 +131,7 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
         let currentStatus = tx.status;
         let currentPaymentStatus = tx.paymentStatus;
 
-        if (currentStatus === "pending_payment" && tx.paymentId) {
+        if (tx.paymentId && (currentStatus === "pending_payment" || currentStatus === "expired" || currentStatus === "failed")) {
           try {
             const sumopodDetail = await sumopodClient.getPayment(tx.paymentId);
             const statusUpper = String(sumopodDetail?.status || "").toUpperCase();

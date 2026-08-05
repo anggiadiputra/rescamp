@@ -249,9 +249,11 @@ export async function sweepActionRequiredRetries() {
  * Background sweeper: mark pending_payment transactions as expired once their
  * expires_at passes. Runs every 15 minutes from backend/src/index.ts.
  *
- * CAS guards against a concurrent webhook that has just promoted the row to
- * processing_domain — we only flip rows still pending_payment AND with
- * expires_at at least 1 minute in the past (grace window).
+ * GUARDS:
+ *  - Only flips rows still pending_payment AND with expires_at at least 1 minute in the past (grace window).
+ *  - Skips rows with a Sumopod paymentId — those are reclaimed via /payments/status/:orderId proactive
+ *    Sumopod check (which can pull a `completed` even if our local row had flipped to `expired`).
+ *  - Skips Resellercamp-synced rows (wholesale) — those are managed by Resellercamp.
  */
 export async function sweepExpiredTransactions() {
   const oneMinAgo = new Date(Date.now() - 60 * 1000);
@@ -260,6 +262,7 @@ export async function sweepExpiredTransactions() {
     .where(and(
       eq(transactions.status, "pending_payment"),
       sql`${transactions.expiresAt} IS NOT NULL AND ${transactions.expiresAt} < ${oneMinAgo}`,
+      sql`(${transactions.paymentId} IS NULL OR ${transactions.paymentId} = '')`,
       sql`(${transactions.metadata} IS NULL OR ${transactions.metadata} NOT LIKE '%"syncedFromLiquid":true%')`
     ));
   const changed = result[0]?.affectedRows ?? result?.affectedRows ?? 0;
@@ -291,15 +294,19 @@ export async function listTransactions(
     allowedUserIds = Array.from(new Set([userId, ...childUsers.map((c) => c.id)]));
   }
 
-  // Auto-expire retail pending_payment transactions created more than 1 hour ago (excluding Resellercamp synced rows)
+  // Auto-expire retail pending_payment transactions whose expires_at has passed (excluding Resellercamp synced rows
+  // and rows with a Sumopod paymentId — those are reclaimed via /payments/status/:orderId proactive check).
+  // Use expiresAt column (truth source) — NOT createdAt — so a Sumopod payment arriving just after our TTL window
+  // but before Sumopod webhook still resolves to "completed" via the standard CAS path.
   try {
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const oneMinAgo = new Date(Date.now() - 60 * 1000);
     await db.update(transactions)
       .set({ status: "expired" })
       .where(and(
         inArray(transactions.userId, allowedUserIds),
         eq(transactions.status, "pending_payment"),
-        sql`${transactions.createdAt} < ${oneHourAgo}`,
+        sql`${transactions.expiresAt} IS NOT NULL AND ${transactions.expiresAt} < ${oneMinAgo}`,
+        sql`(${transactions.paymentId} IS NULL OR ${transactions.paymentId} = '')`,
         sql`(${transactions.metadata} IS NULL OR ${transactions.metadata} NOT LIKE '%"syncedFromLiquid":true%')`
       ));
   } catch (e) {
