@@ -2,31 +2,24 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, RefreshCw, ArrowRightLeft, Plus, Settings } from "lucide-react";
 import { Card, Button, Badge, LoadingSpinner, EmptyState, SearchBar, Pagination, toast } from "../components/ui";
-import { useAuth } from "../contexts/AuthContext";
 import { api } from "../lib/api";
 import type { Domain, PaginatedResponse } from "../lib/types";
 
 export default function DomainsPage() {
-  const { user } = useAuth();
-  const isCustomer = user?.role === "customer";
   const nav = useNavigate();
   const [domains, setDomains] = useState<Domain[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const perPage = 20;
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
   const fetchDomains = () => {
     setLoading(true);
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
-    if (statusFilter) params.set("status", statusFilter);
-    const url = isCustomer
-      ? `/domains/remote?${params}`
-      : `/domains?${params}${search ? `&search=${encodeURIComponent(search)}` : ""}`;
-    api.get<PaginatedResponse<Domain>>(url)
+    // All roles: fetch live from Resellercamp (no DB cache) to match dashboard exactly.
+    api.get<PaginatedResponse<Domain>>(`/domains/remote?${params}`)
       .then((res) => { setDomains(res.data); setTotal(res.meta.total); })
       .catch((err: any) => {
         console.error(err);
@@ -37,42 +30,30 @@ export default function DomainsPage() {
 
   useEffect(() => {
     fetchDomains();
-  }, [page, statusFilter]);
+  }, [page]);
 
-  async function handleSync() {
-    if (syncing) return;
-    setSyncing(true);
-    try {
-      const res: any = await api.post("/domains/sync");
-      const msg = res?.message || "Berhasil sinkronisasi domain dari Resellercamp";
-      toast(`🎉 ${msg}`);
-      fetchDomains();
-    } catch (err: any) {
-      toast(err.message || "Gagal sinkronisasi domain", "error");
-    }
-    setSyncing(false);
-  }
+  if (loading) return <LoadingSpinner />;
 
-  if (loading && !syncing) return <LoadingSpinner />;
-
-  // For /domains/remote (customer): server has no search; filter client-side from one page.
-  const visibleDomains = isCustomer
-    ? domains
-        .filter((d) => !search || d.domainName.toLowerCase().includes(search.toLowerCase()))
-        .filter((d) => !statusFilter || d.status === statusFilter)
-    : domains;
+  // /domains/remote has no server-side search; filter client-side for all roles.
+  const visibleDomains = domains
+    .filter((d) => !search || d.domainName.toLowerCase().includes(search.toLowerCase()))
+    .filter((d) => !statusFilter || d.status === statusFilter);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-gray-900">Domains</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold text-gray-900">Domains</h1>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
+            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+            Live
+          </span>
+        </div>
         <div className="flex items-center gap-2">
-          {!isCustomer && (
-            <Button onClick={handleSync} disabled={syncing} variant="outline">
-              <RefreshCw className={`w-3.5 h-3.5 mr-1 inline ${syncing ? "animate-spin text-black" : ""}`} />
-              {syncing ? "Syncing..." : "Sync dari Resellercamp"}
-            </Button>
-          )}
+          <Button onClick={() => fetchDomains()} disabled={loading} variant="outline">
+            <RefreshCw className={`w-3.5 h-3.5 mr-1 inline ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
           <Link to="/domains/register?tab=transfer">
             <Button><ArrowRightLeft className="w-3.5 h-3.5 mr-1 inline" /> Transfer Domain</Button>
           </Link>
@@ -138,8 +119,8 @@ export default function DomainsPage() {
             ))}
           </div>
           <div className="bg-gray-50 px-5 py-3 flex items-center justify-between border-t border-gray-100">
-            <span className="text-xs text-gray-500 font-medium">Showing {visibleDomains.length} of {total} domains{isCustomer ? " · Live from Resellercamp" : ""}</span>
-            {!isCustomer && <Pagination page={page} totalPages={Math.ceil(total / perPage)} onPage={setPage} />}
+            <span className="text-xs text-gray-500 font-medium">Showing {visibleDomains.length} of {total} domains · Live from Resellercamp</span>
+            <Pagination page={page} totalPages={Math.ceil(total / perPage)} onPage={setPage} />
           </div>
         </Card>
       )}
