@@ -226,7 +226,8 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
 
   // --- Step 3: Create Payment Link on Sumopod Payment Gateway ---
   // N21: append UUID entropy so concurrent same-ms submits never collide
-  const orderId = `EXT-${payload.type.toUpperCase().slice(0, 3)}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+  // Unified prefix INV- across all invoice generations (retail + wholesale).
+  const orderId = `INV-${payload.type.toUpperCase().slice(0, 3)}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   const sumopodRes = await sumopodClient.createPayment({
     orderId,
     amount: payload.amount,

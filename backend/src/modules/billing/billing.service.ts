@@ -423,7 +423,8 @@ export async function listTransactionsFromLiquid(
         currency: item.currency || "IDR",
         description: item.description || item.details || `Resellercamp #${txnId}`,
         paymentId: null,
-        orderId: null,
+        // Unified invoice prefix: INV-{txnId} for wholesale (same as retail INV-{TYPE}-{ms}-{uuid}).
+        orderId: `INV-${txnId}`,
         domainId: null,
         customerId: null,
         metadata: JSON.stringify({

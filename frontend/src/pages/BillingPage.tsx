@@ -24,8 +24,10 @@ function fmtDateTime(d: any): string {
   return `${dateStr}, ${timeStr} WIB`;
 }
 
+// Unified: all invoice numbers use INV- prefix (retail Sumopod INV-{TYPE}-{ms}-{uuid}, wholesale INV-{txnId}).
 function getInvoiceNumber(t: any): string {
   if (!t) return "";
+  if (t.orderId) return t.orderId;
   if (t.metadata) {
     try {
       const meta = typeof t.metadata === "string" ? JSON.parse(t.metadata) : t.metadata;
@@ -33,6 +35,7 @@ function getInvoiceNumber(t: any): string {
     } catch {}
   }
   if (t.paymentId) return t.paymentId;
+  if (t.liquidTransactionId) return `INV-${t.liquidTransactionId}`;
   const numStr = String(t.id).padStart(6, "0");
   return `INV-${numStr}`;
 }
