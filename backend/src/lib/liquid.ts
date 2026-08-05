@@ -70,17 +70,7 @@ export class LiquidClient {
    */
   private getTldEligibility(domainName: string): string {
     const d = domainName.toLowerCase();
-    if (d.endsWith(".co.id")) return "co";
-    if (d.endsWith(".ac.id")) return "ac";
-    if (d.endsWith(".or.id")) return "or";
-    if (d.endsWith(".sch.id")) return "sch";
-    if (d.endsWith(".my.id")) return "my";
-    if (d.endsWith(".web.id")) return "web";
-    if (d.endsWith(".biz.id")) return "biz";
-    if (d.endsWith(".ponpes.id")) return "ponpes";
-    if (d.endsWith(".go.id")) return "go";
-    if (d.endsWith(".mil.id")) return "mil";
-    if (d.endsWith(".des.id")) return "des";
+    // All .id ccTLDs (.id, .co.id, .my.id, .sch.id, .ac.id, .or.id, etc.) use standard contact in Resellercamp
     if (d.endsWith(".id")) return "";
 
     if (d.endsWith(".us")) return "us";
