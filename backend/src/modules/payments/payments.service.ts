@@ -585,15 +585,75 @@ export async function processWebhookPayload(payload: any) {
     return { status: "processed_successfully" };
   } catch (err: any) {
     console.error(`[sumopod webhook] Error paying Resellercamp invoice for ${meta.domainName}:`, err?.message || err);
-    // Enrich metadata with exact liquid error for admin review
-    let updatedMetaStr = tx.metadata;
-    try {
-      const metaObj = JSON.parse(tx.metadata);
-      metaObj.lastError = err?.message || String(err);
-      updatedMetaStr = JSON.stringify(metaObj);
-    } catch {}
 
-    await db.update(transactions).set({ status: "action_required", metadata: updatedMetaStr }).where(eq(transactions.id, tx.id));
-    return { status: "action_failed", error: err?.message || String(err) };
+    // Enrich metadata with lastError for audit trail
+    let metaObj: any = {};
+    try { metaObj = typeof tx.metadata === "string" ? JSON.parse(tx.metadata) : tx.metadata || {}; } catch {}
+    metaObj.lastError = err?.message || String(err);
+
+    // Fallback: probe Resellercamp to see what the actual wholesale transaction status is.
+    // The Resellercamp invoice may have already been paid, cancelled, refunded, or expired — in which case
+    // our local row shouldn't sit at "action_required" forever. Map Resellercamp status → internal status
+    // and reconcile. Only fall back to "action_required" if the Resellercamp invoice is still pending
+    // (i.e. Sumopod paid but Resellercamp has not actually settled).
+    const liquidStatusMap: Record<string, { status: string; paymentStatus: string }> = {
+      paid: { status: "completed", paymentStatus: "completed" },
+      completed: { status: "completed", paymentStatus: "completed" },
+      success: { status: "completed", paymentStatus: "completed" },
+      done: { status: "completed", paymentStatus: "completed" },
+      approved: { status: "completed", paymentStatus: "completed" },
+      cancelled: { status: "cancelled", paymentStatus: "cancelled" },
+      canceled: { status: "cancelled", paymentStatus: "cancelled" },
+      refund: { status: "cancelled", paymentStatus: "cancelled" },
+      refunded: { status: "cancelled", paymentStatus: "cancelled" },
+      expired: { status: "expired", paymentStatus: "expired" },
+      timeout: { status: "expired", paymentStatus: "expired" },
+      failed: { status: "failed", paymentStatus: "failed" },
+      rejected: { status: "failed", paymentStatus: "failed" },
+      pending: { status: "action_required", paymentStatus: "pending" },
+      unpaid: { status: "action_required", paymentStatus: "pending" },
+      processing: { status: "action_required", paymentStatus: "pending" },
+    };
+
+    let resolvedStatus = "action_required";
+    let resolvedPaymentStatus = "pending";
+    let probed = false;
+
+    if (liquidTransactionId) {
+      try {
+        const probedTxn = await liquid.getTransaction(liquidTransactionId);
+        const rawStatus = String(probedTxn?.status || "").toLowerCase();
+        const mapped = liquidStatusMap[rawStatus];
+        if (mapped) {
+          resolvedStatus = mapped.status;
+          resolvedPaymentStatus = mapped.paymentStatus;
+          probed = true;
+          metaObj.reconciledFromLiquidStatus = rawStatus;
+          console.log(`[sumopod webhook] Reconciled tx ${tx.id} status → ${resolvedStatus} (Resellercamp reported '${rawStatus}')`);
+        }
+      } catch (probeErr: any) {
+        console.warn(`[sumopod webhook] Liquid status probe failed for tx ${tx.id}:`, probeErr?.message || probeErr);
+      }
+    }
+
+    metaObj.statusProbeAt = new Date().toISOString();
+    metaObj.statusProbed = probed;
+    const updatedMetaStr = JSON.stringify(metaObj);
+
+    await db.update(transactions).set({
+      status: resolvedStatus as any,
+      paymentStatus: resolvedPaymentStatus as any,
+      metadata: updatedMetaStr,
+    }).where(eq(transactions.id, tx.id));
+
+    // Mirror resolved status to the linked domain (if any) so the domain record stays consistent.
+    // For refunds/cancellations, the domain might not exist yet (Sumopod paid but Resellercamp never created it).
+    // We only update to 'active' when completed; otherwise mirror to a non-active state.
+    if (tx.domainId) {
+      const domainStatus = resolvedStatus === "completed" ? "active" : resolvedStatus;
+      await db.update(domains).set({ status: domainStatus as any }).where(eq(domains.id, tx.domainId));
+    }
+
+    return { status: resolvedStatus === "action_required" ? "action_failed" : `reconciled_${resolvedStatus}`, error: err?.message || String(err) };
   }
 }
