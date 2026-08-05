@@ -22,17 +22,22 @@ export default function DomainsPage() {
   const fetchDomains = () => {
     setLoading(true);
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
-    if (search) params.set("search", search);
     if (statusFilter) params.set("status", statusFilter);
-    api.get<PaginatedResponse<Domain>>(`/domains?${params}`)
+    const url = isCustomer
+      ? `/domains/remote?${params}`
+      : `/domains?${params}${search ? `&search=${encodeURIComponent(search)}` : ""}`;
+    api.get<PaginatedResponse<Domain>>(url)
       .then((res) => { setDomains(res.data); setTotal(res.meta.total); })
-      .catch((err: any) => { console.error(err); })
+      .catch((err: any) => {
+        console.error(err);
+        toast(err?.message || "Gagal memuat domain", "error");
+      })
       .finally(() => { setLoading(false); });
   };
 
   useEffect(() => {
     fetchDomains();
-  }, [search, page, statusFilter]);
+  }, [page, statusFilter]);
 
   async function handleSync() {
     if (syncing) return;
@@ -49,6 +54,13 @@ export default function DomainsPage() {
   }
 
   if (loading && !syncing) return <LoadingSpinner />;
+
+  // For /domains/remote (customer): server has no search; filter client-side from one page.
+  const visibleDomains = isCustomer
+    ? domains
+        .filter((d) => !search || d.domainName.toLowerCase().includes(search.toLowerCase()))
+        .filter((d) => !statusFilter || d.status === statusFilter)
+    : domains;
 
   return (
     <div className="space-y-6">
@@ -82,7 +94,7 @@ export default function DomainsPage() {
         </div>
       </div>
 
-      {domains.length === 0 ? (
+      {visibleDomains.length === 0 ? (
         <EmptyState icon={Search} title="No domains found" description="Register your first domain to get started" action={{ label: "Register Domain", onClick: () => nav("/domains/register") }} />
       ) : (
         <Card className="p-0">
@@ -97,8 +109,8 @@ export default function DomainsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {domains.map((d) => (
-                  <tr key={d.id} className="hover:bg-gray-50/50 transition-colors">
+                {visibleDomains.map((d) => (
+                  <tr key={d.liquidOrderId || d.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{d.domainName}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{d.expiryDate || "-"}</td>
                     <td className="px-4 py-3"><Badge status={d.status} /></td>
@@ -113,8 +125,8 @@ export default function DomainsPage() {
             </table>
           </div>
           <div className="block md:hidden divide-y divide-gray-100 p-4 space-y-4">
-            {domains.map((d) => (
-              <Link key={d.id} to={`/domains/${d.liquidOrderId || d.id}`} className="block rounded-xl p-4 shadow-sm border bg-white hover:shadow-md transition-shadow">
+            {visibleDomains.map((d) => (
+              <Link key={d.liquidOrderId || d.id} to={`/domains/${d.liquidOrderId || d.id}`} className="block rounded-xl p-4 shadow-sm border bg-white hover:shadow-md transition-shadow">
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-sm font-bold text-gray-900">{d.domainName}</p>
@@ -126,8 +138,8 @@ export default function DomainsPage() {
             ))}
           </div>
           <div className="bg-gray-50 px-5 py-3 flex items-center justify-between border-t border-gray-100">
-            <span className="text-xs text-gray-500 font-medium">Showing {domains.length} of {total} domains</span>
-            <Pagination page={page} totalPages={Math.ceil(total / perPage)} onPage={setPage} />
+            <span className="text-xs text-gray-500 font-medium">Showing {visibleDomains.length} of {total} domains{isCustomer ? " · Live from Resellercamp" : ""}</span>
+            {!isCustomer && <Pagination page={page} totalPages={Math.ceil(total / perPage)} onPage={setPage} />}
           </div>
         </Card>
       )}

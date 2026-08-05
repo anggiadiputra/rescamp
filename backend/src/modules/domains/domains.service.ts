@@ -716,3 +716,67 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
 
   return { syncedCount, newAddedCount, total };
 }
+
+// Proxy list directly from Resellercamp (no DB cache). Returns paginated + total reached-end flag.
+export async function listDomainsFromLiquid(
+  creds: { resellerId: string; apiKey: string },
+  customerLiquidId: string | null,
+  page: number,
+  perPage: number,
+) {
+  if (!creds?.resellerId || !creds?.apiKey) {
+    throw new AppError("Resellercamp credentials not configured", 400);
+  }
+  const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
+  const params: Record<string, string> = {
+    limit: String(perPage),
+    page_no: String(page),
+  };
+  if (customerLiquidId) params.customer_id = String(customerLiquidId);
+
+  const raw = await liquid.listDomains(params);
+  const list: any[] = Array.isArray(raw) ? raw : raw?.data || raw?.domains || [];
+
+  const statusMap: Record<string, string> = {
+    live: "active",
+    active: "active",
+    unpaid: "pending",
+    pending: "pending",
+    expired: "expired",
+    "pending delete restorable": "expired",
+    "pending transfer": "transferred",
+    "pending restore": "suspended",
+    suspended: "suspended",
+    cancelled: "expired",
+  };
+
+  const items = list
+    .map((item: any) => {
+      const name = (item.domain_name || item.name || item.domain || "").toLowerCase().trim();
+      if (!name) return null;
+      const status = statusMap[(item.status || "").toLowerCase().trim()] || "active";
+      return {
+        liquidOrderId: String(item.domain_id || item.order_id || item.id || ""),
+        domainName: name,
+        tld: name.split(".").slice(1).join("."),
+        status,
+        registrationDate: item.creation_time || item.creation_date || null,
+        expiryDate: item.expiry_date || null,
+        autoRenew: item.renewal_mode === "auto" || item.renewal_mode === "auto_renew" ? 1 : 0,
+        locked: item.status === "transferlock" || item.locked === "true" || item.locked === true ? 1 : 0,
+        theftProtection: item.theft_protection === "true" || item.theft_protection === true ? 1 : 0,
+        privacyProtection: item.privacy_protection === "true" || item.privacy_protection === true ? 1 : 0,
+        customerId: item.customer_id ? String(item.customer_id) : null,
+        customerName: item.customer_name || null,
+        customerEmail: item.customer_email || null,
+        nameservers: item.nameservers || null,
+      };
+    })
+    .filter(Boolean);
+
+  // Total estimate: if page returned less than perPage, we reached the end.
+  const reachedEnd = list.length < perPage;
+  const total = reachedEnd ? (page - 1) * perPage + list.length : page * perPage + 1;
+
+  return { items, total, reachedEnd };
+}
