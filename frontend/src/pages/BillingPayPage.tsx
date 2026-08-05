@@ -22,16 +22,26 @@ export default function BillingPayPage() {
   const [timeLeft, setTimeLeft] = useState(3600);
   const [isExpired, setIsExpired] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!orderId) return;
     api.get(`/payments/status/${orderId}`)
       .then((res: any) => {
-        const d = res.data;
+        console.groupCollapsed("[BillingPayPage] status fetch", orderId);
+        console.log("res:", res);
+        const d = res?.data || res;
+        if (!d || (!d.id && !d.orderId)) {
+          const msg = `Response tanpa id/orderId (keys: ${JSON.stringify(Object.keys(d || {}))})`;
+          console.warn(msg);
+          setFetchError(msg);
+          console.groupEnd();
+          return;
+        }
         setData({
           id: d.id,
           orderId: d.orderId || d.metadata?.orderId || orderId,
-          domainName: d.metadata?.domainName || "Domain Order",
+          domainName: d.metadata?.domainName || d.description || "Domain Order",
           amount: Number(d.amount || 0),
           fee: Number(d.metadata?.fee || 0),
           paymentLinkUrl: d.paymentLinkUrl || d.metadata?.paymentLinkUrl || "",
@@ -46,8 +56,12 @@ export default function BillingPayPage() {
           setTimeLeft(remaining);
           setIsExpired(remaining <= 0);
         }
+        console.groupEnd();
       })
-      .catch(() => { })
+      .catch((err: any) => {
+        console.error("[BillingPayPage] status fetch failed:", err);
+        setFetchError(err?.message || `HTTP ${err?.status || "?"}`);
+      })
       .finally(() => setLoading(false));
   }, [orderId]);
 
@@ -74,6 +88,11 @@ export default function BillingPayPage() {
             <AlertCircle className="w-12 h-12 mx-auto mb-3 text-red-300" />
             <h1 className="text-lg font-bold text-gray-900">Invoice Tidak Ditemukan</h1>
             <p className="text-sm text-gray-500 mt-1">Invoice dengan ID {orderId} tidak ditemukan.</p>
+            {fetchError && (
+              <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-3 inline-block font-mono break-all max-w-md">
+                {fetchError}
+              </p>
+            )}
             <Button onClick={() => navigate("/billing")} className="mt-4">Kembali ke Billing</Button>
           </div>
         </Card>
