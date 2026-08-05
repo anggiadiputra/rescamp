@@ -361,10 +361,12 @@ export default function BillingPage() {
             </button>
           ))}
         </div>
-        <Button variant="outline" onClick={doBillingSync} disabled={billingSyncing} className="ml-auto shrink-0 text-xs sm:text-sm !py-2">
-          <RefreshCw className={`w-4 h-4 inline mr-1.5 ${billingSyncing ? "animate-spin" : ""}`} />
-          {billingSyncing ? "Syncing..." : "Sync Resellercamp"}
-        </Button>
+        {!isCustomer && (
+          <Button variant="outline" onClick={doBillingSync} disabled={billingSyncing} className="ml-auto shrink-0 text-xs sm:text-sm !py-2">
+            <RefreshCw className={`w-4 h-4 inline mr-1.5 ${billingSyncing ? "animate-spin" : ""}`} />
+            {billingSyncing ? "Syncing..." : "Sync Resellercamp"}
+          </Button>
+        )}
       </div>
 
       <Card className="p-6 bg-white border border-gray-200/80 rounded-2xl shadow-xs space-y-4">
