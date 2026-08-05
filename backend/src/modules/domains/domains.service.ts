@@ -4,12 +4,38 @@ import { eq, and, like, inArray, or, sql } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 
-function getLiquid(user: { resellerId: string | null; apiKey: string | null }): LiquidClient {
-  return new LiquidClient(user.resellerId || "", user.apiKey || "");
+async function getLiquid(user?: { id?: number; resellerId?: string | null; apiKey?: string | null; role?: string | null }): Promise<LiquidClient> {
+  let resellerId = user?.resellerId || "";
+  let apiKey = user?.apiKey || "";
+
+  if ((!resellerId || !apiKey) && user?.id) {
+    const [u] = await db.select().from(users).where(eq(users.id, user.id));
+    if (u) {
+      resellerId = u.resellerId || "";
+      apiKey = u.apiKey || "";
+      if (u.role === "customer" && u.parentResellerId) {
+        const [parent] = await db.select().from(users).where(eq(users.id, u.parentResellerId));
+        if (parent?.resellerId && parent?.apiKey) {
+          resellerId = parent.resellerId;
+          apiKey = parent.apiKey;
+        }
+      }
+    }
+  }
+
+  if (!resellerId || !apiKey) {
+    const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
+    if (defaultReseller) {
+      resellerId = defaultReseller.resellerId || "";
+      apiKey = defaultReseller.apiKey || "";
+    }
+  }
+
+  return new LiquidClient(resellerId, apiKey);
 }
 
-export async function checkAvailability(user: { resellerId: string | null; apiKey: string | null; role?: string }, domain: string) {
-  const liquid = getLiquid(user);
+export async function checkAvailability(user: { id?: number; resellerId: string | null; apiKey: string | null; role?: string }, domain: string) {
+  const liquid = await getLiquid(user);
   const res = await liquid.checkAvailability(domain);
 
   // Extract TLD (e.g. "example.com" -> "com")
@@ -46,15 +72,16 @@ export async function checkAvailability(user: { resellerId: string | null; apiKe
 
 import { createDomainOrderPayment } from "../payments/payments.service";
 
-export async function getSuggestions(user: { resellerId: string | null; apiKey: string | null }, keyword: string, tld?: string) {
-  return getLiquid(user).getDomainSuggestions(keyword, tld);
+export async function getSuggestions(user: { id?: number; resellerId: string | null; apiKey: string | null }, keyword: string, tld?: string) {
+  const liquid = await getLiquid(user);
+  return liquid.getDomainSuggestions(keyword, tld);
 }
 
 export async function orderRegisterDomain(
   user: { id: number; resellerId: string | null; apiKey: string | null },
   data: { domain_name: string; tld: string; years: number; customer_id?: number; nameservers?: string[]; auto_renew?: boolean; privacy_protection?: boolean }
 ) {
-  const liquid = getLiquid(user);
+  const liquid = await getLiquid(user);
   const fullDomain = `${data.domain_name}.${data.tld}`;
   
   const years = data.years || 1;
@@ -108,7 +135,7 @@ export async function orderTransferDomain(
   user: { id: number; resellerId: string | null; apiKey: string | null },
   data: { domain_name: string; auth_code: string; customer_id?: number; nameservers?: string[] }
 ) {
-  const liquid = getLiquid(user);
+  const liquid = await getLiquid(user);
   const tld = data.domain_name.split(".").slice(1).join(".").toLowerCase();
 
   let unitPrice = 150000;
@@ -142,7 +169,7 @@ export async function orderRenewDomain(
   years: number
 ) {
   const domain = await getDomain(userId, domainId);
-  const liquid = getLiquid(user);
+  const liquid = await getLiquid(user);
 
   let unitPrice = 150000;
   try {
@@ -170,10 +197,10 @@ export async function orderRenewDomain(
 }
 
 export async function registerDomain(
-  user: { resellerId: string | null; apiKey: string | null },
+  user: { id?: number; resellerId: string | null; apiKey: string | null },
   data: Record<string, any>
 ) {
-  const liquid = getLiquid(user);
+  const liquid = await getLiquid(user);
   const years = data.years || 1;
   const fullDomain = data.tld ? `${data.domain_name}.${data.tld}` : data.domain_name;
 
@@ -330,22 +357,24 @@ export async function getDomain(userParam: any, lookup: string | number) {
   };
 }
 
-export async function renewDomain(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, years: number) {
+export async function renewDomain(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, years: number) {
   const domain = await getDomain({ id: userId, role: "customer" }, domainId);
-  const liquidRes = await getLiquid(user).renewDomain(String(domain.liquidOrderId || domain.domainName), years);
+  const liquid = await getLiquid(user);
+  const liquidRes = await liquid.renewDomain(String(domain.liquidOrderId || domain.domainName), years);
   await db.update(domains).set({ years: (domain.years || 1) + years }).where(eq(domains.id, domain.id));
   return { domain_id: domain.id, domain_name: domain.domainName, years_added: years, previous_expiry: domain.expiryDate, new_expiry: liquidRes?.expiry_date || null };
 }
 
-export async function updateLock(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, lock: boolean) {
+export async function updateLock(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, lock: boolean) {
   const domain = await getDomain(userId, domainId);
   // N5: short-circuit if already in desired state (concurrent tab toggle)
   if (Boolean(domain.locked) === lock) {
     return { locked: lock, alreadyInState: true };
   }
+  const liquid = await getLiquid(user);
   try {
-    if (lock) await getLiquid(user).lockDomain(String(domain.liquidOrderId || domain.domainName));
-    else await getLiquid(user).unlockDomain(String(domain.liquidOrderId || domain.domainName));
+    if (lock) await liquid.lockDomain(String(domain.liquidOrderId || domain.domainName));
+    else await liquid.unlockDomain(String(domain.liquidOrderId || domain.domainName));
   } catch (err: any) {
     const msg = String(err?.message || "").toLowerCase();
     if (msg.includes("already locked")) {
@@ -368,32 +397,36 @@ export async function updateLock(user: { resellerId: string | null; apiKey: stri
   return { locked: lock };
 }
 
-export async function updateNameservers(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, ns: string[]) {
+export async function updateNameservers(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, ns: string[]) {
   const domain = await getDomain(userId, domainId);
-  await getLiquid(user).updateNameservers(String(domain.liquidOrderId || domain.domainName), ns);
+  const liquid = await getLiquid(user);
+  await liquid.updateNameservers(String(domain.liquidOrderId || domain.domainName), ns);
   await db.update(domains).set({ nameservers: ns }).where(eq(domains.id, domain.id));
   return { domain_id: domainId, nameservers: ns };
 }
 
-export async function getAuthCode(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
+export async function getAuthCode(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
   const domain = await getDomain(userId, domainId);
-  return getLiquid(user).getAuthCode(String(domain.liquidOrderId || domain.domainName));
+  const liquid = await getLiquid(user);
+  return liquid.getAuthCode(String(domain.liquidOrderId || domain.domainName));
 }
 
-export async function updateAuthCode(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, authCode: string) {
+export async function updateAuthCode(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, authCode: string) {
   const domain = await getDomain(userId, domainId);
-  return getLiquid(user).updateAuthCode(String(domain.liquidOrderId || domain.domainName), authCode);
+  const liquid = await getLiquid(user);
+  return liquid.updateAuthCode(String(domain.liquidOrderId || domain.domainName), authCode);
 }
 
-export async function toggleTheftProtection(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, enable: boolean) {
+export async function toggleTheftProtection(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, enable: boolean) {
   const domain = await getDomain(userId, domainId);
   // N5: short-circuit if already in desired state
   if (Boolean(domain.theftProtection) === enable) {
     return { theftProtection: enable, alreadyInState: true };
   }
+  const liquid = await getLiquid(user);
   try {
-    if (enable) await getLiquid(user).enableTheftProtection(String(domain.liquidOrderId || domain.domainName));
-    else await getLiquid(user).disableTheftProtection(String(domain.liquidOrderId || domain.domainName));
+    if (enable) await liquid.enableTheftProtection(String(domain.liquidOrderId || domain.domainName));
+    else await liquid.disableTheftProtection(String(domain.liquidOrderId || domain.domainName));
   } catch (err: any) {
     const msg = String(err?.message || "").toLowerCase();
     if (msg.includes("already enabled") || msg.includes("already active")) {
@@ -416,22 +449,24 @@ export async function toggleTheftProtection(user: { resellerId: string | null; a
   return { theftProtection: enable };
 }
 
-export async function restoreDomain(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
+export async function restoreDomain(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
   const domain = await getDomain(userId, domainId);
-  const res = await getLiquid(user).restoreDomain(String(domain.liquidOrderId || domain.domainName));
+  const liquid = await getLiquid(user);
+  const res = await liquid.restoreDomain(String(domain.liquidOrderId || domain.domainName));
   await db.update(domains).set({ status: "active" }).where(eq(domains.id, domain.id));
   return res;
 }
 
-export async function toggleSuspend(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, suspend: boolean) {
+export async function toggleSuspend(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, suspend: boolean) {
   const domain = await getDomain(userId, domainId);
   // N5: short-circuit if already in desired state
   const desiredStatus = suspend ? "suspended" : "active";
   if (domain.status === desiredStatus) {
     return { status: domain.status, alreadyInState: true };
   }
-  if (suspend) await getLiquid(user).suspendDomain(String(domain.liquidOrderId || domain.domainName));
-  else await getLiquid(user).unsuspendDomain(String(domain.liquidOrderId || domain.domainName));
+  const liquid = await getLiquid(user);
+  if (suspend) await liquid.suspendDomain(String(domain.liquidOrderId || domain.domainName));
+  else await liquid.unsuspendDomain(String(domain.liquidOrderId || domain.domainName));
   // N5: CAS
   const res: any = await db.update(domains)
     .set({ status: desiredStatus as any })
@@ -448,8 +483,8 @@ export async function deleteDomainRecord(userId: number, domainId: number) {
   await db.delete(domains).where(eq(domains.id, domain.id));
 }
 
-export async function bulkAvailability(user: { resellerId: string; apiKey: string; role?: string }, keyword: string) {
-  const liquid = getLiquid(user);
+export async function bulkAvailability(user: { id?: number; resellerId: string; apiKey: string; role?: string }, keyword: string) {
+  const liquid = await getLiquid(user);
 
   // Extract base keyword and requested TLD if user searched with extension (e.g. "nama.web.id")
   const cleanInput = keyword.trim().toLowerCase();
