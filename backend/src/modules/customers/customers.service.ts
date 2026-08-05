@@ -207,62 +207,6 @@ export async function completeProfile(
   return cust!;
 }
 
-export async function syncFromLiquid(creds: { resellerId: string | null; apiKey: string | null }, userId: number) {
-  if (!creds.resellerId || !creds.apiKey) throw new AppError("LIQUID credentials not configured", 500);
-  const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
-  const res = await liquid.listCustomers();
-  const list = Array.isArray(res) ? res : res?.data || res?.customers || [];
-  
-  let count = 0;
-  for (const c of list) {
-    const liquidId = String(c.customer_id || c.id || "");
-    if (!liquidId) continue;
-    const email = c.email || c.customer_email || "";
-    if (!email) continue;
-    
-    // Check if already exists
-    const [existingByLiquid] = await db.select({ id: customers.id }).from(customers)
-      .where(eq(customers.liquidCustomerId, liquidId));
-    
-    if (existingByLiquid) {
-      continue;
-    }
-
-    const [existingByEmail] = await db.select({ id: customers.id }).from(customers)
-      .where(eq(customers.email, email));
-    
-    if (existingByEmail) {
-      await db.update(customers).set({ liquidCustomerId: liquidId }).where(eq(customers.id, existingByEmail.id));
-      count++;
-      continue;
-    }
-
-    try {
-      await db.insert(customers).values({
-        userId,
-        liquidCustomerId: liquidId,
-        name: c.name || c.customer_name || email.split("@")[0],
-        email,
-        company: c.company || "",
-        address: c.address_line_1 || c.address || "",
-        city: c.city || "",
-        state: c.state || "",
-        country: c.country_code || c.country || "ID",
-        zipcode: c.zipcode || "",
-        phone: c.tel_no || c.phone || "",
-      });
-      count++;
-    } catch (err: any) {
-      if (err.code === "ER_DUP_ENTRY" || err.errno === 1062 || err.message?.includes("Duplicate entry")) {
-        console.warn(`[customer-sync] Skipped duplicate liquid_customer_id: ${liquidId}`);
-      } else {
-        throw err;
-      }
-    }
-  }
-  return { synced: count, total: list.length };
-}
-
 // Proxy list directly from Resellercamp (no DB cache). Paginated; for customer role pass their liquidCustomerId.
 export async function listCustomersFromLiquid(
   creds: { resellerId: string; apiKey: string },

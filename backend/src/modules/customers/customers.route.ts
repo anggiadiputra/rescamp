@@ -13,5 +13,4 @@ export const customerRoutes = new Elysia({ prefix: "/customers" })
       .get("/:id", h.detail as any, { detail: { tags: ["Customers"], summary: "Get customer" } })
       .put("/:id", h.update as any, { body: customerSchema, detail: { tags: ["Customers"], summary: "Update customer" } })
       .delete("/:id", h.remove as any)
-      .post("/sync", h.sync as any, { detail: { tags: ["Customers"], summary: "Sync customers from Liquid" } })
   );

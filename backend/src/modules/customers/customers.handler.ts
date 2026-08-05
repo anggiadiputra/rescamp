@@ -75,15 +75,6 @@ export async function completeProfile(ctx: any) {
   return { data: cust };
 }
 
-export async function sync(ctx: any) {
-  const user = await getUser(ctx);
-  const result = await svc.syncFromLiquid(
-    { resellerId: user.resellerId, apiKey: user.apiKey },
-    user.id
-  );
-  return { data: result };
-}
-
 export async function listRemote(ctx: any) {
   const u = await getUser(ctx);
   const creds = await getResellerCreds(ctx);
