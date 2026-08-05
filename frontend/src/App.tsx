@@ -69,7 +69,7 @@ export default function App() {
             <Route path="/domains/transfer" element={<ProtectedRoute><DomainTransferPage /></ProtectedRoute>} />
             <Route path="/customers" element={<ResellerRoute><CustomersPage /></ResellerRoute>} />
             <Route path="/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
-            <Route path="/billing/pay/:orderId" element={<ProtectedRoute><BillingPayPage /></ProtectedRoute>} />
+            <Route path="/billing/pay/:orderId" element={<BillingPayPage />} />
             <Route path="/prices" element={<ProtectedRoute><PricesPage /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/settings" element={<ResellerRoute><SettingsPage /></ResellerRoute>} />

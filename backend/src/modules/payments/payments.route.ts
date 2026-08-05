@@ -48,13 +48,12 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
     }
   )
 
-  // Protected status check for frontend polling
-  .guard({ beforeHandle: authGuard }, (app) =>
-    app.get(
-      "/status/:orderId",
-      async ({ params, store, set }) => {
-        const userId = Number((store as any)?.user?.sub);
-        const { orderId } = params;
+  // Status check for frontend & payment link status polling (Public by orderId)
+  .get(
+    "/status/:orderId",
+    async ({ params, store, set }) => {
+      const userId = Number((store as any)?.user?.sub || 0);
+      const { orderId } = params;
 
         const cleanOrderId = String(orderId || "").trim();
         const numericMatch = cleanOrderId.replace(/^INV-0*/i, "").replace(/^0+/, "");
@@ -218,4 +217,4 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
         detail: { tags: ["Payments"], summary: "Get order & payment status by order ID" },
       }
     )
-  );
+  ;
