@@ -262,3 +262,53 @@ export async function syncFromLiquid(creds: { resellerId: string | null; apiKey:
   }
   return { synced: count, total: list.length };
 }
+
+// Proxy list directly from Resellercamp (no DB cache). Paginated; for customer role pass their liquidCustomerId.
+export async function listCustomersFromLiquid(
+  creds: { resellerId: string; apiKey: string },
+  customerLiquidId: string | null,
+  page: number,
+  perPage: number,
+) {
+  if (!creds?.resellerId || !creds?.apiKey) {
+    throw new AppError("Resellercamp credentials not configured", 400);
+  }
+  const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
+  const params: Record<string, string> = {
+    limit: String(perPage),
+    page_no: String(page),
+  };
+  if (customerLiquidId) params.customer_id = String(customerLiquidId);
+
+  const raw = await liquid.listCustomers(params);
+  const list: any[] = Array.isArray(raw) ? raw : raw?.data || raw?.customers || [];
+
+  const items = list
+    .map((c: any) => {
+      const liquidId = String(c.customer_id || c.id || "");
+      if (!liquidId) return null;
+      return {
+        // Use liquidCustomerId as numeric-ish `id` for FE compatibility with existing Customer type.
+        // Stored as string; backend endpoints that take `:id` will need to special-case this.
+        id: liquidId as any,
+        liquidCustomerId: liquidId,
+        name: c.name || c.customer_name || "",
+        email: c.email || c.customer_email || "",
+        company: c.company || "",
+        address: c.address_line_1 || c.address || "",
+        city: c.city || "",
+        state: c.state || "",
+        country: c.country_code || c.country || "ID",
+        zipcode: c.zipcode || c.zip || "",
+        phone: c.tel_no || c.phone || "",
+        phone_cc: c.tel_cc_no || c.phone_cc || "62",
+        createdAt: c.creation_time || c.creation_date || c.created_at || "",
+      };
+    })
+    .filter(Boolean);
+
+  const reachedEnd = list.length < perPage;
+  const total = reachedEnd ? (page - 1) * perPage + list.length : page * perPage + 1;
+
+  return { items, total, reachedEnd };
+}

@@ -40,37 +40,38 @@ export default function CustomersPage() {
   async function fetchCustomers() {
     setLoading(true);
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
-    if (search) params.set("search", search);
     try {
-      const res = await api.get<PaginatedResponse<Customer>>(`/customers?${params}`);
+      const res = await api.get<PaginatedResponse<Customer>>(`/customers/remote?${params}`);
       setCustomers(res.data || []);
       setTotal(res.meta?.total || 0);
     } catch (err: any) {
-      if (err.name !== "AbortError") console.error(err);
+      if (err.name !== "AbortError") {
+        console.error(err);
+        toast(err?.message || "Gagal memuat customer dari Resellercamp", "error");
+      }
     }
     setLoading(false);
   }
 
+  // Client-side filter for live Resellercamp data (server has no search param).
+  const visibleCustomers = customers.filter((c) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      (c.name || "").toLowerCase().includes(q) ||
+      (c.email || "").toLowerCase().includes(q) ||
+      (c.company || "").toLowerCase().includes(q)
+    );
+  });
+
   useEffect(() => {
-    const controller = new AbortController();
-    const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
-    if (search) params.set("search", search);
-    api.get<PaginatedResponse<Customer>>(`/customers?${params}`, { signal: controller.signal })
-      .then((res) => { setCustomers(res.data || []); setTotal(res.meta?.total || 0); })
-      .catch((err) => { if (err.name !== "AbortError") console.error(err); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [page, search]);
+    fetchCustomers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   async function doSync() {
-    if (syncing) return;
-    setSyncing(true);
-    try {
-      const res = await api.post<any>("/customers/sync");
-      toast(`${res.synced || 0} new customers synced from LIQUID`);
-      fetchCustomers();
-    } catch (e: any) { toast(e.message, "error"); }
-    setSyncing(false);
+    // Sync is meaningless when listing live from Resellercamp; data is already live.
+    toast("Mode live Resellercamp — data sudah real-time, sync tidak diperlukan", "info");
   }
 
   async function save() {
@@ -98,32 +99,11 @@ export default function CustomersPage() {
   }
 
   async function doDelete() {
-    setDeleteLoading(true);
-    try {
-      await api.delete(`/customers/${deleteId}`);
-      toast("Customer deleted");
-      fetchCustomers();
-    } catch (e: any) { toast(e.message, "error"); }
-    setDeleteLoading(false);
-    setDeleteId(0);
-    setOverviewId(null);
+    toast("Delete belum didukung di mode live Resellercamp — edit di dashboard Resellercamp", "info");
   }
 
   function openEdit(c: Customer) {
-    setEditMode(true);
-    setEditId(c.id);
-    setForm({
-      name: c.name || "",
-      email: c.email || "",
-      company: c.company || "",
-      address: c.address || "",
-      city: c.city || "",
-      state: c.state === "Not Applicable" ? "" : (c.state || ""),
-      country: c.country || "ID",
-      zipcode: c.zipcode || "",
-      phone: c.phone || "",
-    });
-    setModalOpen(true);
+    toast("Edit belum didukung di mode live Resellercamp — edit di dashboard Resellercamp", "info");
   }
 
   function openCreate() {
@@ -142,17 +122,20 @@ export default function CustomersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Customers</h1>
-          <p className="text-sm text-gray-500 mt-1">Kelola akun customer Anda. Setiap customer baru otomatis terhubung ke Resellercamp via Liquid API.</p>
+          <p className="text-sm text-gray-500 mt-1">Daftar customer langsung dari dashboard Resellercamp (live, tanpa cache lokal).</p>
+        </div>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-700">
+          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /> Live dari Resellercamp
         </div>
       </div>
 
       {/* Search & Action Bar */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <SearchBar value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Cari customer berdasarkan nama, email, perusahaan..." />
+        <SearchBar value={search} onChange={setSearch} placeholder="Cari customer berdasarkan nama, email, perusahaan..." />
         <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
-          <Button variant="outline" onClick={doSync} disabled={syncing} className="shadow-2xs text-xs sm:text-sm !py-2.5">
-            <RefreshCw className={`w-4 h-4 inline mr-1.5 ${syncing ? "animate-spin" : ""}`} />
-            {syncing ? "Syncing..." : "Sync Customers"}
+          <Button variant="outline" onClick={() => fetchCustomers()} disabled={loading} className="shadow-2xs text-xs sm:text-sm !py-2.5">
+            <RefreshCw className={`w-4 h-4 inline mr-1.5 ${loading ? "animate-spin" : ""}`} />
+            Refresh
           </Button>
           <Button onClick={openCreate} className="bg-black hover:bg-gray-800 text-white text-xs sm:text-sm !py-2.5 shadow-sm">
             <Plus className="w-4 h-4 inline mr-1.5" /> Tambah Customer
@@ -160,9 +143,9 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {customers.length === 0 && !search ? (
-        <EmptyState icon={User} title="Belum Ada Customer" description="Tambahkan customer pertama Anda untuk mulai mendaftarkan domain" action={{ label: "Tambah Customer", onClick: openCreate }} />
-      ) : customers.length === 0 && search ? (
+      {visibleCustomers.length === 0 && !search ? (
+        <EmptyState icon={User} title="Belum Ada Customer" description="Belum ada customer di akun Resellercamp Anda" />
+      ) : visibleCustomers.length === 0 && search ? (
         <EmptyState icon={User} title="Customer Tidak Ditemukan" description="Coba gunakan kata kunci pencarian yang berbeda" />
       ) : (
         <Card className="p-0 overflow-hidden border border-gray-200/80 shadow-xs rounded-2xl">
@@ -178,7 +161,7 @@ export default function CustomersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-sm">
-                {customers.map((c) => (
+                {visibleCustomers.map((c) => (
                   <tr key={c.id} className="hover:bg-gray-50/70 transition-colors cursor-pointer group" onClick={() => setOverviewId(c.id)}>
                     <td className="px-5 py-4">
                       <p className="text-sm text-gray-900 font-bold group-hover:text-black">{c.name}</p>
@@ -213,7 +196,7 @@ export default function CustomersPage() {
 
           {/* Mobile cards */}
           <div className="block md:hidden space-y-3 p-4">
-            {customers.map((c) => (
+            {visibleCustomers.map((c) => (
               <div key={c.id} className="rounded-xl p-4 shadow-2xs border border-gray-200 bg-white space-y-2 cursor-pointer hover:border-gray-300 transition-colors" onClick={() => setOverviewId(c.id)}>
                 <div className="flex justify-between items-start">
                   <p className="text-base font-bold text-gray-900">{c.name}</p>

@@ -444,8 +444,9 @@ export class LiquidClient {
       notify: "true",
     });
   }
-  listCustomers() {
-    return this.request<any>("GET", "/customers");
+  listCustomers(params?: Record<string, string>) {
+    const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+    return this.request<any>("GET", `/customers${qs}`);
   }
   getCustomer(customerId: string) {
     return this.request<any>("GET", `/customers/${customerId}`);
