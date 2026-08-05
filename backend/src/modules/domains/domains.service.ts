@@ -318,42 +318,101 @@ export async function getDomain(userParam: any, lookup: string | number) {
 
   // Support lookup by local id or liquidOrderId
   const lookupNum = parseInt(String(lookup), 10);
+  const lookupStr = String(lookup);
   const domainCond = isNaN(lookupNum)
-    ? eq(domains.liquidOrderId, String(lookup))
-    : or(eq(domains.id, lookupNum), eq(domains.liquidOrderId, String(lookupNum)));
+    ? eq(domains.liquidOrderId, lookupStr)
+    : or(eq(domains.id, lookupNum), eq(domains.liquidOrderId, lookupStr));
 
   conditions.push(domainCond);
 
   const [domain] = await db.select().from(domains).where(and(...conditions));
-  if (!domain) throw new AppError("Domain not found", 404);
 
-  let cust: any = null;
-  let reseller: any = null;
+  if (domain) {
+    let cust: any = null;
+    let reseller: any = null;
 
-  if (domain.customerId) {
-    const [c] = await db.select().from(customers).where(eq(customers.id, domain.customerId));
-    cust = c || null;
-  }
-  if (!cust && domain.userId) {
-    const [c] = await db.select().from(customers).where(eq(customers.userId, domain.userId));
-    cust = c || null;
+    if (domain.customerId) {
+      const [c] = await db.select().from(customers).where(eq(customers.id, domain.customerId));
+      cust = c || null;
+    }
+    if (!cust && domain.userId) {
+      const [c] = await db.select().from(customers).where(eq(customers.userId, domain.userId));
+      cust = c || null;
+    }
+
+    if (domain.userId) {
+      const [u] = await db.select({ id: users.id, resellerId: users.resellerId, name: users.name, email: users.email }).from(users).where(eq(users.id, domain.userId));
+      reseller = u || null;
+    }
+
+    return {
+      ...domain,
+      domainId: domain.id,
+      liquidOrderId: domain.liquidOrderId || null,
+      customerId: domain.customerId || cust?.id || null,
+      liquidCustomerId: cust?.liquidCustomerId || null,
+      customerName: cust?.name || null,
+      customerEmail: cust?.email || null,
+      userId: domain.userId,
+      resellerId: reseller?.resellerId || user.resellerId || null,
+    };
   }
 
-  if (domain.userId) {
-    const [u] = await db.select({ id: users.id, resellerId: users.resellerId, name: users.name, email: users.email }).from(users).where(eq(users.id, domain.userId));
-    reseller = u || null;
+  // Live-only fallback: probe Resellercamp so client-side links to liquidOrderId still resolve.
+  // Used when the domain listing is served live (no DB cache) but the row was never synced locally.
+  const liquid = await getLiquid(userParam);
+  let liquidItem: any = null;
+  try {
+    liquidItem = await liquid.getDomain(lookupStr);
+  } catch (e: any) {
+    // Bubble 404 verbatim if the API call itself fails (e.g. invalid id)
+    if (e?.status === 404 || /not\s*found/i.test(String(e?.message || ""))) {
+      throw new AppError("Domain not found", 404);
+    }
   }
+  if (!liquidItem) {
+    throw new AppError("Domain not found", 404);
+  }
+
+  const statusMap: Record<string, string> = {
+    live: "active",
+    active: "active",
+    unpaid: "pending",
+    pending: "pending",
+    expired: "expired",
+    "pending delete restorable": "expired",
+    "pending transfer": "transferred",
+    "pending restore": "suspended",
+    suspended: "suspended",
+    cancelled: "expired",
+  };
+  const domainName = (liquidItem.domain_name || liquidItem.name || liquidItem.domain || "").toLowerCase().trim();
+  if (!domainName) throw new AppError("Domain not found", 404);
+  const liquidStatus = String(liquidItem.status || "").toLowerCase().trim();
+  const mappedStatus = statusMap[liquidStatus] || "active";
 
   return {
-    ...domain,
-    domainId: domain.id,
-    liquidOrderId: domain.liquidOrderId || null,
-    customerId: domain.customerId || cust?.id || null,
-    liquidCustomerId: cust?.liquidCustomerId || null,
-    customerName: cust?.name || null,
-    customerEmail: cust?.email || null,
-    userId: domain.userId,
-    resellerId: reseller?.resellerId || user.resellerId || null,
+    id: Number(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || lookupNum) || 0,
+    domainId: Number(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || lookupNum) || 0,
+    domainName,
+    tld: domainName.split(".").slice(1).join("."),
+    registrationDate: liquidItem.creation_time || liquidItem.creation_date || null,
+    expiryDate: liquidItem.expiry_date || null,
+    years: Number(liquidItem.no_of_years || 1),
+    status: mappedStatus,
+    autoRenew: liquidItem.renewal_mode === "auto" || liquidItem.renewal_mode === "auto_renew" ? 1 : 0,
+    locked: liquidItem.status === "transferlock" || liquidItem.locked === "true" || liquidItem.locked === true ? 1 : 0,
+    theftProtection: liquidItem.theft_protection === "true" || liquidItem.theft_protection === true ? 1 : 0,
+    privacyProtection: liquidItem.privacy_protection === "true" || liquidItem.privacy_protection === true ? 1 : 0,
+    liquidOrderId: String(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || lookupStr),
+    nameservers: liquidItem.nameservers || null,
+    customerId: liquidItem.customer_id ? Number(liquidItem.customer_id) : null,
+    customerName: liquidItem.customer_name || null,
+    customerEmail: liquidItem.customer_email || null,
+    userId: userId,
+    resellerId: user.resellerId || null,
+    createdAt: liquidItem.creation_time || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 }
 
