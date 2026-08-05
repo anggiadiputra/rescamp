@@ -665,11 +665,11 @@ export function ConfirmDialog({ open, title, message, onConfirm, onClose, loadin
 
 // Toast notification (auto-dismiss)
 let toastId = 0;
-export function toast(message: string, type: "success" | "error" = "success") {
+export function toast(message: string, type: "success" | "error" | "info" = "success") {
   const id = ++toastId;
   const container = document.getElementById("toast-container") || (() => { const el = document.createElement("div"); el.id = "toast-container"; el.className = "fixed bottom-5 right-5 z-50 space-y-2"; document.body.appendChild(el); return el; })();
   const el = document.createElement("div");
-  const colors = type === "error" ? "bg-red-50 border-red-200 text-red-800" : "bg-emerald-50 border-emerald-200 text-emerald-800";
+  const colors = type === "error" ? "bg-red-50 border-red-200 text-red-800" : type === "info" ? "bg-blue-50 border-blue-200 text-blue-800" : "bg-emerald-50 border-emerald-200 text-emerald-800";
   el.className = `px-4 py-3 border rounded-xl text-xs font-semibold shadow-lg transition-all animate-fade-in ${colors}`;
   el.textContent = message;
   el.id = `toast-${id}`;

@@ -24,7 +24,6 @@ export default function CustomersPage() {
   const [total, setTotal] = useState(0);
   const perPage = 20;
   const [search, setSearch] = useState("");
-  const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [overviewId, setOverviewId] = useState<number | null>(null);
 
@@ -35,7 +34,6 @@ export default function CustomersPage() {
   const [form, setForm] = useState(defaultForm);
   const [deleteId, setDeleteId] = useState(0);
   const [deleteName, setDeleteName] = useState("");
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
   async function fetchCustomers() {
     setLoading(true);
@@ -69,11 +67,6 @@ export default function CustomersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  async function doSync() {
-    // Sync is meaningless when listing live from Resellercamp; data is already live.
-    toast("Mode live Resellercamp — data sudah real-time, sync tidak diperlukan", "info");
-  }
-
   async function save() {
     if (saving) return;
     if (!form.name.trim() || !form.email.trim()) {
@@ -103,7 +96,8 @@ export default function CustomersPage() {
   }
 
   function openEdit(c: Customer) {
-    toast("Edit belum didukung di mode live Resellercamp — edit di dashboard Resellercamp", "info");
+    setEditId(c.id);
+    toast(`Edit untuk ${c.name} belum didukung di mode live Resellercamp — edit di dashboard Resellercamp`, "info");
   }
 
   function openCreate() {
@@ -366,7 +360,7 @@ export default function CustomersPage() {
         </div>
       </Modal>
 
-      <ConfirmDialog open={deleteId > 0} title="Delete Customer Contact" message={`Delete ${deleteName}? This cannot be undone.`} onConfirm={doDelete} onClose={() => setDeleteId(0)} loading={deleteLoading} />
+      <ConfirmDialog open={deleteId > 0} title="Delete Customer Contact" message={`Delete ${deleteName}? This cannot be undone.`} onConfirm={doDelete} onClose={() => setDeleteId(0)} />
     </div>
   );
 }
