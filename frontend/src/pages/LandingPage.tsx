@@ -336,7 +336,7 @@ export default function LandingPage() {
               </div>
             )}
 
-            {/* Popular TLD Display Badges (Live Prices) */}
+            {/* Popular TLD Display Badges */}
             <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
               {popularDomains.map((item) => (
                 <div

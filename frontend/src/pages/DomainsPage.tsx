@@ -46,10 +46,6 @@ export default function DomainsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold text-gray-900">Domains</h1>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
-            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-            Live
-          </span>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => fetchDomains()} disabled={loading} variant="outline">
@@ -160,7 +156,7 @@ export default function DomainsPage() {
             ))}
           </div>
           <div className="bg-gray-50 px-5 py-3 flex items-center justify-between border-t border-gray-100">
-            <span className="text-xs text-gray-500 font-medium">Showing {visibleDomains.length} of {total} domains · Live from Resellercamp</span>
+            <span className="text-xs text-gray-500 font-medium">Showing {visibleDomains.length} of {total} domains</span>
             <Pagination page={page} totalPages={Math.ceil(total / perPage)} onPage={setPage} />
           </div>
         </Card>

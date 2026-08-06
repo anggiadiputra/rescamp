@@ -685,7 +685,7 @@ export default function DomainDetailPage() {
             <p className="text-sm font-black text-amber-950 font-mono">{domain.domainName}</p>
           </div>
           <p className="text-xs text-gray-600 leading-relaxed">
-            Domain akan di-suspend di Resellercamp dan alasan akan dicatat. Alasan ini akan ditampilkan ke customer.
+            Domain akan di-suspend dan alasan akan dicatat. Alasan ini akan ditampilkan ke customer.
           </p>
           <div>
             <label className="text-xs font-bold text-gray-600 uppercase tracking-wider block mb-1">
@@ -720,7 +720,7 @@ export default function DomainDetailPage() {
       <ConfirmDialog
         open={unsuspendOpen}
         title="Unsuspend Domain"
-        message={`Aktifkan kembali domain ${domain.domainName}? Domain akan live normal di Resellercamp.`}
+        message={`Aktifkan kembali domain ${domain.domainName}? Domain akan aktif normal kembali.`}
         onConfirm={confirmUnsuspend}
         onClose={() => setUnsuspendOpen(false)}
         loading={suspendLoading}

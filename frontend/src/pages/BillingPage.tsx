@@ -285,7 +285,7 @@ export default function BillingPage() {
         </div>
         {!isCustomer && balance.balance !== "0.00" && (
           <div className="text-xs sm:text-sm font-semibold text-gray-700 bg-gray-100 px-3.5 py-2 rounded-xl border border-gray-200 shadow-2xs">
-            Saldo Deposit Resellercamp: <span className="font-bold text-black">{balance.currency} {Number(balance.balance).toLocaleString("id-ID")}</span>
+            Saldo Deposit: <span className="font-bold text-black">{balance.currency} {Number(balance.balance).toLocaleString("id-ID")}</span>
           </div>
         )}
       </div>
@@ -364,7 +364,7 @@ export default function BillingPage() {
         {!isCustomer && (
           <Button variant="outline" onClick={doBillingSync} disabled={billingSyncing} className="ml-auto shrink-0 text-xs sm:text-sm !py-2">
             <RefreshCw className={`w-4 h-4 inline mr-1.5 ${billingSyncing ? "animate-spin" : ""}`} />
-            {billingSyncing ? "Syncing..." : "Sync Resellercamp"}
+            {billingSyncing ? "Syncing..." : "Sync Wholesale"}
           </Button>
         )}
       </div>
@@ -411,7 +411,7 @@ export default function BillingPage() {
                 ? "Daftar seluruh transaksi pendaftaran, perpanjangan, dan transfer domain Anda."
                 : categoryTab === "retail"
                 ? "Daftar faktur tagihan penjualan domain resmi yang ditagihkan kepada Customer."
-                : "Daftar mutasi pemotongan dan topup saldo deposit di Resellercamp."}
+                : "Daftar mutasi pemotongan dan topup saldo deposit."}
             </p>
           </div>
         </div>

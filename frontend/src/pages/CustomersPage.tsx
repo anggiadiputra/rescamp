@@ -113,14 +113,9 @@ export default function CustomersPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Customers</h1>
-          <p className="text-sm text-gray-500 mt-1">Daftar customer langsung dari dashboard Resellercamp (live, tanpa cache lokal).</p>
-        </div>
-        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-700">
-          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /> Live dari Resellercamp
-        </div>
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Customers</h1>
+        <p className="text-sm text-gray-500 mt-1">Daftar customer yang terhubung dengan akun Anda.</p>
       </div>
 
       {/* Search & Action Bar */}
@@ -138,7 +133,7 @@ export default function CustomersPage() {
       </div>
 
       {visibleCustomers.length === 0 && !search ? (
-        <EmptyState icon={User} title="Belum Ada Customer" description="Belum ada customer di akun Resellercamp Anda" />
+          <EmptyState icon={User} title="Belum Ada Customer" description="Belum ada customer yang terhubung dengan akun Anda" />
       ) : visibleCustomers.length === 0 && search ? (
         <EmptyState icon={User} title="Customer Tidak Ditemukan" description="Coba gunakan kata kunci pencarian yang berbeda" />
       ) : (
@@ -270,7 +265,7 @@ export default function CustomersPage() {
                 <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
                   <Globe className="w-4 h-4 text-gray-400 shrink-0" />
                   <div>
-                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Resellercamp ID</p>
+                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Customer ID</p>
                     <p className="text-xs font-semibold text-gray-800 font-mono">{overviewCustomer.liquidCustomerId}</p>
                   </div>
                 </div>

@@ -237,7 +237,7 @@ export default function DnsManagePage() {
         {loading ? (
           <div className="py-20 flex flex-col items-center justify-center gap-3">
             <LoadingSpinner size="md" />
-            <span className="text-sm text-gray-500 font-medium">Fetching DNS records from Resellercamp...</span>
+            <span className="text-sm text-gray-500 font-medium">Fetching DNS records...</span>
           </div>
         ) : filteredRecords.length === 0 ? (
           <div className="text-center py-20 px-4 space-y-3">
