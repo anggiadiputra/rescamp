@@ -17,6 +17,15 @@ async function getDomain(userId: number, domainId: number) {
   return domain;
 }
 
+function assertNotSuspended(domain: { status: string | null }) {
+  if (domain.status === "suspended") {
+    throw new AppError(
+      "Domain sedang di-suspend. Unsuspend terlebih dahulu untuk melakukan konfigurasi.",
+      409,
+    );
+  }
+}
+
 // Domain forwarding
 export async function getDomainForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
   const domain = await getDomain(userId, domainId);
@@ -25,6 +34,7 @@ export async function getDomainForwarding(user: { resellerId: string | null; api
 
 export async function updateDomainForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, data: { destination_url: string; enabled: boolean }) {
   const domain = await getDomain(userId, domainId);
+  assertNotSuspended(domain);
   return getLiquid(user).updateDomainForwarding(String(domain.liquidOrderId || domain.domainName), data);
 }
 
@@ -36,11 +46,13 @@ export async function getEmailForwarding(user: { resellerId: string | null; apiK
 
 export async function createEmailForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, data: { email: string; forward_to: string }) {
   const domain = await getDomain(userId, domainId);
+  assertNotSuspended(domain);
   return getLiquid(user).createEmailForwarding(String(domain.liquidOrderId || domain.domainName), data);
 }
 
 export async function deleteEmailForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, email: string) {
   const domain = await getDomain(userId, domainId);
+  assertNotSuspended(domain);
   return getLiquid(user).deleteEmailForwarding(String(domain.liquidOrderId || domain.domainName), email);
 }
 
@@ -52,6 +64,7 @@ export async function getPrivacy(user: { resellerId: string | null; apiKey: stri
 
 export async function enablePrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
   const domain = await getDomain(userId, domainId);
+  assertNotSuspended(domain);
   const res = await getLiquid(user).enablePrivacyProtection(String(domain.liquidOrderId || domain.domainName));
   await db.update(domains).set({ privacyProtection: 1 }).where(eq(domains.id, domainId));
   return res;
@@ -59,6 +72,7 @@ export async function enablePrivacy(user: { resellerId: string | null; apiKey: s
 
 export async function disablePrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
   const domain = await getDomain(userId, domainId);
+  assertNotSuspended(domain);
   const res = await getLiquid(user).disablePrivacyProtection(String(domain.liquidOrderId || domain.domainName));
   await db.update(domains).set({ privacyProtection: 0 }).where(eq(domains.id, domainId));
   return res;
@@ -66,6 +80,7 @@ export async function disablePrivacy(user: { resellerId: string | null; apiKey: 
 
 export async function buyPrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
   const domain = await getDomain(userId, domainId);
+  assertNotSuspended(domain);
   const res = await getLiquid(user).buyPrivacyProtection(String(domain.liquidOrderId || domain.domainName));
   await db.update(domains).set({ privacyProtection: 1 }).where(eq(domains.id, domainId));
   return res;

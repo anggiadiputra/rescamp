@@ -4,6 +4,18 @@ import { eq, and, like, inArray, or, sql } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 
+// ponytail: helper used by mutators below. Single source of truth for the
+// "domain-suspended → reject any user config" rule. upgrade path: when we add
+// finer roles (e.g. read-only auditor), accept an `allowConfig: boolean` arg.
+function assertNotSuspended(domain: { status: string | null }) {
+  if (domain.status === "suspended") {
+    throw new AppError(
+      "Domain sedang di-suspend. Unsuspend terlebih dahulu untuk melakukan konfigurasi.",
+      409,
+    );
+  }
+}
+
 async function getLiquid(user?: { id?: number; resellerId?: string | null; apiKey?: string | null; role?: string | null }): Promise<LiquidClient> {
   let resellerId = user?.resellerId || "";
   let apiKey = user?.apiKey || "";
@@ -468,6 +480,7 @@ export async function renewDomain(user: { id?: number; resellerId: string | null
 
 export async function updateLock(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, lock: boolean) {
   const domain = await getDomain(userId, domainId);
+  assertNotSuspended(domain);
   // N5: short-circuit if already in desired state (concurrent tab toggle)
   if (Boolean(domain.locked) === lock) {
     return { locked: lock, alreadyInState: true };
@@ -500,6 +513,7 @@ export async function updateLock(user: { id?: number; resellerId: string | null;
 
 export async function updateNameservers(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, ns: string[]) {
   const domain = await getDomain(userId, domainId);
+  assertNotSuspended(domain);
   const liquid = await getLiquid(user);
   await liquid.updateNameservers(String(domain.liquidOrderId || domain.domainName), ns);
   await db.update(domains).set({ nameservers: ns }).where(eq(domains.id, domain.id));
@@ -514,12 +528,14 @@ export async function getAuthCode(user: { id?: number; resellerId: string | null
 
 export async function updateAuthCode(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, authCode: string) {
   const domain = await getDomain(userId, domainId);
+  assertNotSuspended(domain);
   const liquid = await getLiquid(user);
   return liquid.updateAuthCode(String(domain.liquidOrderId || domain.domainName), authCode);
 }
 
 export async function toggleTheftProtection(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, enable: boolean) {
   const domain = await getDomain(userId, domainId);
+  assertNotSuspended(domain);
   // N5: short-circuit if already in desired state
   if (Boolean(domain.theftProtection) === enable) {
     return { theftProtection: enable, alreadyInState: true };

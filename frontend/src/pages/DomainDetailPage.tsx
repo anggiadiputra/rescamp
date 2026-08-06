@@ -402,7 +402,9 @@ export default function DomainDetailPage() {
           <div className="pt-3 border-t border-gray-100 flex justify-end">
             <button
               onClick={() => { setNsForm(activeNs.length ? [...activeNs] : ["", ""]); setNsOpen(true); }}
-              className="w-full py-3 bg-gray-900 hover:bg-black text-white text-sm font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+              disabled={domain.status === "suspended"}
+              title={domain.status === "suspended" ? "Domain suspended — unsuspend dulu" : undefined}
+              className={`w-full py-3 bg-gray-900 text-white text-sm font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 ${domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-black cursor-pointer"}`}
             >
               <Globe className="w-4 h-4" /> Ubah Nameservers Domain
             </button>
@@ -419,7 +421,13 @@ export default function DomainDetailPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Action 1: Manage DNS */}
-          <Link to={`/domains/${id}/dns`} className="p-4 sm:p-5 bg-gray-50 hover:bg-gray-100/80 border border-gray-200/80 rounded-xl transition-all flex flex-col justify-between gap-3 group">
+          <Link
+            to={`/domains/${id}/dns`}
+            onClick={(e) => { if (domain.status === "suspended") e.preventDefault(); }}
+            aria-disabled={domain.status === "suspended"}
+            title={domain.status === "suspended" ? "Domain suspended — unsuspend dulu" : undefined}
+            className={`p-4 sm:p-5 bg-gray-50 border border-gray-200/80 rounded-xl transition-all flex flex-col justify-between gap-3 group ${domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-100/80 cursor-pointer"}`}
+          >
             <div className="flex items-center justify-between">
               <div className="p-2.5 bg-black text-white rounded-xl group-hover:scale-105 transition-transform">
                 <Server className="w-5 h-5" />
@@ -435,7 +443,9 @@ export default function DomainDetailPage() {
           {/* Action 2: Renew Domain */}
           <button
             onClick={() => { setRenewYears(1); setRenewOpen(true); }}
-            className="p-4 sm:p-5 bg-gray-50 hover:bg-emerald-50/50 border border-gray-200/80 hover:border-emerald-200 rounded-xl transition-all flex flex-col justify-between gap-3 text-left group cursor-pointer"
+            disabled={domain.status === "suspended"}
+            title={domain.status === "suspended" ? "Domain suspended — unsuspend dulu" : undefined}
+            className={`p-4 sm:p-5 bg-gray-50 border border-gray-200/80 rounded-xl transition-all flex flex-col justify-between gap-3 text-left group ${domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-emerald-50/50 hover:border-emerald-200 cursor-pointer"}`}
           >
             <div className="flex items-center justify-between">
               <div className="p-2.5 bg-emerald-600 text-white rounded-xl group-hover:scale-105 transition-transform">
@@ -451,8 +461,9 @@ export default function DomainDetailPage() {
           {/* Action 3: Lock/Unlock */}
           <button
             onClick={toggleLock}
-            disabled={lockLoading}
-            className={`p-4 sm:p-5 bg-gray-50 border rounded-xl transition-all flex flex-col justify-between gap-3 text-left group cursor-pointer ${domain.locked ? 'hover:bg-amber-50/50 hover:border-amber-200' : 'hover:bg-emerald-50/50 hover:border-emerald-200'}`}
+            disabled={lockLoading || domain.status === "suspended"}
+            title={domain.status === "suspended" ? "Domain suspended — unsuspend dulu" : undefined}
+            className={`p-4 sm:p-5 bg-gray-50 border rounded-xl transition-all flex flex-col justify-between gap-3 text-left group ${domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : `cursor-pointer ${domain.locked ? 'hover:bg-amber-50/50 hover:border-amber-200' : 'hover:bg-emerald-50/50 hover:border-emerald-200'}`}`}
           >
             <div className="flex items-center justify-between">
               <div className={`p-2.5 text-white rounded-xl group-hover:scale-105 transition-transform ${domain.locked ? 'bg-amber-600' : 'bg-emerald-600'}`}>
@@ -471,8 +482,9 @@ export default function DomainDetailPage() {
           {/* Action 4: Get Auth Code */}
           <button
             onClick={getAuthCode}
-            disabled={authLoading}
-            className="p-4 sm:p-5 bg-gray-50 hover:bg-blue-50/50 border border-gray-200/80 hover:border-blue-200 rounded-xl transition-all flex flex-col justify-between gap-3 text-left group cursor-pointer"
+            disabled={authLoading || domain.status === "suspended"}
+            title={domain.status === "suspended" ? "Domain suspended — unsuspend dulu" : undefined}
+            className={`p-4 sm:p-5 bg-gray-50 border border-gray-200/80 rounded-xl transition-all flex flex-col justify-between gap-3 text-left group ${domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-50/50 hover:border-blue-200 cursor-pointer"}`}
           >
             <div className="flex items-center justify-between">
               <div className="p-2.5 bg-blue-600 text-white rounded-xl group-hover:scale-105 transition-transform">
@@ -491,8 +503,9 @@ export default function DomainDetailPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <button
               onClick={toggleTheft}
-              disabled={theftLoading}
-              className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs sm:text-sm font-bold rounded-xl transition-colors flex items-center gap-2 cursor-pointer"
+              disabled={theftLoading || domain.status === "suspended"}
+              title={domain.status === "suspended" ? "Domain suspended — unsuspend dulu" : undefined}
+              className={`px-4 py-2.5 bg-gray-100 text-gray-800 text-xs sm:text-sm font-bold rounded-xl transition-colors flex items-center gap-2 ${domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-200 cursor-pointer"}`}
             >
               <ShieldCheck className="w-4.5 h-4.5 text-blue-600" />
               {domain.theftProtection ? "Matikan Theft Protection" : "Aktifkan Theft Protection"}
@@ -509,12 +522,14 @@ export default function DomainDetailPage() {
             )}
           </div>
 
-          <button
-            onClick={() => setDeleteOpen(true)}
-            className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs sm:text-sm font-bold rounded-xl border border-rose-200 transition-colors flex items-center gap-2 cursor-pointer"
-          >
-            <Trash2 className="w-4.5 h-4.5 text-rose-600" /> Hapus Record Domain
-          </button>
+          {isReseller && (
+            <button
+              onClick={() => setDeleteOpen(true)}
+              className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs sm:text-sm font-bold rounded-xl border border-rose-200 transition-colors flex items-center gap-2 cursor-pointer"
+            >
+              <Trash2 className="w-4.5 h-4.5 text-rose-600" /> Hapus Record Domain
+            </button>
+          )}
         </div>
       </div>
 

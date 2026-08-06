@@ -47,6 +47,12 @@ export async function addRecord(
   type: string, data: { hostname: string; value: string; ttl?: number },
 ) {
   const domain = await getDomain(userParam, domainLookup);
+  if (domain.status === "suspended") {
+    throw new AppError(
+      "Domain sedang di-suspend. Unsuspend terlebih dahulu untuk melakukan konfigurasi.",
+      409,
+    );
+  }
   return getLiquid(user).addDnsRecord(String(domain.liquidOrderId || domain.domainName), mapDnsType(type), data);
 }
 
@@ -55,6 +61,12 @@ export async function updateRecord(
   type: string, oldHost: string, oldValue: string, data: { hostname: string; value: string; ttl?: number },
 ) {
   const domain = await getDomain(userParam, domainLookup);
+  if (domain.status === "suspended") {
+    throw new AppError(
+      "Domain sedang di-suspend. Unsuspend terlebih dahulu untuk melakukan konfigurasi.",
+      409,
+    );
+  }
   return getLiquid(user).updateDnsRecord(String(domain.liquidOrderId || domain.domainName), mapDnsType(type), oldHost, oldValue, data);
 }
 
@@ -63,5 +75,11 @@ export async function deleteRecord(
   type: string, hostname: string, value: string,
 ) {
   const domain = await getDomain(userParam, domainLookup);
+  if (domain.status === "suspended") {
+    throw new AppError(
+      "Domain sedang di-suspend. Unsuspend terlebih dahulu untuk melakukan konfigurasi.",
+      409,
+    );
+  }
   return getLiquid(user).deleteDnsRecord(String(domain.liquidOrderId || domain.domainName), mapDnsType(type), hostname, value);
 }
