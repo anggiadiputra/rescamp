@@ -49,7 +49,7 @@ const app = new Elysia()
   )
   .listen(env.PORT);
 
-console.log(`🚀 Server running on http://localhost:${env.PORT}`);
+console.log(`🚀 Server running on port ${env.PORT}`);
 
 // Background sweeper: expire pending_payment + retry action_required every 15 minutes
 let sweepTimer: Timer | null = null;

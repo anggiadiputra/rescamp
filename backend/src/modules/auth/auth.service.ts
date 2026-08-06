@@ -6,6 +6,7 @@ import { signToken } from "../../lib/jwt";
 import { AppError } from "../../lib/error";
 import { LiquidClient } from "../../lib/liquid";
 import { sendEmail } from "../../lib/email";
+import { env } from "../../config/env";
 
 const MYSQL_DUP_ENTRY = 1062;
 
@@ -488,7 +489,7 @@ export async function forgotPassword(email: string) {
   await db.insert(otpCodes).values({ email: cleanEmail, code: token, purpose: "reset", expiresAt });
   await db.insert(otpCodes).values({ email: cleanEmail, code: otpCode, purpose: "reset", expiresAt });
 
-  const frontendUrl = process.env.CORS_ORIGIN || process.env.APP_URL || "http://localhost:5173";
+  const frontendUrl = env.CORS_ORIGIN;
   const resetLink = `${frontendUrl}/reset-password?token=${token}`;
 
   await sendEmail(cleanEmail, "reset_password", {
