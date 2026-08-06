@@ -82,7 +82,7 @@ export default function DashboardPage() {
       } catch (e: any) {
         if (e?.name !== "AbortError") {
           setSuggestions([]);
-          toast.error("Gagal memuat saran domain");
+          toast("Gagal memuat saran domain", "error");
         }
       } finally {
         if (!ctrl.signal.aborted) setSuggestLoading(false);
