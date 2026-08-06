@@ -41,3 +41,16 @@ coverage
 .cache
 .eslintcache
 *.tsbuildinfo
+
+# Build & deploy artifacts (root only; backend dist tracked if needed)
+/*.zip
+/*.tar.gz
+
+# Server / hosting configs (keep backend-specific configs inside backend/)
+/vhost
+/nginx.conf
+/apache.conf
+
+# Editor / OS extras
+.cursor/
+*.swp
