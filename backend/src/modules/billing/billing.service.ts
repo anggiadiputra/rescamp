@@ -164,6 +164,16 @@ export async function sweepActionRequiredRetries() {
       const [reseller] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
       if (reseller) { resellerId = reseller.resellerId || ""; apiKey = reseller.apiKey || ""; }
     }
+    // Fallback to first reseller row when customer has no parent (e.g. account created before
+    // parent link was set, or admin customer). Mirrors getLiquid() in domains.service.ts:39-44.
+    if (!resellerId || !apiKey) {
+      const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
+      if (defaultReseller) {
+        resellerId = defaultReseller.resellerId || "";
+        apiKey = defaultReseller.apiKey || "";
+      }
+    }
+    if (!resellerId || !apiKey) continue; // no creds at all — skip, log loudly
     const liquid = new LiquidClient(resellerId, apiKey);
 
     const currentRetry = Number(meta.retryCount || 0);
