@@ -45,7 +45,10 @@ export class LiquidClient {
       // Resellercamp returns this envelope when the action did not actually succeed
       // (e.g. sandbox/test accounts lacking permission, missing prerequisite contact, etc.).
       // DELETE is exempt because a successful delete legitimately returns nothing.
-      if (method !== "DELETE") {
+      // List endpoints (GET /domains) are exempt: a reseller with zero domains can legitimately
+      // return {"message":""}; callers already fall back to [] via `raw?.data || raw?.domains || []`.
+      const isListEndpoint = method === "GET" && path === "/domains";
+      if (method !== "DELETE" && !isListEndpoint) {
         const keys = data && typeof data === "object" ? Object.keys(data) : [];
         const isEmptyEnvelope = keys.length === 1 && keys[0] === "message" && !data.message;
         if (isEmptyEnvelope) {
