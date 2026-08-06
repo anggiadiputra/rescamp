@@ -2,10 +2,22 @@ import { describe, it, expect } from "bun:test";
 
 // E2E: Full user flow tanpa order domain sungguhan
 // Hanya read operations + availability check
+//
+// Creds are read from environment so this test never embeds secrets in source.
+// Required env: TEST_RESELLER_ID, TEST_API_KEY (see .env.test.example).
 const BASE = "http://localhost:3000/api";
+
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env ${name}. Copy .env.test.example to .env.test and try again.`);
+  return v;
+}
 
 describe("E2E Flow", () => {
   it("register → login → me → balance → availability → domains", async () => {
+    const resellerId = requireEnv("TEST_RESELLER_ID");
+    const apiKey = requireEnv("TEST_API_KEY");
+
     // Step 1: Register
     const email = `e2e_${Date.now()}@test.com`;
     const regRes = await fetch(`${BASE}/auth/register`, {
@@ -15,8 +27,8 @@ describe("E2E Flow", () => {
         email,
         password: "e2etest123",
         name: "E2E User",
-        reseller_id: "17058",
-        api_key: "037f6ef19498ad1e44e31a9871327fa1",
+        reseller_id: resellerId,
+        api_key: apiKey,
       }),
     });
     expect(regRes.status).toBe(201);

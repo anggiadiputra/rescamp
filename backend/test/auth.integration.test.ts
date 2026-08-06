@@ -1,19 +1,30 @@
 import { describe, it, expect } from "bun:test";
 
-// Integration test: hit the running backend server
+// Integration test: hit the running backend server.
+// Creds and seed account are env-driven — never hardcoded.
+// Required env (see .env.test.example): TEST_RESELLER_ID, TEST_API_KEY,
+// TEST_USER_EMAIL, TEST_USER_PASSWORD.
 const BASE = "http://localhost:3000/api";
+
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env ${name}. Copy .env.test.example to .env.test and try again.`);
+  return v;
+}
 
 describe("Auth API Integration", () => {
   it("POST /auth/register → 201 + token", async () => {
+    const resellerId = requireEnv("TEST_RESELLER_ID");
+    const apiKey = requireEnv("TEST_API_KEY");
     const res = await fetch(`${BASE}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email: `integration_${Date.now()}@test.com`,
-        password: "rahasia123",
+        password: requireEnv("TEST_USER_PASSWORD"),
         name: "Integration",
-        reseller_id: "17058",
-        api_key: "037f6ef19498ad1e44e31a9871327fa1",
+        reseller_id: resellerId,
+        api_key: apiKey,
       }),
     });
     expect(res.status).toBe(201);
@@ -23,16 +34,18 @@ describe("Auth API Integration", () => {
   });
 
   it("POST /auth/register → 409 duplicate", async () => {
+    const resellerId = requireEnv("TEST_RESELLER_ID");
+    const apiKey = requireEnv("TEST_API_KEY");
     const email = `dup_${Date.now()}@test.com`;
     await fetch(`${BASE}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: "rahasia123", name: "Dup", reseller_id: "17058", api_key: "037f6ef19498ad1e44e31a9871327fa1" }),
+      body: JSON.stringify({ email, password: requireEnv("TEST_USER_PASSWORD"), name: "Dup", reseller_id: resellerId, api_key: apiKey }),
     });
     const res = await fetch(`${BASE}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: "rahasia123", name: "Dup2", reseller_id: "17058", api_key: "037f6ef19498ad1e44e31a9871327fa1" }),
+      body: JSON.stringify({ email, password: requireEnv("TEST_USER_PASSWORD"), name: "Dup2", reseller_id: resellerId, api_key: apiKey }),
     });
     expect(res.status).toBe(409);
   });
@@ -41,7 +54,7 @@ describe("Auth API Integration", () => {
     const res = await fetch(`${BASE}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: "test@test.com", password: "rahasia123" }),
+      body: JSON.stringify({ email: requireEnv("TEST_USER_EMAIL"), password: requireEnv("TEST_USER_PASSWORD") }),
     });
     expect(res.status).toBe(200);
     const body: any = await res.json();
@@ -52,7 +65,7 @@ describe("Auth API Integration", () => {
     const res = await fetch(`${BASE}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: "test@test.com", password: "wrong123" }),
+      body: JSON.stringify({ email: requireEnv("TEST_USER_EMAIL"), password: "wrong123" }),
     });
     expect(res.status).toBe(401);
   });
@@ -66,7 +79,7 @@ describe("Auth API Integration", () => {
     const loginRes = await fetch(`${BASE}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: "test@test.com", password: "rahasia123" }),
+      body: JSON.stringify({ email: requireEnv("TEST_USER_EMAIL"), password: requireEnv("TEST_USER_PASSWORD") }),
     });
     const { token } = ((await loginRes.json()) as any).data;
 

@@ -3,12 +3,18 @@ import { describe, it, expect } from "bun:test";
 const BASE = "http://localhost:3000/api";
 let token: string;
 
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env ${name}. Copy .env.test.example to .env.test and try again.`);
+  return v;
+}
+
 async function ensureToken() {
   if (token) return;
   const res = await fetch(`${BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "test@test.com", password: "rahasia123" }),
+    body: JSON.stringify({ email: requireEnv("TEST_USER_EMAIL"), password: requireEnv("TEST_USER_PASSWORD") }),
   });
   const body: any = await res.json();
   token = body.data.token;
