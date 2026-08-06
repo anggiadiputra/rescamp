@@ -54,3 +54,9 @@ coverage
 # Editor / OS extras
 .cursor/
 *.swp
+
+# Internal documentation & specifications (keep README.md only)
+/*.md
+!/README.md
+/swagger.json
+
