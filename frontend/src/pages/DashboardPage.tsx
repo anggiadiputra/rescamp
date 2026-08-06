@@ -1,7 +1,7 @@
-import { Globe, AlertCircle, Clock, CheckCircle2, ArrowRight, Sparkles, AlertTriangle } from "lucide-react";
-import { StatCard, Card, LoadingSpinner, Button } from "../components/ui";
+import { Globe, AlertCircle, Clock, CheckCircle2, AlertTriangle, Search } from "lucide-react";
+import { StatCard, Card, LoadingSpinner, toast } from "../components/ui";
 import { api } from "../lib/api";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import type { Domain, PaginatedResponse } from "../lib/types";
@@ -13,6 +13,14 @@ function fmtBalance(amount: any, currency: string = "IDR"): string {
   return `${currency} ${Math.round(actual).toLocaleString("id-ID")}`;
 }
 
+function fmtPrice(amount: any): string {
+  if (amount == null || amount === "") return "";
+  const num = Number(amount);
+  if (isNaN(num)) return "";
+  const actual = num < 1000 ? num * 1000 : num;
+  return `Rp ${Math.round(actual).toLocaleString("id-ID")}`;
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const nav = useNavigate();
@@ -22,6 +30,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState({ balance: "0.00", currency: "IDR" });
   const [quickSearch, setQuickSearch] = useState("");
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const promises: Promise<any>[] = [
@@ -48,6 +59,41 @@ export default function DashboardPage() {
     nav(`/domains/register?search=${encodeURIComponent(quickSearch.trim())}`);
   }
 
+  useEffect(() => {
+    if (abortRef.current) abortRef.current.abort();
+    const trimmed = quickSearch.trim();
+    const baseKeyword = trimmed.includes(".") ? trimmed.split(".")[0] : trimmed;
+    if (baseKeyword.length < 2) {
+      setSuggestions([]);
+      setSuggestLoading(false);
+      return;
+    }
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setSuggestLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.get<any>(
+          `/domains/bulk-availability?keyword=${encodeURIComponent(baseKeyword)}`,
+          { signal: ctrl.signal }
+        );
+        const list = (Array.isArray(res) ? res : res?.data || []).slice(0, 5);
+        setSuggestions(list);
+      } catch (e: any) {
+        if (e?.name !== "AbortError") {
+          setSuggestions([]);
+          toast.error("Gagal memuat saran domain");
+        }
+      } finally {
+        if (!ctrl.signal.aborted) setSuggestLoading(false);
+      }
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [quickSearch]);
+
   if (loading) return <LoadingSpinner />;
 
   const active = domains.filter((d) => d.status === "active").length;
@@ -67,41 +113,83 @@ export default function DashboardPage() {
             {isCustomer ? "Manage your domains and registered services." : "Manage your reseller platform and customer accounts."}
           </p>
         </div>
-        <Link to="/domains/register">
-          <Button className="bg-black hover:bg-gray-800 text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-lg">
-            + Register New Domain
-          </Button>
-        </Link>
       </div>
 
       {/* Hero Quick Search for Customers */}
       {isCustomer && (
-        <Card className="p-6 bg-black text-white border-0 shadow-md rounded-2xl">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <h2 className="text-base font-bold text-white">Find & Register a New Domain</h2>
-            </div>
-            <p className="text-xs text-gray-300">Type a keyword or domain name to search real-time customer prices.</p>
-            <form onSubmit={handleQuickSearch} className="flex items-center gap-2 pt-1">
+        <Card className="p-5 bg-white border border-gray-200 shadow-sm rounded-xl">
+          <form onSubmit={handleQuickSearch} className="space-y-3">
+            <div className="flex flex-col sm:flex-row gap-2 w-full">
               <div className="relative flex-grow">
-                <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                 <input
                   type="text"
                   value={quickSearch}
                   onChange={(e) => setQuickSearch(e.target.value)}
                   placeholder="e.g. mybrand or mybrand.com"
-                  className="w-full pl-10 pr-4 py-2.5 bg-gray-900 border border-gray-800 text-white rounded-xl text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white font-mono shadow-inner"
+                  className="w-full pl-10 pr-4 h-11 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black font-mono shadow-xs"
                 />
               </div>
               <button
                 type="submit"
-                className="px-5 py-2.5 bg-white hover:bg-gray-100 text-black font-bold text-xs sm:text-sm rounded-xl transition-all shadow-xs shrink-0 flex items-center gap-1.5"
+                disabled={!quickSearch.trim()}
+                className="h-11 px-5 bg-black hover:bg-gray-800 active:bg-gray-900 text-white font-bold text-sm rounded-xl transition-colors shadow-xs disabled:opacity-50 flex items-center justify-center gap-2 shrink-0"
               >
-                Search <ArrowRight className="w-4 h-4" />
+                <Search className="w-4 h-4" />
+                <span>Search</span>
               </button>
-            </form>
-          </div>
+            </div>
+
+            {/* Inline suggestions */}
+            {quickSearch.trim().length >= 2 && (
+              <div className="pt-1">
+                {suggestLoading && (
+                  <div className="flex flex-wrap gap-2" aria-busy="true">
+                    {[0, 1, 2, 3, 4].map((i) => (
+                      <div
+                        key={i}
+                        className="h-8 w-32 bg-gray-100 rounded-full animate-pulse"
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {!suggestLoading && suggestions.length === 0 && (
+                  <p className="text-xs text-gray-500">
+                    Tidak ada hasil untuk "{quickSearch.trim()}".
+                  </p>
+                )}
+
+                {!suggestLoading && suggestions.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {suggestions.map((s: any) => {
+                      const avail = s.available !== false;
+                      const label = s.domain || s.tld;
+                      return (
+                        <button
+                          key={s.domain}
+                          type="button"
+                          onClick={() => nav(`/domains/register?search=${encodeURIComponent(s.domain)}`)}
+                          className={`group inline-flex items-center gap-2 px-3 h-8 rounded-full border text-xs font-semibold transition-colors ${
+                            avail
+                              ? "border-gray-200 hover:border-black hover:bg-gray-50 text-gray-900"
+                              : "border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed"
+                          }`}
+                          disabled={!avail}
+                          title={avail ? `Daftarkan ${s.domain}` : `${s.domain} tidak tersedia`}
+                        >
+                          <span className="font-mono">{label}</span>
+                          <span className={avail ? "text-gray-500" : "text-gray-400"}>
+                            {avail ? (s.price ? fmtPrice(s.price) : "Lihat harga") : "Unavailable"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </form>
         </Card>
       )}
 
