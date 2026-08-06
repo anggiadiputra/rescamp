@@ -14,6 +14,9 @@ const envVars = {
   SUMOPOD_WEBHOOK_TOKEN: process.env.SUMOPOD_WEBHOOK_TOKEN || "",
   SUMOPOD_WEBHOOK_SECRET: process.env.SUMOPOD_WEBHOOK_SECRET || "",
   LIQUID_BASE_URL: process.env.LIQUID_BASE_URL || "https://api.domainsas.com:443/v1/",
+  KIRISAN_API_URL: process.env.KIRISAN_API_URL || "https://api.kirisan.com/v1",
+  FONNTE_API_URL: process.env.FONNTE_API_URL || "https://api.fonnte.com",
+  TURNSTILE_VERIFY_URL: process.env.TURNSTILE_VERIFY_URL || "https://challenges.cloudflare.com/turnstile/v0/siteverify",
   APP_URL: process.env.APP_URL || "http://localhost:5173",
 } as const;
 

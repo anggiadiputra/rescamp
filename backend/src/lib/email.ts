@@ -1,11 +1,13 @@
 import { db } from "../db";
 import { appSettings } from "../db/schema";
+import { env } from "../config/env";
 
 async function getKirisanConfig() {
   const rows = await db.select().from(appSettings);
   const map: Record<string, string> = {};
   for (const r of rows) map[r.key] = r.value || "";
   return {
+    apiUrl: map.kirisan_api_url || env.KIRISAN_API_URL,
     token: map.kirisan_token || "",
     channelKey: map.kirisan_channel_key || "",
     templateId: map.kirisan_template_id || "",
@@ -44,7 +46,7 @@ export async function sendEmail(to: string, type: "login_otp" | "register_otp" |
     content: { email: { template: Number(templateId) || 1 } },
   };
 
-  const res = await fetch("https://api.kirisan.com/v1/send", {
+  const res = await fetch(`${cfg.apiUrl}/send`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${cfg.token}`,

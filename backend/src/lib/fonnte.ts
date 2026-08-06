@@ -1,15 +1,19 @@
 import { db } from "../db";
 import { appSettings } from "../db/schema";
+import { env } from "../config/env";
 
-async function getFonnteToken(): Promise<string> {
+async function getFonnteConfig(): Promise<{ token: string; apiUrl: string }> {
   const rows = await db.select().from(appSettings);
   const map: Record<string, string> = {};
   for (const r of rows) map[r.key] = r.value || "";
-  return map.fonnte_token || "";
+  return {
+    token: map.fonnte_token || "",
+    apiUrl: map.fonnte_api_url || env.FONNTE_API_URL,
+  };
 }
 
 export async function checkWhatsApp(phone: string): Promise<{ registered: boolean }> {
-  const token = await getFonnteToken();
+  const { token, apiUrl } = await getFonnteConfig();
   if (!token) {
     console.warn("[fonnte] Token not configured, skipping WA check");
     return { registered: false };
@@ -21,7 +25,7 @@ export async function checkWhatsApp(phone: string): Promise<{ registered: boolea
   if (!normalized.startsWith("62")) normalized = "62" + normalized;
 
   try {
-    const res = await fetch("https://api.fonnte.com/device", {
+    const res = await fetch(`${apiUrl}/device`, {
       method: "POST",
       headers: {
         Authorization: token,

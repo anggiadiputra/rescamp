@@ -2,6 +2,7 @@ import { db } from "../db";
 import { appSettings } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { AppError } from "./error";
+import { env } from "../config/env";
 
 export async function verifyTurnstileToken(token?: string, remoteip?: string): Promise<boolean> {
   // Retrieve settings
@@ -13,6 +14,7 @@ export async function verifyTurnstileToken(token?: string, remoteip?: string): P
 
   const isEnabled = settings.turnstile_enabled === "true";
   const secretKey = settings.turnstile_secret_key?.trim();
+  const verifyUrl = settings.turnstile_verify_url || env.TURNSTILE_VERIFY_URL;
 
   // If Turnstile is not enabled or secret key is missing, bypass verification
   if (!isEnabled || !secretKey) {
@@ -29,7 +31,7 @@ export async function verifyTurnstileToken(token?: string, remoteip?: string): P
     formData.append("response", token);
     if (remoteip) formData.append("remoteip", remoteip);
 
-    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+    const res = await fetch(verifyUrl, {
       method: "POST",
       body: formData,
     });

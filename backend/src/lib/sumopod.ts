@@ -37,7 +37,7 @@ export class SumopodClient {
    */
   async createPayment(options: CreatePaymentOptions): Promise<SumopodPaymentResponse> {
     // Return URLs MUST point to frontend dashboard (CORS_ORIGIN e.g. https://dash.ekstensi.id), not backend API (APP_URL)
-    let frontendUrl = (env.CORS_ORIGIN || "https://dash.ekstensi.id").trim().replace(/\/$/, "");
+    let frontendUrl = env.CORS_ORIGIN.trim().replace(/\/$/, "");
     if (frontendUrl.startsWith("http://")) {
       frontendUrl = frontendUrl.replace(/^http:\/\//, "https://");
     } else if (!frontendUrl.startsWith("https://")) {

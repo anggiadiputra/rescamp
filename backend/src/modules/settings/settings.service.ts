@@ -14,6 +14,7 @@ export interface SettingsData {
 
   // Email Gateway
   email_provider?: "kirisan" | "smtp" | "brevo_api";
+  kirisan_api_url?: string;
   kirisan_token?: string;
   kirisan_channel_key?: string;
   kirisan_template_id?: string;
@@ -34,6 +35,7 @@ export interface SettingsData {
   theme_preset?: string;
 
   // WA Fonnte
+  fonnte_api_url?: string;
   fonnte_token?: string;
   fonnte_sender?: string;
   fonnte_notify_order?: boolean;
@@ -59,6 +61,7 @@ export interface SettingsData {
   turnstile_enabled?: boolean;
   turnstile_site_key?: string;
   turnstile_secret_key?: string;
+  turnstile_verify_url?: string;
 
   // Tax / PPN Configuration
   tax_enabled?: boolean;
@@ -75,6 +78,7 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   og_image_url: "",
 
   email_provider: "kirisan",
+  kirisan_api_url: env.KIRISAN_API_URL,
   kirisan_token: "",
   kirisan_channel_key: "",
   kirisan_template_id: "",
@@ -93,17 +97,18 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   sidebar_color: "#ffffff",
   theme_preset: "monochrome",
 
+  fonnte_api_url: env.FONNTE_API_URL,
   fonnte_token: "",
   fonnte_sender: "",
   fonnte_notify_order: "true",
   fonnte_notify_expiry: "true",
 
-  sumopod_api_key: env.SUMOPOD_API_KEY || "",
-  sumopod_base_url: env.SUMOPOD_PAYMENT_URL || "https://api.sumopod.com/v1",
-  sumopod_webhook_token: env.SUMOPOD_WEBHOOK_TOKEN || "",
-  sumopod_webhook_secret: env.SUMOPOD_WEBHOOK_SECRET || "",
-  sumopod_success_url: `${env.CORS_ORIGIN || "https://dash.ekstensi.id"}/billing?status=success`,
-  sumopod_cancel_url: `${env.CORS_ORIGIN || "https://dash.ekstensi.id"}/billing?status=cancel`,
+  sumopod_api_key: env.SUMOPOD_API_KEY,
+  sumopod_base_url: env.SUMOPOD_PAYMENT_URL,
+  sumopod_webhook_token: env.SUMOPOD_WEBHOOK_TOKEN,
+  sumopod_webhook_secret: env.SUMOPOD_WEBHOOK_SECRET,
+  sumopod_success_url: `${env.CORS_ORIGIN}/billing?status=success`,
+  sumopod_cancel_url: `${env.CORS_ORIGIN}/billing?status=cancel`,
 
   s3_endpoint: "",
   s3_region: "us-east-1",
@@ -115,6 +120,7 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   turnstile_enabled: "false",
   turnstile_site_key: "",
   turnstile_secret_key: "",
+  turnstile_verify_url: env.TURNSTILE_VERIFY_URL,
 
   tax_enabled: "false",
   tax_rate: "11",
@@ -218,6 +224,7 @@ export async function testKirisanConnection(payload: {
   const token = payload.kirisan_token || settings.kirisan_token;
   const channelKey = payload.kirisan_channel_key || settings.kirisan_channel_key;
   const templateId = payload.kirisan_template_id || settings.kirisan_template_id || settings.kirisan_login_otp_template_id;
+  const apiUrl = settings.kirisan_api_url || env.KIRISAN_API_URL;
 
   if (!token || !channelKey) {
     throw new Error("Kirisan Token dan Channel Key wajib diisi untuk melakukan pengujian.");
@@ -245,7 +252,7 @@ export async function testKirisanConnection(payload: {
     },
   };
 
-  const res = await fetch("https://api.kirisan.com/v1/send", {
+  const res = await fetch(`${apiUrl}/send`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${token}`,

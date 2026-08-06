@@ -33,6 +33,7 @@ export default function SettingsPage() {
 
     // Email Gateway
     email_provider: "kirisan",
+    kirisan_api_url: "",
     kirisan_token: "",
     kirisan_channel_key: "",
     kirisan_template_id: "",
@@ -53,6 +54,7 @@ export default function SettingsPage() {
     theme_preset: "monochrome",
 
     // WA Fonnte
+    fonnte_api_url: "",
     fonnte_token: "",
     fonnte_sender: "",
     fonnte_notify_order: true,
@@ -78,6 +80,7 @@ export default function SettingsPage() {
     turnstile_enabled: false,
     turnstile_site_key: "",
     turnstile_secret_key: "",
+    turnstile_verify_url: "",
 
     // Tax / PPN Configuration
     tax_enabled: false,
@@ -293,6 +296,16 @@ export default function SettingsPage() {
                   <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
                     <p className="font-semibold">💡 Catatan Kirisan API:</p>
                     <p className="mt-0.5">Sistem akan menggunakan template ID dari Dashboard Kirisan. Jika Kirisan gagal/unconfigured, otomatis fallback ke SMTP.</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Kirisan API URL (opsional, override)</label>
+                    <input
+                      type="url"
+                      value={form.kirisan_api_url || ""}
+                      onChange={(e) => setForm({ ...form, kirisan_api_url: e.target.value })}
+                      className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white font-mono text-xs"
+                      placeholder="https://api.kirisan.com/v1"
+                    />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Kirisan Account Token</label>
@@ -521,6 +534,16 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-3.5">
                 <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Fonnte API URL (opsional, override)</label>
+                  <input
+                    type="url"
+                    value={form.fonnte_api_url || ""}
+                    onChange={(e) => setForm({ ...form, fonnte_api_url: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white font-mono text-xs"
+                    placeholder="https://api.fonnte.com"
+                  />
+                </div>
+                <div>
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Fonnte API Token</label>
                   <SecretInput
                     value={form.fonnte_token || ""}
@@ -738,6 +761,17 @@ export default function SettingsPage() {
                         placeholder="0x4AAAAAA..."
                       />
                       <p className="text-[10px] text-gray-400 mt-1">Key rahasia untuk verifikasi token CAPTCHA pada server backend Cloudflare siteverify API.</p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Turnstile Verify URL (opsional, override)</label>
+                      <input
+                        type="url"
+                        value={form.turnstile_verify_url || ""}
+                        onChange={(e) => setForm({ ...form, turnstile_verify_url: e.target.value })}
+                        className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white font-mono text-xs"
+                        placeholder="https://challenges.cloudflare.com/turnstile/v0/siteverify"
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1">Endpoint siteverify. Kosongkan untuk default.</p>
                     </div>
                   </div>
                 )}

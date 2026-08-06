@@ -8,7 +8,7 @@ export class LiquidClient {
   private authHeader: string;
 
   constructor(resellerId: string, apiKey: string, baseURL?: string) {
-    const rawUrl = baseURL || env.LIQUID_BASE_URL || "https://api.domainsas.com/v1";
+    const rawUrl = baseURL || env.LIQUID_BASE_URL;
     this.baseURL = rawUrl.endsWith("/") ? rawUrl.slice(0, -1) : rawUrl;
     this.authHeader = "Basic " + btoa(`${resellerId}:${apiKey}`);
   }
