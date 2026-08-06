@@ -458,10 +458,10 @@ export default function BillingPage() {
                           {(() => {
                             const fallback = t.description || `${t.type === "domain" ? "Domain Registration Order" : "Service Order"}`;
                             if ((t as any).isWholesale || (t as any).invoiceType === "wholesale") return fallback;
-                            if (t.type !== "register" && t.type !== "transfer" && t.type !== "renew") return fallback;
+                            if (t.type !== "register" && t.type !== "transfer" && t.type !== "renew" && t.type !== "privacy") return fallback;
                             const info = getTxnInfo(t);
                             if (!info.registerDate || !info.expiryDate) return fallback;
-                            const typeLabel = t.type === "register" ? "Domain register" : t.type === "transfer" ? "Domain transfer" : "Domain renewal";
+                            const typeLabel = t.type === "register" ? "Domain register" : t.type === "transfer" ? "Domain transfer" : t.type === "renew" ? "Domain renewal" : "WHOIS Privacy";
                             return `${typeLabel} - ${info.domainName} (${info.years} yr) - ${info.registerDate} → ${info.expiryDate}`;
                           })()}
                         </td>
@@ -514,10 +514,10 @@ export default function BillingPage() {
                       {(() => {
                         const fallback = t.description || "Service Order";
                         if ((t as any).isWholesale || (t as any).invoiceType === "wholesale") return fallback;
-                        if (t.type !== "register" && t.type !== "transfer" && t.type !== "renew") return fallback;
+                        if (t.type !== "register" && t.type !== "transfer" && t.type !== "renew" && t.type !== "privacy") return fallback;
                         const info = getTxnInfo(t);
                         if (!info.registerDate || !info.expiryDate) return fallback;
-                        const typeLabel = t.type === "register" ? "Domain register" : t.type === "transfer" ? "Domain transfer" : "Domain renewal";
+                        const typeLabel = t.type === "register" ? "Domain register" : t.type === "transfer" ? "Domain transfer" : t.type === "renew" ? "Domain renewal" : "WHOIS Privacy";
                         return `${typeLabel} - ${info.domainName} (${info.years} yr) - ${info.registerDate} → ${info.expiryDate}`;
                       })()}
                     </p>
@@ -713,10 +713,10 @@ export default function BillingPage() {
                         {(() => {
                           const fallback = detail.description || "Domain Registration Order";
                           if ((detail as any).isWholesale || (detail as any).invoiceType === "wholesale") return fallback;
-                          if (detail.type !== "register" && detail.type !== "transfer" && detail.type !== "renew") return fallback;
+                          if (detail.type !== "register" && detail.type !== "transfer" && detail.type !== "renew" && detail.type !== "privacy") return fallback;
                           const info = getTxnInfo(detail);
                           if (!info.registerDate || !info.expiryDate) return fallback;
-                          const typeLabel = detail.type === "register" ? "Domain register" : detail.type === "transfer" ? "Domain transfer" : "Domain renewal";
+                          const typeLabel = detail.type === "register" ? "Domain register" : detail.type === "transfer" ? "Domain transfer" : detail.type === "renew" ? "Domain renewal" : "WHOIS Privacy";
                           return `${typeLabel} - ${info.domainName} (${info.years} yr) - ${info.registerDate} → ${info.expiryDate}`;
                         })()}
                       </p>

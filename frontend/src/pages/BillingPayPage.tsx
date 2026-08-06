@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Card, Button, LoadingSpinner } from "../components/ui";
 import { api } from "../lib/api";
@@ -8,10 +8,12 @@ export default function BillingPayPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [data, setData] = useState<{
     id: number;
     orderId: string;
     domainName: string;
+    type: string;
     amount: number;
     fee: number;
     paymentLinkUrl: string;
@@ -24,46 +26,44 @@ export default function BillingPayPage() {
   const [copied, setCopied] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const refresh = useCallback(async (isInitial = false) => {
     if (!orderId) return;
-    api.get(`/payments/status/${orderId}`)
-      .then((res: any) => {
-        console.groupCollapsed("[BillingPayPage] status fetch", orderId);
-        console.log("res:", res);
-        const d = res?.data || res;
-        if (!d || (!d.id && !d.orderId)) {
-          const msg = `Response tanpa id/orderId (keys: ${JSON.stringify(Object.keys(d || {}))})`;
-          console.warn(msg);
-          setFetchError(msg);
-          console.groupEnd();
-          return;
-        }
-        setData({
-          id: d.id,
-          orderId: d.orderId || d.metadata?.orderId || orderId,
-          domainName: d.metadata?.domainName || d.description || "Domain Order",
-          amount: Number(d.amount || 0),
-          fee: Number(d.metadata?.fee || 0),
-          paymentLinkUrl: d.paymentLinkUrl || d.metadata?.paymentLinkUrl || "",
-          expiresAt: d.expiresAt || d.metadata?.expiresAt || "",
-          status: d.status,
-          currency: d.currency || "IDR",
-        });
-        if (d.expiresAt || d.metadata?.expiresAt) {
-          const exp = d.expiresAt || d.metadata.expiresAt;
-          const targetTime = new Date(exp).getTime();
-          const remaining = Math.max(0, Math.floor((targetTime - Date.now()) / 1000));
-          setTimeLeft(remaining);
-          setIsExpired(remaining <= 0);
-        }
-        console.groupEnd();
-      })
-      .catch((err: any) => {
-        console.error("[BillingPayPage] status fetch failed:", err);
-        setFetchError(err?.message || `HTTP ${err?.status || "?"}`);
-      })
-      .finally(() => setLoading(false));
+    if (isInitial) setLoading(true); else setRefreshing(true);
+    try {
+      const res: any = await api.get(`/payments/status/${orderId}`);
+      const d = res?.data || res;
+      if (!d || (!d.id && !d.orderId)) {
+        setFetchError(`Response tanpa id/orderId (keys: ${JSON.stringify(Object.keys(d || {}))})`);
+        return;
+      }
+      setData({
+        id: d.id,
+        orderId: d.orderId || d.metadata?.orderId || orderId,
+        domainName: d.metadata?.domainName || d.description || "Domain Order",
+        type: d.type || d.metadata?.type || "",
+        amount: Number(d.amount || 0),
+        fee: Number(d.metadata?.fee || 0),
+        paymentLinkUrl: d.paymentLinkUrl || d.metadata?.paymentLinkUrl || "",
+        expiresAt: d.expiresAt || d.metadata?.expiresAt || "",
+        status: d.status,
+        currency: d.currency || "IDR",
+      });
+      if (d.expiresAt || d.metadata?.expiresAt) {
+        const exp = d.expiresAt || d.metadata.expiresAt;
+        const targetTime = new Date(exp).getTime();
+        const remaining = Math.max(0, Math.floor((targetTime - Date.now()) / 1000));
+        setTimeLeft(remaining);
+        setIsExpired(remaining <= 0);
+      }
+      setFetchError(null);
+    } catch (err: any) {
+      setFetchError(err?.message || `HTTP ${err?.status || "?"}`);
+    } finally {
+      if (isInitial) setLoading(false); else setRefreshing(false);
+    }
   }, [orderId]);
+
+  useEffect(() => { refresh(true); }, [refresh]);
 
   useEffect(() => {
     if (isExpired) return;
@@ -201,7 +201,7 @@ export default function BillingPayPage() {
             </div>
             <div className="p-4 space-y-2">
               <div className="flex justify-between items-center text-xs">
-                <span className="text-gray-500">Subtotal Domain</span>
+                <span className="text-gray-500">{data.type === "privacy" ? "Subtotal WHOIS Privacy" : "Subtotal Domain"}</span>
                 <span className="font-mono font-semibold text-gray-700">{fmt(data.amount)}</span>
               </div>
               {data.fee > 0 && (
@@ -240,11 +240,12 @@ export default function BillingPayPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => window.location.reload()}
-                  className="py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                  onClick={() => refresh(false)}
+                  disabled={refreshing}
+                  className="py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  Cek Status
+                  {refreshing ? "Memuat…" : "Cek Status"}
                 </button>
               </div>
             </div>

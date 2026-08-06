@@ -396,6 +396,29 @@ export async function getDomain(userParam: any, lookup: string | number) {
       reseller = u || null;
     }
 
+    // Defensive: if local column says privacy=0 but Resellercamp reports it active (race between
+    // pre-existing row and bundled-register webhook), probe live once and reconcile. Read-only on
+    // Resellercamp side; only flips the local column when upstream confirms. Single try/catch so a
+    // transient upstream failure never breaks the read.
+    if (!domain.privacyProtection && domain.liquidOrderId) {
+      try {
+        const liquid = await getLiquid(userParam);
+        const live: any = await liquid.getPrivacyProtection(String(domain.liquidOrderId));
+        const liveFlag = live && (
+          live.privacy_protection === "true" ||
+          live.privacy_protection === true ||
+          live === true ||
+          (typeof live === "object" && (live.status === "active" || live.data?.privacy_protection === "true"))
+        );
+        if (liveFlag) {
+          await db.update(domains).set({ privacyProtection: 1 }).where(eq(domains.id, domain.id));
+          domain.privacyProtection = 1;
+        }
+      } catch {
+        // ignore — fall back to local column
+      }
+    }
+
     return {
       ...domain,
       _local: true,
