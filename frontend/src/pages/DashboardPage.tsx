@@ -20,7 +20,6 @@ export default function DashboardPage() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState({ balance: "0.00", currency: "IDR" });
-  const [quickSearch, setQuickSearch] = useState("");
   useEffect(() => {
     const promises: Promise<any>[] = [
       // All roles: fetch live Resellercamp for dashboard counts to match dashboard reseller.
