@@ -40,6 +40,22 @@ export class LiquidClient {
         const errMsg = data.message || data.error || data.error_message || data.description || text || "LIQUID API error";
         throw new AppError(errMsg, status);
       }
+
+      // Detect silent failures: HTTP 200 but response is just {"message":""} with no payload keys.
+      // Resellercamp returns this envelope when the action did not actually succeed
+      // (e.g. sandbox/test accounts lacking permission, missing prerequisite contact, etc.).
+      // DELETE is exempt because a successful delete legitimately returns nothing.
+      if (method !== "DELETE") {
+        const keys = data && typeof data === "object" ? Object.keys(data) : [];
+        const isEmptyEnvelope = keys.length === 1 && keys[0] === "message" && !data.message;
+        if (isEmptyEnvelope) {
+          throw new AppError(
+            `Resellercamp returned an empty response for ${method} ${path}. ` +
+            `This usually means the action was rejected (sandbox account limitation, missing prerequisite, or invalid credentials).`,
+            502
+          );
+        }
+      }
       return data;
     } catch (err: any) {
       if (err instanceof AppError) {

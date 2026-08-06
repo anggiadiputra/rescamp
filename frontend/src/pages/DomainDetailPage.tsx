@@ -53,6 +53,7 @@ export default function DomainDetailPage() {
   const [suspendLoading, setSuspendLoading] = useState(false);
   const [lockLoading, setLockLoading] = useState(false);
   const [theftLoading, setTheftLoading] = useState(false);
+  const [privacyBuying, setPrivacyBuying] = useState(false);
 
   const fetchDomain = useCallback(async () => {
     setLoading(true);
@@ -251,6 +252,28 @@ export default function DomainDetailPage() {
     setDeleteLoading(false);
   }
 
+  async function doBuyPrivacy() {
+    setPrivacyBuying(true);
+    try {
+      const res: any = await api.post(`/domains/${id}/privacy/buy`, {});
+      const paymentInfo = res?.data || res;
+      const orderId = paymentInfo?.orderId || paymentInfo?.order_id;
+      const paymentLinkUrl = paymentInfo?.paymentLinkUrl || paymentInfo?.payment_link_url;
+
+      if (orderId) {
+        nav(`/billing/pay/${orderId}`);
+      } else if (paymentLinkUrl) {
+        window.location.href = paymentLinkUrl;
+      } else {
+        toast("Order WHOIS Privacy berhasil dibuat");
+        await fetchDomain();
+      }
+    } catch (e: any) {
+      toast(e.message || "Gagal membuat order WHOIS Privacy", "error");
+    }
+    setPrivacyBuying(false);
+  }
+
   function handleCopyNs() {
     const list = domain?.nameservers?.length ? domain.nameservers.join("\n") : "ns1.liquid.net\nns2.liquid.net";
     navigator.clipboard.writeText(list);
@@ -274,6 +297,7 @@ export default function DomainDetailPage() {
 
 
   const activeNs = domain.nameservers?.length ? domain.nameservers : ["ns1.liquid.net", "ns2.liquid.net"];
+  const isIdDomain = (domain.tld || "").toLowerCase().endsWith("id");
 
   return (
     <div className="space-y-6">
@@ -343,11 +367,28 @@ export default function DomainDetailPage() {
               <span className="text-gray-500 block text-xs font-medium">Durasi Kontrak</span>
               <span className="font-semibold text-gray-900">{domain.years} Tahun</span>
             </div>
-            <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
+            <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2">
               <span className="text-gray-500 block text-xs font-medium">WHOIS Privacy</span>
               <span className={`font-bold ${domain.privacyProtection ? "text-emerald-600" : "text-gray-500"}`}>
                 {domain.privacyProtection ? "✓ Aktif" : "Non-Aktif"}
               </span>
+              {!domain.privacyProtection && !isIdDomain && (
+                <button
+                  onClick={doBuyPrivacy}
+                  disabled={privacyBuying || domain.status === "suspended"}
+                  className={`mt-1 w-full text-xs font-bold rounded-lg py-2 px-3 transition-colors flex items-center justify-center gap-1.5 ${
+                    domain.status === "suspended"
+                      ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                      : "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  {privacyBuying ? "Memproses..." : "Beli WHOIS Protection"}
+                </button>
+              )}
+              {isIdDomain && (
+                <p className="text-[10px] text-gray-400 italic">Tidak tersedia untuk domain .id</p>
+              )}
             </div>
             <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
               <span className="text-gray-500 block text-xs font-medium">Transfer Lock</span>

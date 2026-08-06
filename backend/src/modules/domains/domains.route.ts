@@ -29,7 +29,7 @@ export const domainRoutes = new Elysia({ prefix: "/domains" })
       .post("/:id/restore", h.restore as any, { detail: { tags: ["Domains"], summary: "Restore domain" } })
       .put("/:id/suspended", h.suspend as any, { beforeHandle: resellerGuard, body: suspendSchema, detail: { tags: ["Domains"], summary: "Suspend domain (reseller only)" } })
       .delete("/:id/suspended", h.unsuspend as any, { beforeHandle: resellerGuard, detail: { tags: ["Domains"], summary: "Unsuspend domain (reseller only)" } })
-      .delete("/:id", h.remove as any, { detail: { tags: ["Domains"], summary: "Delete domain" } })
+      .delete("/:id", h.remove as any, { beforeHandle: resellerGuard, detail: { tags: ["Domains"], summary: "Delete domain (reseller only)" } })
       // Mount DNS + Forwarding sub-routes under :id
       .group("/:id", (app) => app.use(dnsRoutes).use(forwardingRoutes))
   );

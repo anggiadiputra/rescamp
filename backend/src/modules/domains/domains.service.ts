@@ -208,6 +208,45 @@ export async function orderRenewDomain(
   });
 }
 
+export async function orderBuyPrivacy(
+  user: { id: number; resellerId: string | null; apiKey: string | null },
+  userId: number,
+  domainId: number
+) {
+  const domain = await getDomain(userId, domainId);
+  const tldKey = domain.tld.toLowerCase();
+
+  if (tldKey.endsWith("id")) {
+    throw new AppError("WHOIS privacy tidak tersedia untuk domain .id", 400);
+  }
+  if (domain.privacyProtection) {
+    throw new AppError("WHOIS privacy sudah aktif untuk domain ini", 409);
+  }
+
+  const liquid = await getLiquid(user);
+
+  let privacyPrice = 70000;
+  try {
+    const rawCustPrices = await liquid.getCustomerPrices();
+    const prices = formatCustomerPrices(rawCustPrices);
+    const pInfo = prices[tldKey];
+    if (pInfo && pInfo.privacy_protect) {
+      const pp = Number(pInfo.privacy_protect);
+      privacyPrice = pp < 1000 ? pp * 1000 : pp;
+    }
+  } catch (e) {}
+
+  return createDomainOrderPayment({
+    userId,
+    type: "privacy",
+    domainName: domain.domainName,
+    tld: domain.tld,
+    domainId: domain.id,
+    customerId: domain.customerId || undefined,
+    amount: privacyPrice,
+  });
+}
+
 export async function registerDomain(
   user: { id?: number; resellerId: string | null; apiKey: string | null },
   data: Record<string, any>
@@ -662,9 +701,12 @@ export async function toggleSuspend(user: { id?: number; resellerId: string | nu
   return { status: desiredStatus, reason: suspend ? (reason || null) : null };
 }
 
-export async function deleteDomainRecord(userId: number, domainId: number) {
-  const domain = await getDomain(userId, domainId);
-  if (domain.status === "active") throw new AppError("Cannot delete active domain. Suspend first.", 400);
+export async function deleteDomainRecord(user: { id: number; resellerId: string | null; apiKey: string | null; role?: string | null; email?: string | null }, domainId: number) {
+  const domain = await getDomain(user, domainId);
+  // Per LIQUID docs (DELETE /v1/domains/{domain_id}), deletion is allowed regardless of status.
+  // We delete the wholesale order first; only then purge the local cache row.
+  const liquid = await getLiquid(user);
+  await liquid.deleteDomain(String(domain.liquidOrderId || domain.domainName));
   await db.delete(domains).where(eq(domains.id, domain.id));
 }
 

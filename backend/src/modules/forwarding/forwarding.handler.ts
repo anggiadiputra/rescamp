@@ -1,4 +1,5 @@
 import * as svc from "./forwarding.service";
+import * as domainsSvc from "../domains/domains.service";
 import { db } from "../../db";
 import { users } from "../../db/schema";
 import { eq } from "drizzle-orm";
@@ -74,6 +75,9 @@ export async function disablePrivacy(ctx: any) {
 
 export async function buyPrivacy(ctx: any) {
   const { user, creds } = await getResellerCreds(ctx);
-  const result = await svc.buyPrivacy(creds, user.id, parseInt(ctx.params.id));
+  // Create a Sumopod payment link instead of charging reseller balance directly.
+  // On payment completion (webhook), svc.buyPrivacy is invoked to actually
+  // purchase privacy on Resellercamp and flip the local flag.
+  const result = await domainsSvc.orderBuyPrivacy(creds as any, user.id, parseInt(ctx.params.id));
   return { data: result };
 }

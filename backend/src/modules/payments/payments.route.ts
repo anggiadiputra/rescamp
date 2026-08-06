@@ -17,13 +17,18 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
       const tokenHeader = headers["x-webhook-token"] as string;
 
       // Verify authentication via token header or Svix HMAC signature
-      const isTokenValid = sumopodClient.verifyWebhookToken(tokenHeader);
+      const isTokenValid = await sumopodClient.verifyWebhookToken(tokenHeader);
       let isSigValid = false;
 
-      if (process.env.SUMOPOD_WEBHOOK_SECRET && svixId && svixTimestamp && svixSignature) {
+      // Read HMAC secret fresh from DB/env (not from a cached singleton)
+      const { getSystemSettings } = await import("../../modules/settings/settings.service");
+      const settings = await getSystemSettings().catch(() => ({} as Record<string, string>));
+      const webhookSecret = settings.sumopod_webhook_secret || process.env.SUMOPOD_WEBHOOK_SECRET || "";
+
+      if (webhookSecret && svixId && svixTimestamp && svixSignature) {
         const rawBody = typeof body === "string" ? body : JSON.stringify(body);
         isSigValid = sumopodClient.verifyWebhookSignature(
-          process.env.SUMOPOD_WEBHOOK_SECRET,
+          webhookSecret,
           svixId,
           svixTimestamp,
           svixSignature,

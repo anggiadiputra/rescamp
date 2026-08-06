@@ -17,6 +17,7 @@ out
 **/.env.*
 !**/.env.example
 **/.env.test
+!**/.env.test.example
 
 # OS & IDE metadata
 .DS_Store

@@ -180,7 +180,7 @@ export async function unsuspend(ctx: any) {
 
 export async function remove(ctx: any) {
   const user = await getUser(ctx);
-  await svc.deleteDomainRecord(user.id, parseInt(ctx.params.id));
+  await svc.deleteDomainRecord(user, parseInt(ctx.params.id));
   ctx.set.status = 204;
   return;
 }

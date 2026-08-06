@@ -7,7 +7,7 @@ import { AppError } from "../../lib/error";
 
 export interface CreateDomainOrderPayload {
   userId: number;
-  type: "register" | "transfer" | "renew";
+  type: "register" | "transfer" | "renew" | "privacy";
   domainName: string;
   tld?: string;
   years?: number;
@@ -118,12 +118,54 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
   }
 
   if (!targetLiquidCustomerId) {
-    throw new AppError("Resellercamp Customer ID could not be resolved. Please set up customer first.", 400);
+    if (payload.type === "renew") {
+      // Last-resort for renew: the Resellercamp renewDomain(domainId, ...) call itself
+      // does not require customer_id, so we try one more email-match against the
+      // reseller's full customer list (which scopes across the whole reseller account,
+      // unlike the per-customer lookup above) and self-heal the local row.
+      try {
+        const listRes = await liquid.listCustomers();
+        const list = Array.isArray(listRes) ? listRes : listRes?.data || listRes?.customers || [];
+        const ownerEmail = (custRecord?.email || user.email || "").toLowerCase();
+        const match = list.find((c: any) =>
+          String(c.email || c.customer_email || "").toLowerCase() === ownerEmail
+        );
+        if (match) {
+          targetLiquidCustomerId = String(match.customer_id || match.id || "");
+          if (custRecord && targetLiquidCustomerId) {
+            await db.update(customers)
+              .set({ liquidCustomerId: targetLiquidCustomerId })
+              .where(eq(customers.id, custRecord.id));
+            console.log(`[payments] renew: self-healed liquidCustomerId=${targetLiquidCustomerId} for customer=${custRecord.id}`);
+          }
+        }
+      } catch (e: any) {
+        console.warn("[payments] renew: listCustomers fallback failed:", e?.message);
+      }
+      if (!targetLiquidCustomerId) {
+        // renewDomain doesn't require customer_id; downstream listCustomerTransactions
+        // fallback is already wrapped in try/catch, so proceeding is safe.
+        console.warn(`[payments] renew: no Resellercamp customer resolved for user=${user.id} domain=${fullDomain}; proceeding anyway`);
+      }
+    } else {
+      throw new AppError("Resellercamp Customer ID could not be resolved. Please set up customer first.", 400);
+    }
   }
 
   // --- Step 2: Send order to Resellercamp with KeepInvoice (creates pending invoice) ---
+  // Privacy purchases don't support keep_invoice on Resellercamp — the actual
+  // buyPrivacyProtection call happens after Sumopod payment completes (in webhook).
   let liquidTransactionId: string | null = null;
   let liquidOrderId: string | null = null;
+
+  if (payload.type === "privacy") {
+    // Skip Resellercamp order creation — handled post-payment in webhook
+    // We still need a domainId in the payload to know which domain to apply privacy to
+    if (!payload.domainId) throw new AppError("Missing domain ID for privacy purchase", 400);
+    const [targetDomain] = await db.select().from(domains).where(eq(domains.id, payload.domainId));
+    if (!targetDomain) throw new AppError(`Domain ID ${payload.domainId} not found`, 404);
+    liquidOrderId = targetDomain.liquidOrderId ? String(targetDomain.liquidOrderId) : null;
+  }
 
   try {
     if (payload.type === "register") {
@@ -220,7 +262,8 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
   }
 
   // Guard: never let customer pay if Resellercamp invoice was not created
-  if (!liquidTransactionId) {
+  // Privacy purchases skip Resellercamp order creation (no keep_invoice support)
+  if (!liquidTransactionId && payload.type !== "privacy") {
     throw new AppError("Order domain berhasil dibuat tapi tidak mendapat ID invoice dari Resellercamp. Silakan coba lagi atau hubungi admin.", 502);
   }
 
@@ -279,6 +322,8 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
       customerId: validCustomerId,
       domainId: payload.domainId,
       expiresAt: formattedExpiresAt,
+      fee: sumopodRes.fee || 0,
+      netAmount: sumopodRes.net_amount || 0,
     }),
   };
 
@@ -537,7 +582,7 @@ export async function processWebhookPayload(payload: any) {
   try {
     if (liquidTransactionId && liquidCustomerId) {
       await liquid.payCustomerTransaction(liquidCustomerId, liquidTransactionId, true);
-    } else {
+    } else if (meta.type !== "privacy") {
       throw new Error(`Cannot pay Resellercamp invoice: liquidTransactionId=${liquidTransactionId}, liquidCustomerId=${liquidCustomerId}`);
     }
 
@@ -556,6 +601,17 @@ export async function processWebhookPayload(payload: any) {
           liquidOrderId: liquidOrderId ? String(liquidOrderId) : null,
           nameservers: meta.nameservers || [],
         }).onDuplicateKeyUpdate({ set: { domainName: sql`${domains.domainName}` } });
+      }
+    } else if (meta.type === "privacy") {
+      // Privacy purchases skip Resellercamp order creation — call buyPrivacyProtection now
+      const domainId = meta.domainId || tx.domainId;
+      if (domainId) {
+        const [targetDomain] = await db.select().from(domains).where(eq(domains.id, domainId));
+        if (targetDomain) {
+          const domainIdentifier = String(targetDomain.liquidOrderId || targetDomain.domainName);
+          await liquid.buyPrivacyProtection(domainIdentifier);
+          await db.update(domains).set({ privacyProtection: 1 }).where(eq(domains.id, domainId));
+        }
       }
     } else if (meta.type === "renew") {
       const domainId = meta.domainId || tx.domainId;

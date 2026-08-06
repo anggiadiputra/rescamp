@@ -1,6 +1,48 @@
 import crypto from "crypto";
 import { env } from "../config/env";
 import { AppError } from "./error";
+import { getSystemSettings } from "../modules/settings/settings.service";
+
+/**
+ * Read Sumopod credentials from DB (app_settings) with env fallback.
+ * DB values take precedence — env is fallback when DB row missing/empty.
+ * ponytail: per-call DB read; if hot path shows up, wrap with TTL cache.
+ */
+async function getSumopodConfig(): Promise<{ apiKey: string; baseUrl: string; webhookToken: string; webhookSecret: string }> {
+  let apiKey = "";
+  let apiKeySource: "db" | "env" | "none" = "none";
+  let baseUrl = env.SUMOPOD_PAYMENT_URL;
+  let webhookToken = "";
+  let webhookSecret = "";
+
+  try {
+    const settings = await getSystemSettings();
+    if (settings.sumopod_api_key) {
+      apiKey = String(settings.sumopod_api_key).trim();
+      apiKeySource = "db";
+    }
+    if (settings.sumopod_base_url) baseUrl = settings.sumopod_base_url;
+    if (settings.sumopod_webhook_token) webhookToken = settings.sumopod_webhook_token;
+    if (settings.sumopod_webhook_secret) webhookSecret = settings.sumopod_webhook_secret;
+  } catch (e) {
+    // fall through to env defaults
+  }
+
+  if (!apiKey) {
+    apiKey = (env.SUMOPOD_API_KEY || "").trim();
+    if (apiKey) apiKeySource = "env";
+  }
+  if (!baseUrl) baseUrl = env.SUMOPOD_PAYMENT_URL;
+
+  console.log(`[sumopod config] apiKey source=${apiKeySource} length=${apiKey.length} prefix=${apiKey.slice(0, 8)}…`);
+
+  return {
+    apiKey,
+    baseUrl: baseUrl.replace(/\/$/, ""),
+    webhookToken,
+    webhookSecret: webhookSecret || env.SUMOPOD_WEBHOOK_SECRET || "",
+  };
+}
 
 export interface CreatePaymentOptions {
   orderId: string;
@@ -24,18 +66,11 @@ export interface SumopodPaymentResponse {
 }
 
 export class SumopodClient {
-  private baseUrl: string;
-  private apiKey: string;
-
-  constructor() {
-    this.baseUrl = env.SUMOPOD_PAYMENT_URL.replace(/\/$/, "");
-    this.apiKey = env.SUMOPOD_API_KEY;
-  }
-
   /**
    * Create payment link via Sumopod API
    */
   async createPayment(options: CreatePaymentOptions): Promise<SumopodPaymentResponse> {
+    const cfg = await getSumopodConfig();
     // Return URLs MUST point to frontend dashboard (CORS_ORIGIN e.g. https://dash.ekstensi.id), not backend API (APP_URL)
     let frontendUrl = env.CORS_ORIGIN.trim().replace(/\/$/, "");
     if (frontendUrl.startsWith("http://")) {
@@ -58,11 +93,11 @@ export class SumopodClient {
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
-      const response = await fetch(`${this.baseUrl}/payments`, {
+      const response = await fetch(`${cfg.baseUrl}/payments`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Api-Key": this.apiKey,
+          "X-Api-Key": cfg.apiKey,
         },
         body: JSON.stringify(payload),
         signal: controller.signal,
@@ -137,10 +172,11 @@ export class SumopodClient {
    * Fetch payment details by payment_id
    */
   async getPayment(paymentId: string): Promise<any> {
+    const cfg = await getSumopodConfig();
     try {
-      const response = await fetch(`${this.baseUrl}/payments/${paymentId}`, {
+      const response = await fetch(`${cfg.baseUrl}/payments/${paymentId}`, {
         headers: {
-          "X-Api-Key": this.apiKey,
+          "X-Api-Key": cfg.apiKey,
         },
       });
       if (!response.ok) return null;
@@ -154,12 +190,13 @@ export class SumopodClient {
   /**
    * Verifies simple webhook token header
    */
-  verifyWebhookToken(receivedToken: string | undefined): boolean {
-    if (!env.SUMOPOD_WEBHOOK_TOKEN) {
-      // If no token is configured in env, permit in sandbox/development mode
+  async verifyWebhookToken(receivedToken: string | undefined): Promise<boolean> {
+    const cfg = await getSumopodConfig();
+    if (!cfg.webhookToken) {
+      // If no token is configured (DB nor env), permit in sandbox/development mode
       return true;
     }
-    return receivedToken === env.SUMOPOD_WEBHOOK_TOKEN;
+    return receivedToken === cfg.webhookToken;
   }
 }
 
