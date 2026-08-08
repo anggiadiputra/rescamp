@@ -6,7 +6,7 @@ import { AppError } from "../../lib/error";
 import { getDomain } from "../domains/domains.service";
 import { resolveCredsFromUser } from "../../lib/reseller-creds";
 
-function getLiquid(creds: { resellerId: string; apiKey: string }): LiquidClient {
+function getLiquid(creds: { resellerId?: string | null; apiKey?: string | null }): LiquidClient {
   return new LiquidClient(creds.resellerId || "", creds.apiKey || "");
 }
 

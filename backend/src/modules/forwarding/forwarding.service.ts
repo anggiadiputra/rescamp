@@ -5,7 +5,7 @@ import { domains } from "../../db/schema";
 import { eq, and, or } from "drizzle-orm";
 import { resolveCredsFromUser } from "../../lib/reseller-creds";
 
-function getLiquid(creds: { resellerId: string; apiKey: string }): LiquidClient {
+function getLiquid(creds: { resellerId?: string | null; apiKey?: string | null }): LiquidClient {
   return new LiquidClient(creds.resellerId || "", creds.apiKey || "");
 }
 

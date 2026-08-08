@@ -363,7 +363,7 @@ export async function getResellerData(userId: number) {
     const liquid = new LiquidClient(creds.resellerId, apiKey);
     try {
       const [acc, bal] = await Promise.all([
-        liquid.getReseller(user.resellerId).catch(() => null),
+        liquid.getReseller(creds.resellerId).catch(() => null),
         liquid.getBalance().catch(() => null),
       ]);
       account = acc;
