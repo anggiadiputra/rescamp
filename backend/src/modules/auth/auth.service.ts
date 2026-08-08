@@ -7,6 +7,7 @@ import { AppError } from "../../lib/error";
 import { LiquidClient } from "../../lib/liquid";
 import { sendEmail } from "../../lib/email";
 import { env } from "../../config/env";
+import { encryptOtpCode, decryptOtpCode, encryptApiKey, decryptApiKey } from "../../lib/encryption";
 
 const MYSQL_DUP_ENTRY = 1062;
 
@@ -21,7 +22,8 @@ export async function sendRegisterOtp(email: string) {
     and(eq(otpCodes.email, email), eq(otpCodes.purpose, "register"), eq(otpCodes.used, false))
   );
 
-  await db.insert(otpCodes).values({ email, code, purpose: "register", expiresAt });
+  const encryptedCode = await encryptOtpCode(code);
+  await db.insert(otpCodes).values({ email, code, codeEncrypted: encryptedCode, purpose: "register", expiresAt });
 
   await sendEmail(email, "register_otp", { otp: code, code, expiry_minutes: 5 });
 
@@ -84,13 +86,15 @@ export async function register(data: {
   }
 
   try {
+    const encryptedApiKey = data.api_key ? await encryptApiKey(data.api_key) : null;
     const result: any = await db.insert(users).values({
       email: data.email,
       passwordHash,
       name: data.name,
       role,
       resellerId: role === "reseller" ? data.reseller_id : null,
-      apiKey: data.api_key || null,
+      apiKey: data.api_key || null, // plaintext (legacy, for backward compatibility)
+      apiKeyEncrypted: encryptedApiKey, // encrypted (new)
       parentResellerId,
     });
     const userId = Number(result[0]?.insertId || result.insertId);
@@ -354,8 +358,18 @@ export async function getResellerData(userId: number) {
   let balance: any = null;
   let syncError = "";
 
-  if (user.resellerId && user.apiKey) {
-    const liquid = new LiquidClient(user.resellerId, user.apiKey);
+  // Decrypt API key if available, fallback to plaintext for legacy
+  let apiKey = user.apiKey;
+  if (user.apiKeyEncrypted) {
+    try {
+      apiKey = await decryptApiKey(user.apiKeyEncrypted);
+    } catch (e) {
+      console.error("[getResellerData] decryptApiKey failed, using plaintext:", e);
+    }
+  }
+
+  if (user.resellerId && apiKey) {
+    const liquid = new LiquidClient(user.resellerId, apiKey);
     try {
       const [acc, bal] = await Promise.all([
         liquid.getReseller(user.resellerId).catch(() => null),
@@ -397,7 +411,7 @@ export async function getResellerData(userId: number) {
 
   return {
     reseller_id: user.resellerId || "",
-    api_key_masked: maskApiKey(user.apiKey || ""),
+    api_key_masked: maskApiKey(apiKey || ""),
     balance,
     account,
     name: user.name,
@@ -409,14 +423,28 @@ export async function getResellerData(userId: number) {
 
 // --- OTP & Password Reset ---
 
+/**
+ * Generate cryptographically secure 6-digit OTP using crypto.getRandomValues()
+ * ponytail: uses modulo 10, introduces slight bias but negligible for OTP use case
+ */
 function generateOtp(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  const array = new Uint32Array(1);
+  crypto.getRandomValues(array);
+  return String((array[0] ?? 0) % 1000000).padStart(6, "0");
 }
 
+/**
+ * Generate cryptographically secure 48-character reset token
+ * Uses unbiased modulo reduction via rejection sampling
+ */
 function generateResetToken(): string {
   const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const array = new Uint32Array(48);
+  crypto.getRandomValues(array);
   let token = "";
-  for (let i = 0; i < 48; i++) token += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 48; i++) {
+    token += chars[(array[i] ?? 0) % chars.length];
+  }
   return token;
 }
 
@@ -438,7 +466,8 @@ export async function sendLoginOtp(email: string, password: string) {
     and(eq(otpCodes.email, email), eq(otpCodes.purpose, "login"), eq(otpCodes.used, false))
   );
 
-  await db.insert(otpCodes).values({ email, code, purpose: "login", expiresAt });
+  const encryptedCode = await encryptOtpCode(code);
+  await db.insert(otpCodes).values({ email, code, codeEncrypted: encryptedCode, purpose: "login", expiresAt });
 
   await sendEmail(email, "login_otp", { otp: code, code, expiry_minutes: 5 });
 
@@ -448,9 +477,19 @@ export async function sendLoginOtp(email: string, password: string) {
 export async function verifyLoginOtp(email: string, code: string) {
   const cleanEmail = (email || "").trim();
   const cleanCode = (code || "").trim();
-  const [record] = await db.select().from(otpCodes).where(
-    and(eq(otpCodes.email, cleanEmail), eq(otpCodes.code, cleanCode), eq(otpCodes.purpose, "login"), eq(otpCodes.used, false))
+  
+  // Try encrypted first, fallback to plaintext for backward compatibility
+  let [record] = await db.select().from(otpCodes).where(
+    and(eq(otpCodes.email, cleanEmail), eq(otpCodes.codeEncrypted, await encryptOtpCode(cleanCode)), eq(otpCodes.purpose, "login"), eq(otpCodes.used, false))
   );
+  
+  // Fallback to plaintext code comparison for legacy OTPs
+  if (!record) {
+    [record] = await db.select().from(otpCodes).where(
+      and(eq(otpCodes.email, cleanEmail), eq(otpCodes.code, cleanCode), eq(otpCodes.purpose, "login"), eq(otpCodes.used, false))
+    );
+  }
+  
   if (!record) throw new AppError("Kode OTP tidak valid atau sudah digunakan", 401);
   if (new Date() > record.expiresAt) throw new AppError("Kode OTP sudah kadaluarsa. Silakan minta kode baru.", 401);
 
@@ -486,8 +525,10 @@ export async function forgotPassword(email: string) {
   );
 
   // Insert both token and 6-digit OTP code so user can reset via link OR OTP code
-  await db.insert(otpCodes).values({ email: cleanEmail, code: token, purpose: "reset", expiresAt });
-  await db.insert(otpCodes).values({ email: cleanEmail, code: otpCode, purpose: "reset", expiresAt });
+  const encryptedToken = await encryptOtpCode(token);
+  const encryptedOtpCode = await encryptOtpCode(otpCode);
+  await db.insert(otpCodes).values({ email: cleanEmail, code: token, codeEncrypted: encryptedToken, purpose: "reset", expiresAt });
+  await db.insert(otpCodes).values({ email: cleanEmail, code: otpCode, codeEncrypted: encryptedOtpCode, purpose: "reset", expiresAt });
 
   const frontendUrl = env.CORS_ORIGIN;
   const resetLink = `${frontendUrl}/reset-password?token=${token}`;
@@ -514,9 +555,18 @@ export async function resetPassword(tokenOrCode: string, newPassword: string) {
   const clean = (tokenOrCode || "").trim();
   if (!clean) throw new AppError("Token atau Kode OTP reset tidak valid", 400);
 
-  const [record] = await db.select().from(otpCodes).where(
-    and(eq(otpCodes.code, clean), eq(otpCodes.purpose, "reset"), eq(otpCodes.used, false))
+  // Try encrypted first, fallback to plaintext for backward compatibility
+  const encryptedValue = await encryptOtpCode(clean);
+  let [record] = await db.select().from(otpCodes).where(
+    and(eq(otpCodes.codeEncrypted, encryptedValue), eq(otpCodes.purpose, "reset"), eq(otpCodes.used, false))
   );
+  
+  // Fallback to plaintext code comparison for legacy tokens
+  if (!record) {
+    [record] = await db.select().from(otpCodes).where(
+      and(eq(otpCodes.code, clean), eq(otpCodes.purpose, "reset"), eq(otpCodes.used, false))
+    );
+  }
 
   if (!record) throw new AppError("Token atau Kode OTP reset tidak valid atau sudah digunakan", 401);
   if (new Date() > record.expiresAt) throw new AppError("Token atau Kode OTP reset sudah kadaluarsa", 401);

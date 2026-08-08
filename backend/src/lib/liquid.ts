@@ -440,6 +440,21 @@ export class LiquidClient {
   }
 
   // --- Customers ---
+  /**
+   * Generate a secure random password for API-only customer accounts
+   * Uses crypto.getRandomValues() for cryptographic security
+   */
+  private generateSecurePassword(): string {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    const array = new Uint32Array(16);
+    crypto.getRandomValues(array);
+    let password = "";
+    for (let i = 0; i < 16; i++) {
+      password += chars[(array[i] ?? 0) % chars.length];
+    }
+    return password;
+  }
+
   createCustomer(data: Record<string, any>) {
     const phone = data.phone || "";
     let tel_cc_no = data.phone_cc || data.tel_cc_no || "62";
@@ -454,10 +469,14 @@ export class LiquidClient {
       tel_no = phone.substring(1);
     }
 
+    // ponytail: auto-generate secure password if not provided
+    // This is for API-only integration; customer never logs in with this password
+    const password = data.password || this.generateSecurePassword();
+
     return this.request<any>("POST", "/customers", {
       name: data.name,
       email: data.email,
-      password: data.password || "Pass@123!",
+      password,
       company: data.company || "",
       address_line_1: data.address || data.address_line_1 || "",
       city: data.city || "",

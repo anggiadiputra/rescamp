@@ -36,9 +36,9 @@ export async function verifyTurnstileToken(token?: string, remoteip?: string): P
       body: formData,
     });
 
-    const data = await res.json();
-    if (!data.success) {
-      console.warn("[Turnstile] Siteverify failed:", data["error-codes"]);
+    const data: any = await res.json();
+    if (!data?.success) {
+      console.warn("[Turnstile] Siteverify failed:", data?.["error-codes"]);
       throw new AppError("Verifikasi Turnstile gagal. Silakan coba lagi.", 400);
     }
 

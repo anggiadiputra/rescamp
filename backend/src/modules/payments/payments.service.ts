@@ -190,7 +190,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
 
       if (!liquidTransactionId) {
         try {
-          const txList = await liquid.listCustomerTransactions(targetLiquidCustomerId, true);
+          const txList = await liquid.listCustomerTransactions(targetLiquidCustomerId || "", true);
           const pendingList = Array.isArray(txList) ? txList : txList?.data || txList?.transactions || [];
           if (pendingList.length > 0) {
             liquidTransactionId = String(pendingList[0]?.transaction_id || pendingList[0]?.invoice_id || pendingList[0]?.id || "");
@@ -215,7 +215,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
 
       if (!liquidTransactionId) {
         try {
-          const txList = await liquid.listCustomerTransactions(targetLiquidCustomerId, true);
+          const txList = await liquid.listCustomerTransactions(targetLiquidCustomerId || "", true);
           const pendingList = Array.isArray(txList) ? txList : txList?.data || txList?.transactions || [];
           if (pendingList.length > 0) {
             liquidTransactionId = String(pendingList[0]?.transaction_id || pendingList[0]?.invoice_id || pendingList[0]?.id || "");
@@ -243,7 +243,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
 
       if (!liquidTransactionId) {
         try {
-          const txList = await liquid.listCustomerTransactions(targetLiquidCustomerId, true);
+          const txList = await liquid.listCustomerTransactions(targetLiquidCustomerId || "", true);
           const pendingList = Array.isArray(txList) ? txList : txList?.data || txList?.transactions || [];
           if (pendingList.length > 0) {
             liquidTransactionId = String(pendingList[0]?.transaction_id || pendingList[0]?.invoice_id || pendingList[0]?.id || "");

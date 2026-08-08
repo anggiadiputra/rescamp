@@ -34,9 +34,9 @@ export async function checkWhatsApp(phone: string): Promise<{ registered: boolea
       body: JSON.stringify({ device_token: normalized }),
     });
 
-    const data = await res.json();
+    const data: any = await res.json();
     // Fonnte device endpoint returns device status; if status is true, number is on WA
-    return { registered: data.status === true || data.registered === true };
+    return { registered: data?.status === true || data?.registered === true };
   } catch (e) {
     console.error("[fonnte] check failed:", e);
     return { registered: false };

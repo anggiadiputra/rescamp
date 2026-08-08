@@ -7,7 +7,8 @@ export const users = mysqlTable("users", {
   name: varchar("name", { length: 255 }).notNull(),
   role: mysqlEnum("role", ["reseller", "customer"]).default("reseller"),
   resellerId: varchar("reseller_id", { length: 100 }),
-  apiKey: varchar("api_key", { length: 255 }),
+  apiKey: varchar("api_key", { length: 255 }), // plaintext (legacy, to be deprecated)
+  apiKeyEncrypted: varchar("api_key_encrypted", { length: 512 }), // encrypted (new)
   parentResellerId: int("parent_reseller_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
