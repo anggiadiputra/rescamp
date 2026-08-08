@@ -5,6 +5,7 @@ import { customers } from "../../db/schema/customers";
 import { eq } from "drizzle-orm";
 import { AppError } from "../../lib/error";
 import { verifyTurnstileToken } from "../../lib/turnstile";
+import { resolveResellerCreds } from "../../lib/reseller-creds";
 
 async function getUser(ctx: any) {
   const userId = Number(ctx.store?.user?.sub);
@@ -13,25 +14,14 @@ async function getUser(ctx: any) {
   return user;
 }
 
+import { resolveResellerCreds } from "../../lib/reseller-creds";
+
 // Resolve Resellercamp credentials for the calling user.
 async function getResellerCreds(ctx: any): Promise<{ resellerId: string; apiKey: string }> {
   const u = await getUser(ctx);
-  if (u.role === "customer") {
-    if (u.parentResellerId) {
-      const [reseller] = await db.select().from(users).where(eq(users.id, u.parentResellerId));
-      if (reseller?.apiKey && reseller.resellerId)
-        return { resellerId: reseller.resellerId, apiKey: reseller.apiKey };
-    }
-    const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
-    if (defaultReseller?.apiKey && defaultReseller.resellerId)
-      return { resellerId: defaultReseller.resellerId, apiKey: defaultReseller.apiKey };
-    throw new AppError("Reseller credentials not configured", 500);
-  }
-  if (u.apiKey && u.resellerId) return { resellerId: u.resellerId, apiKey: u.apiKey };
-  const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
-  if (defaultReseller?.apiKey && defaultReseller.resellerId)
-    return { resellerId: defaultReseller.resellerId, apiKey: defaultReseller.apiKey };
-  throw new AppError("Reseller credentials not configured", 500);
+  const creds = await resolveResellerCreds(u.id);
+  if (!creds.resellerId || !creds.apiKey) throw new AppError("Reseller credentials not configured", 500);
+  return creds;
 }
 
 export async function create(ctx: any) {

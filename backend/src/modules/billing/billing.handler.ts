@@ -3,6 +3,7 @@ import { db } from "../../db";
 import { users } from "../../db/schema";
 import { eq } from "drizzle-orm";
 import { AppError } from "../../lib/error";
+import { resolveResellerCreds } from "../../lib/reseller-creds";
 
 async function getUser(ctx: any) {
   const userId = Number(ctx.store?.user?.sub);
@@ -11,21 +12,13 @@ async function getUser(ctx: any) {
   return user;
 }
 
+import { resolveResellerCreds } from "../../lib/reseller-creds";
+
 async function getResellerCreds(ctx: any) {
   const u = await getUser(ctx);
-  if (u.role === "customer") {
-    let r: any = null;
-    if (u.parentResellerId) {
-      [r] = await db.select().from(users).where(eq(users.id, u.parentResellerId));
-    }
-    if (!r) {
-      [r] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
-    }
-    if (!r || !r.apiKey) throw new AppError("Reseller not configured", 500);
-    return { id: u.id, resellerId: r.resellerId || "", apiKey: r.apiKey, role: u.role };
-  }
-  if (u.role === "reseller" || u.role === "admin") return { id: u.id, resellerId: u.resellerId || "", apiKey: u.apiKey || "", role: u.role };
-  throw new AppError("Invalid user role", 403);
+  const creds = await resolveResellerCreds(u.id);
+  if (!creds.resellerId || !creds.apiKey) throw new AppError("Reseller not configured", 500);
+  return { id: u.id, resellerId: creds.resellerId, apiKey: creds.apiKey, role: u.role };
 }
 
 export async function balance(ctx: any) {
