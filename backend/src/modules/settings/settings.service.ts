@@ -279,9 +279,13 @@ export async function testLiquidConnection(resellerId?: string, apiKey?: string)
   let key = apiKey;
 
   if (!rId || !key) {
+    const { resolveResellerCreds } = await import("../../lib/reseller-creds");
     const [reseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
-    rId = reseller?.resellerId || "";
-    key = reseller?.apiKey || "";
+    if (reseller) {
+      const creds = await resolveResellerCreds(reseller.id);
+      rId = creds.resellerId;
+      key = creds.apiKey;
+    }
   }
 
   if (!rId || !key) {

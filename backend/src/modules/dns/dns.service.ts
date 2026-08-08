@@ -4,9 +4,10 @@ import { eq, and } from "drizzle-orm";
 import { LiquidClient } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { getDomain } from "../domains/domains.service";
+import { resolveCredsFromUser } from "../../lib/reseller-creds";
 
-function getLiquid(user: { resellerId: string | null; apiKey: string | null }): LiquidClient {
-  return new LiquidClient(user.resellerId || "", user.apiKey || "");
+function getLiquid(creds: { resellerId: string; apiKey: string }): LiquidClient {
+  return new LiquidClient(creds.resellerId || "", creds.apiKey || "");
 }
 
 function mapDnsType(type: string): string {

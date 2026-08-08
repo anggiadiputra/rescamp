@@ -3,6 +3,7 @@ import { domains, users, customers, transactions } from "../../db/schema";
 import { eq, and, like, inArray, or, sql } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
+import { resolveResellerCreds } from "../../lib/reseller-creds";
 
 // ponytail: helper used by mutators below. Single source of truth for the
 // "domain-suspended → reject any user config" rule. upgrade path: when we add
@@ -17,32 +18,13 @@ function assertNotSuspended(domain: { status: string | null }) {
 }
 
 async function getLiquid(user?: { id?: number; resellerId?: string | null; apiKey?: string | null; role?: string | null }): Promise<LiquidClient> {
-  let resellerId = user?.resellerId || "";
-  let apiKey = user?.apiKey || "";
-
-  if ((!resellerId || !apiKey) && user?.id) {
-    const [u] = await db.select().from(users).where(eq(users.id, user.id));
-    if (u) {
-      resellerId = u.resellerId || "";
-      apiKey = u.apiKey || "";
-      if (u.role === "customer" && u.parentResellerId) {
-        const [parent] = await db.select().from(users).where(eq(users.id, u.parentResellerId));
-        if (parent?.resellerId && parent?.apiKey) {
-          resellerId = parent.resellerId;
-          apiKey = parent.apiKey;
-        }
-      }
-    }
+  if (user?.id) {
+    const creds = await resolveResellerCreds(user.id);
+    return new LiquidClient(creds.resellerId, creds.apiKey);
   }
-
-  if (!resellerId || !apiKey) {
-    const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
-    if (defaultReseller) {
-      resellerId = defaultReseller.resellerId || "";
-      apiKey = defaultReseller.apiKey || "";
-    }
-  }
-
+  // Fallback for calls without userId (should be rare)
+  const resellerId = user?.resellerId || "";
+  const apiKey = user?.apiKey || "";
   return new LiquidClient(resellerId, apiKey);
 }
 
@@ -812,30 +794,12 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
   const [u] = await db.select().from(users).where(eq(users.id, userId));
   if (!u) throw new AppError("User not found", 404);
 
-  let resellerId = u.resellerId || "";
-  let apiKey = u.apiKey || "";
-
-  if (u.role === "customer" && u.parentResellerId) {
-    const [reseller] = await db.select().from(users).where(eq(users.id, u.parentResellerId));
-    if (reseller) {
-      resellerId = reseller.resellerId || "";
-      apiKey = reseller.apiKey || "";
-    }
-  }
-
-  if (!resellerId || !apiKey) {
-    const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
-    if (defaultReseller) {
-      resellerId = defaultReseller.resellerId || "";
-      apiKey = defaultReseller.apiKey || "";
-    }
-  }
-
-  if (!resellerId || !apiKey) {
+  const syncCreds = await resolveResellerCreds(userId);
+  if (!syncCreds.resellerId || !syncCreds.apiKey) {
     throw new AppError("Resellercamp credentials not configured", 400);
   }
 
-  const liquid = new LiquidClient(resellerId, apiKey);
+  const liquid = new LiquidClient(syncCreds.resellerId, syncCreds.apiKey);
 
   const statusMap: Record<string, string> = {
     live: "active",

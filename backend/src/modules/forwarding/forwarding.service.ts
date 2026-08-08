@@ -3,9 +3,10 @@ import { AppError } from "../../lib/error";
 import { db } from "../../db";
 import { domains } from "../../db/schema";
 import { eq, and, or } from "drizzle-orm";
+import { resolveCredsFromUser } from "../../lib/reseller-creds";
 
-function getLiquid(user: { resellerId: string | null; apiKey: string | null }): LiquidClient {
-  return new LiquidClient(user.resellerId || "", user.apiKey || "");
+function getLiquid(creds: { resellerId: string; apiKey: string }): LiquidClient {
+  return new LiquidClient(creds.resellerId || "", creds.apiKey || "");
 }
 
 async function getDomain(userId: number, domainId: number) {

@@ -3,6 +3,7 @@ import { db } from "../../db";
 import { users } from "../../db/schema";
 import { eq } from "drizzle-orm";
 import { AppError } from "../../lib/error";
+import { resolveResellerCreds } from "../../lib/reseller-creds";
 
 async function getUser(ctx: any) {
   const userId = Number(ctx.store?.user?.sub);
@@ -13,14 +14,9 @@ async function getUser(ctx: any) {
 
 async function getResellerCreds(ctx: any) {
   const u = await getUser(ctx);
-  if (u.role === "customer") {
-    let r: any = null;
-    if (u.parentResellerId) [r] = await db.select().from(users).where(eq(users.id, u.parentResellerId));
-    if (!r) [r] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
-    if (!r || !r.apiKey) throw new AppError("Reseller not configured", 500);
-    return { user: u, creds: { resellerId: r.resellerId || "", apiKey: r.apiKey } };
-  }
-  return { user: u, creds: { resellerId: u.resellerId || "", apiKey: u.apiKey || "" } };
+  const creds = await resolveResellerCreds(u.id);
+  if (!creds.resellerId || !creds.apiKey) throw new AppError("Reseller not configured", 500);
+  return { user: u, creds };
 }
 
 export async function list(ctx: any) {

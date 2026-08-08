@@ -3,11 +3,12 @@ import { transactions, users, customers, domains } from "../../db/schema";
 import { eq, and, sql, inArray, or, isNotNull } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
+import { resolveResellerCreds, resolveCredsFromUser } from "../../lib/reseller-creds";
 
 const MAX_ACTION_REQUIRED_RETRIES = 5;
 
-function getLiquid(user: { resellerId: string | null; apiKey: string | null }): LiquidClient {
-  return new LiquidClient(user.resellerId || "", user.apiKey || "");
+function getLiquid(creds: { resellerId: string; apiKey: string }): LiquidClient {
+  return new LiquidClient(creds.resellerId || "", creds.apiKey || "");
 }
 
 async function fetchAllLiquidTransactions(liquid: LiquidClient, customerId?: string): Promise<any[]> {
@@ -27,17 +28,19 @@ async function fetchAllLiquidTransactions(liquid: LiquidClient, customerId?: str
   return all;
 }
 
-export async function getBalance(user: { resellerId: string | null; apiKey: string | null }) {
+export async function getBalance(user: { id?: number; resellerId: string | null; apiKey: string | null }) {
   try {
-    return await getLiquid(user).getBalance();
+    const creds = user.id ? await resolveResellerCreds(user.id) : { resellerId: user.resellerId || "", apiKey: user.apiKey || "" };
+    return await getLiquid(creds).getBalance();
   } catch (err: any) {
     console.warn("[billing.service] getBalance fallback triggered:", err?.message || err);
     return { balance: "0.00", currency: "IDR" };
   }
 }
 
-export async function getPrices(user: { resellerId: string | null; apiKey: string | null; role?: string }) {
-  const liquid = getLiquid(user);
+export async function getPrices(user: { id?: number; resellerId: string | null; apiKey: string | null; role?: string }) {
+  const creds = user.id ? await resolveResellerCreds(user.id) : { resellerId: user.resellerId || "", apiKey: user.apiKey || "" };
+  const liquid = getLiquid(creds);
 
   // Try customer prices first (GET /customers/prices) — works for all roles
   try {
@@ -158,23 +161,9 @@ export async function sweepActionRequiredRetries() {
 
     const [user] = await db.select().from(users).where(eq(users.id, tx.userId));
     if (!user) continue;
-    let resellerId = user.resellerId || "";
-    let apiKey = user.apiKey || "";
-    if (user.role === "customer" && user.parentResellerId) {
-      const [reseller] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
-      if (reseller) { resellerId = reseller.resellerId || ""; apiKey = reseller.apiKey || ""; }
-    }
-    // Fallback to first reseller row when customer has no parent (e.g. account created before
-    // parent link was set, or admin customer). Mirrors getLiquid() in domains.service.ts:39-44.
-    if (!resellerId || !apiKey) {
-      const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
-      if (defaultReseller) {
-        resellerId = defaultReseller.resellerId || "";
-        apiKey = defaultReseller.apiKey || "";
-      }
-    }
-    if (!resellerId || !apiKey) continue; // no creds at all — skip, log loudly
-    const liquid = new LiquidClient(resellerId, apiKey);
+    const sweeperCreds = await resolveCredsFromUser(user);
+    if (!sweeperCreds.resellerId || !sweeperCreds.apiKey) continue; // no creds at all — skip
+    const liquid = new LiquidClient(sweeperCreds.resellerId, sweeperCreds.apiKey);
 
     const currentRetry = Number(meta.retryCount || 0);
     const casResult: any = await db.update(transactions)
@@ -325,10 +314,11 @@ export async function listTransactions(
 
   // Auto-sync transactions from Resellercamp for customer/reseller if available
   try {
-    const [userRecord] = await db.select().from(users).where(eq(users.id, userId));
-    if (userRecord && userRecord.resellerId && userRecord.apiKey) {
-      const liquid = getLiquid(userRecord);
-      if (userRecord.role === "customer") {
+    const syncCreds = await resolveResellerCreds(userId);
+    if (syncCreds.resellerId && syncCreds.apiKey) {
+      const liquid = getLiquid(syncCreds);
+      const [userRecord] = await db.select().from(users).where(eq(users.id, userId));
+      if (userRecord?.role === "customer") {
         const [cust] = await db.select({ liquidCustomerId: customers.liquidCustomerId }).from(customers).where(eq(customers.userId, userId));
         if (cust?.liquidCustomerId) {
           const list = await fetchAllLiquidTransactions(liquid, cust.liquidCustomerId).catch(() => []);
@@ -565,9 +555,10 @@ export async function getTransaction(userParam: number | { id: number; role?: st
   const [brandSetting] = await db.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, "brand_name"));
   const defaultBrand = brandSetting?.value || "Ekstensi ID";
 
-  if (resellerUser?.resellerId && resellerUser?.apiKey) {
+  const invoiceCreds = resellerUser ? await resolveCredsFromUser(resellerUser) : { resellerId: "", apiKey: "" };
+  if (invoiceCreds.resellerId && invoiceCreds.apiKey) {
     try {
-      const liquid = getLiquid(resellerUser);
+      const liquid = getLiquid(invoiceCreds);
       const liqReseller = await liquid.getReseller(resellerUser.resellerId);
       if (liqReseller) {
         const addrParts = [
@@ -624,13 +615,15 @@ export async function getTransaction(userParam: number | { id: number; role?: st
   return { ...txn, invoiceType, isWholesale, customer, resellerInfo };
 }
 
-export async function syncBalanceToLocal(user: { resellerId: string | null; apiKey: string | null }, userId: number) {
-  return getLiquid(user).getBalance();
+export async function syncBalanceToLocal(user: { resellerId: string | null; apiKey: string | null; id?: number }, userId: number) {
+  const creds = user.id ? await resolveResellerCreds(user.id) : { resellerId: user.resellerId || "", apiKey: user.apiKey || "" };
+  return getLiquid(creds).getBalance();
 }
 
 export async function syncTransactions(user: { id: number; role: string | null; resellerId?: string | null; apiKey?: string | null }) {
-  if (!user.resellerId || !user.apiKey) throw new AppError("Reseller credentials not configured", 500);
-  const liquid = getLiquid({ resellerId: user.resellerId || "", apiKey: user.apiKey || "" });
+  const syncCreds = await resolveResellerCreds(user.id);
+  if (!syncCreds.resellerId || !syncCreds.apiKey) throw new AppError("Reseller credentials not configured", 500);
+  const liquid = getLiquid(syncCreds);
   let list: any[] = [];
   let count = 0;
 

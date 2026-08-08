@@ -8,6 +8,7 @@ import { LiquidClient } from "../../lib/liquid";
 import { sendEmail } from "../../lib/email";
 import { env } from "../../config/env";
 import { encryptOtpCode, decryptOtpCode, encryptApiKey, decryptApiKey } from "../../lib/encryption";
+import { resolveResellerCreds, resolveCredsFromUser, invalidateCredsCache } from "../../lib/reseller-creds";
 
 const MYSQL_DUP_ENTRY = 1062;
 
@@ -106,7 +107,9 @@ export async function register(data: {
     if (role === "customer") {
       (async () => {
         try {
-          const liquid = new LiquidClient(resellerObj.resellerId!, resellerObj.apiKey!);
+          const creds = await resolveCredsFromUser(resellerObj);
+          if (!creds.resellerId || !creds.apiKey) return;
+          const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
           const liqCust = await liquid.createCustomer({
             name: data.name, email: data.email,
             company: data.company || "", address: data.address || "",
@@ -267,15 +270,9 @@ export async function updateProfile(userId: number, data: {
     }).where(eq(customers.id, cust.id));
 
     // Sync to LIQUID
-    let resellerId = user.resellerId;
-    let apiKey = user.apiKey;
-    if ((!resellerId || !apiKey) && user.parentResellerId) {
-      const [parent] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
-      if (parent) {
-        resellerId = parent.resellerId;
-        apiKey = parent.apiKey;
-      }
-    }
+    const creds = await resolveResellerCreds(userId);
+    const resellerId = creds.resellerId;
+    const apiKey = creds.apiKey;
 
     if (cust.liquidCustomerId && resellerId && apiKey) {
       (async () => {
@@ -358,18 +355,12 @@ export async function getResellerData(userId: number) {
   let balance: any = null;
   let syncError = "";
 
-  // Decrypt API key if available, fallback to plaintext for legacy
-  let apiKey = user.apiKey;
-  if (user.apiKeyEncrypted) {
-    try {
-      apiKey = await decryptApiKey(user.apiKeyEncrypted);
-    } catch (e) {
-      console.error("[getResellerData] decryptApiKey failed, using plaintext:", e);
-    }
-  }
+  // Resolve credentials with decryption + cache
+  const creds = await resolveResellerCreds(userId);
+  const apiKey = creds.apiKey;
 
-  if (user.resellerId && apiKey) {
-    const liquid = new LiquidClient(user.resellerId, apiKey);
+  if (creds.resellerId && apiKey) {
+    const liquid = new LiquidClient(creds.resellerId, apiKey);
     try {
       const [acc, bal] = await Promise.all([
         liquid.getReseller(user.resellerId).catch(() => null),

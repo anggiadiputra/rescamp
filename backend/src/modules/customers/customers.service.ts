@@ -4,25 +4,18 @@ import { domains } from "../../db/schema/domains";
 import { eq, and, like, sql } from "drizzle-orm";
 import { LiquidClient } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
+import { resolveResellerCreds } from "../../lib/reseller-creds";
 
-function getLiquid(user: { resellerId: string | null; apiKey: string | null }): LiquidClient {
-  return new LiquidClient(user.resellerId || "", user.apiKey || "");
+function getLiquid(creds: { resellerId: string; apiKey: string }): LiquidClient {
+  return new LiquidClient(creds.resellerId || "", creds.apiKey || "");
 }
 
 export async function createCustomer(
   user: { resellerId: string | null; apiKey: string | null; id: number; parentResellerId?: number | null },
   data: { name: string; email: string; company?: string; address?: string; city?: string; state?: string; country: string; zipcode?: string; phone?: string },
 ) {
-  // Resolve reseller liquid credentials if user is linked to a parent reseller
-  let creds = { resellerId: user.resellerId, apiKey: user.apiKey };
-  if (!creds.resellerId || !creds.apiKey) {
-    if (user.parentResellerId) {
-      const [reseller] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
-      if (reseller?.resellerId && reseller?.apiKey) {
-        creds = { resellerId: reseller.resellerId, apiKey: reseller.apiKey };
-      }
-    }
-  }
+  // Resolve reseller liquid credentials via centralized helper (handles decryption + cache)
+  const creds = await resolveResellerCreds(user.id);
 
   // Create in LIQUID API first
   let liquidCustomerId = "";
@@ -157,19 +150,16 @@ export async function completeProfile(
   user: { id: number; email: string; name: string; resellerId: string | null; apiKey: string | null; parentResellerId: number | null },
   data: { company: string; address: string; city: string; state: string; country: string; zipcode: string; phone_cc: string; phone: string },
 ) {
-  // Get reseller's LIQUID credentials
-  let liquidUser = { resellerId: user.resellerId, apiKey: user.apiKey };
-  if (!liquidUser.resellerId || !liquidUser.apiKey) {
-    if (!user.parentResellerId) throw new AppError("No reseller linked", 500);
-    const [reseller] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
-    if (!reseller?.resellerId || !reseller?.apiKey) throw new AppError("Reseller API not configured", 500);
-    liquidUser = { resellerId: reseller.resellerId, apiKey: reseller.apiKey };
+  // Resolve reseller's LIQUID credentials via centralized helper
+  const liquidCreds = await resolveResellerCreds(user.id);
+  if (!liquidCreds.resellerId || !liquidCreds.apiKey) {
+    throw new AppError("Reseller API not configured", 500);
   }
 
   // Create LIQUID customer
   let liquidCustomerId = "";
   try {
-    const liquidRes = await getLiquid(liquidUser).createCustomer({
+    const liquidRes = await getLiquid(liquidCreds).createCustomer({
       name: user.name,
       email: user.email,
       company: data.company,

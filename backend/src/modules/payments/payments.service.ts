@@ -4,6 +4,7 @@ import { eq, and, sql, or } from "drizzle-orm";
 import { sumopodClient } from "../../lib/sumopod";
 import { LiquidClient } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
+import { resolveResellerCreds } from "../../lib/reseller-creds";
 
 export interface CreateDomainOrderPayload {
   userId: number;
@@ -31,16 +32,11 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
   const [user] = await db.select().from(users).where(eq(users.id, payload.userId));
   if (!user) throw new AppError("User not found", 404);
 
-  let resellerId = user.resellerId || "";
-  let apiKey = user.apiKey || "";
-  if (user.role === "customer" && user.parentResellerId) {
-    const [reseller] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
-    if (reseller) { resellerId = reseller.resellerId || ""; apiKey = reseller.apiKey || ""; }
-  }
-  if (!resellerId || !apiKey) {
-    const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
-    if (defaultReseller) { resellerId = defaultReseller.resellerId || ""; apiKey = defaultReseller.apiKey || ""; }
-  }
+  let resellerId = "";
+  let apiKey = "";
+  const paymentCreds = await resolveResellerCreds(payload.userId);
+  resellerId = paymentCreds.resellerId;
+  apiKey = paymentCreds.apiKey;
 
   const liquid = new LiquidClient(resellerId, apiKey);
 
@@ -486,16 +482,9 @@ export async function processWebhookPayload(payload: any) {
   const [user] = await db.select().from(users).where(eq(users.id, tx.userId));
   if (!user) return { status: "user_not_found" };
 
-  let resellerId = user.resellerId || "";
-  let apiKey = user.apiKey || "";
-  if (user.role === "customer" && user.parentResellerId) {
-    const [reseller] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
-    if (reseller) { resellerId = reseller.resellerId || ""; apiKey = reseller.apiKey || ""; }
-  }
-  if (!resellerId || !apiKey) {
-    const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
-    if (defaultReseller) { resellerId = defaultReseller.resellerId || ""; apiKey = defaultReseller.apiKey || ""; }
-  }
+  const webhookCreds = await resolveResellerCreds(tx.userId);
+  const resellerId = webhookCreds.resellerId;
+  const apiKey = webhookCreds.apiKey;
 
   const liquid = new LiquidClient(resellerId, apiKey);
 
