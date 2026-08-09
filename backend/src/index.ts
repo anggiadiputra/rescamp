@@ -24,15 +24,7 @@ const allowedOrigins = (env.CORS_ORIGIN || "*")
 const app = new Elysia()
   .use(
     cors({
-      origin: (request: Request): boolean => {
-        const origin = request.headers.get("origin");
-        if (!origin) return true;
-        if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) return true;
-        if (origin.endsWith(".ekstensi.id") || origin.endsWith(".diurusin.id") || origin.includes("localhost")) {
-          return true;
-        }
-        return true;
-      },
+      origin: true,
       credentials: true,
       allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
