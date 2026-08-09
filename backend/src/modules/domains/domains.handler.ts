@@ -89,20 +89,20 @@ export async function renew(ctx: any) {
   const user = await getUser(ctx);
   const creds = user.role === "customer" ? await getResellerCreds(ctx) : user;
   const { years } = ctx.body;
-  const result = await svc.orderRenewDomain(creds as any, user.id, parseInt(ctx.params.id), years);
+  const result = await svc.orderRenewDomain(creds as any, user, ctx.params.id, years);
   return { data: result };
 }
 
 export async function lock(ctx: any) {
   const user = await getUser(ctx);
   const creds = user.role === "customer" ? await getResellerCreds(ctx) : user;
-  const result = await svc.updateLock(creds as any, user.id, parseInt(ctx.params.id), true);
+  const result = await svc.updateLock(creds as any, user, ctx.params.id, true);
   return { success: true, locked: 1, message: "Domain locked successfully", data: result };
 }
 export async function unlock(ctx: any) {
   const user = await getUser(ctx);
   const creds = user.role === "customer" ? await getResellerCreds(ctx) : user;
-  const result = await svc.updateLock(creds as any, user.id, parseInt(ctx.params.id), false);
+  const result = await svc.updateLock(creds as any, user, ctx.params.id, false);
   return { success: true, locked: 0, message: "Domain unlocked successfully", data: result };
 }
 
@@ -110,7 +110,7 @@ export async function updateNs(ctx: any) {
   const user = await getUser(ctx);
   const creds = user.role === "customer" ? await getResellerCreds(ctx) : user;
   const { nameservers } = ctx.body;
-  const result = await svc.updateNameservers(creds as any, user.id, parseInt(ctx.params.id), nameservers);
+  const result = await svc.updateNameservers(creds as any, user, ctx.params.id, nameservers);
   return { data: result };
 }
 
@@ -123,7 +123,7 @@ export async function getNs(ctx: any) {
 export async function getAuth(ctx: any) {
   const user = await getUser(ctx);
   const creds = user.role === "customer" ? await getResellerCreds(ctx) : user;
-  const result = await svc.getAuthCode(creds as any, user.id, parseInt(ctx.params.id));
+  const result = await svc.getAuthCode(creds as any, user, ctx.params.id);
   return { data: result };
 }
 
@@ -131,25 +131,25 @@ export async function updateAuth(ctx: any) {
   const user = await getUser(ctx);
   const creds = user.role === "customer" ? await getResellerCreds(ctx) : user;
   const { auth_code } = ctx.body;
-  const result = await svc.updateAuthCode(creds as any, user.id, parseInt(ctx.params.id), auth_code);
+  const result = await svc.updateAuthCode(creds as any, user, ctx.params.id, auth_code);
   return { data: result };
 }
 
 export async function enableTheft(ctx: any) {
   const u = await getUser(ctx);
-  const result = await svc.toggleTheftProtection(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), true);
+  const result = await svc.toggleTheftProtection(await getResellerCreds(ctx), u, ctx.params.id, true);
   return { success: true, theftProtection: 1, message: "Theft protection enabled successfully", data: result };
 }
 export async function disableTheft(ctx: any) {
   const u = await getUser(ctx);
-  const result = await svc.toggleTheftProtection(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), false);
+  const result = await svc.toggleTheftProtection(await getResellerCreds(ctx), u, ctx.params.id, false);
   return { success: true, theftProtection: 0, message: "Theft protection disabled successfully", data: result };
 }
 
 export async function restore(ctx: any) {
   const user = await getUser(ctx);
   const creds = await getResellerCreds(ctx);
-  const result = await svc.restoreDomain(creds, user.id, parseInt(ctx.params.id));
+  const result = await svc.restoreDomain(creds, user, ctx.params.id);
   return { data: result };
 }
 
@@ -159,20 +159,20 @@ export async function suspend(ctx: any) {
   if (reason.length < 5) {
     throw new AppError("Reason is required (min 5 chars)", 400);
   }
-  const result = await svc.toggleSuspend(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), true, reason);
+  const result = await svc.toggleSuspend(await getResellerCreds(ctx), u, ctx.params.id, true, reason);
   ctx.set.status = 200;
   return { data: result };
 }
 export async function unsuspend(ctx: any) {
   const u = await getUser(ctx);
-  await svc.toggleSuspend(await getResellerCreds(ctx), u.id, parseInt(ctx.params.id), false);
+  await svc.toggleSuspend(await getResellerCreds(ctx), u, ctx.params.id, false);
   ctx.set.status = 204;
   return;
 }
 
 export async function remove(ctx: any) {
   const user = await getUser(ctx);
-  await svc.deleteDomainRecord(user, parseInt(ctx.params.id));
+  await svc.deleteDomainRecord(user, ctx.params.id);
   ctx.set.status = 204;
   return;
 }

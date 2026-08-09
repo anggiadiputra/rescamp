@@ -158,11 +158,11 @@ export async function orderTransferDomain(
 
 export async function orderRenewDomain(
   user: { id: number; resellerId: string | null; apiKey: string | null },
-  userId: number,
-  domainId: number,
+  userParam: any,
+  domainId: string | number,
   years: number
 ) {
-  const domain = await getDomain(userId, domainId);
+  const domain = await getDomain(userParam, domainId);
   const liquid = await getLiquid(user);
 
   let unitPrice = 150000;
@@ -179,7 +179,7 @@ export async function orderRenewDomain(
   const totalAmount = unitPrice * (years || 1);
 
   return createDomainOrderPayment({
-    userId,
+    userId: typeof userParam === "object" ? userParam.id : Number(userParam),
     type: "renew",
     domainName: domain.domainName,
     tld: domain.tld,
@@ -192,10 +192,10 @@ export async function orderRenewDomain(
 
 export async function orderBuyPrivacy(
   user: { id: number; resellerId: string | null; apiKey: string | null },
-  userId: number,
-  domainId: number
+  userParam: any,
+  domainId: string | number
 ) {
-  const domain = await getDomain(userId, domainId);
+  const domain = await getDomain(userParam, domainId);
   const tldKey = domain.tld.toLowerCase();
 
   if (tldKey.endsWith("id")) {
@@ -349,12 +349,14 @@ export async function getDomain(userParam: any, lookup: string | number) {
     conditions.push(accessCondition);
   }
 
-  // Support lookup by local id or liquidOrderId
-  const lookupNum = parseInt(String(lookup), 10);
-  const lookupStr = String(lookup);
-  const domainCond = isNaN(lookupNum)
-    ? eq(domains.liquidOrderId, lookupStr)
-    : or(eq(domains.id, lookupNum), eq(domains.liquidOrderId, lookupStr));
+  // Support lookup by local id, liquidOrderId, or domainName
+  const lookupStr = String(lookup || "").trim();
+  const lookupNum = parseInt(lookupStr, 10);
+  const isNumericOnly = !isNaN(lookupNum) && /^\d+$/.test(lookupStr);
+
+  const domainCond = isNumericOnly
+    ? or(eq(domains.id, lookupNum), eq(domains.liquidOrderId, lookupStr), eq(domains.domainName, lookupStr.toLowerCase()))
+    : or(eq(domains.liquidOrderId, lookupStr), eq(domains.domainName, lookupStr.toLowerCase()));
 
   conditions.push(domainCond);
 
@@ -514,16 +516,16 @@ export async function getDomain(userParam: any, lookup: string | number) {
   };
 }
 
-export async function renewDomain(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, years: number) {
-  const domain = await getDomain({ id: userId, role: "customer" }, domainId);
+export async function renewDomain(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number, years: number) {
+  const domain = await getDomain(userParam, domainId);
   const liquid = await getLiquid(user);
   const liquidRes = await liquid.renewDomain(String(domain.liquidOrderId || domain.domainName), years);
   await db.update(domains).set({ years: (domain.years || 1) + years }).where(eq(domains.id, domain.id));
   return { domain_id: domain.id, domain_name: domain.domainName, years_added: years, previous_expiry: domain.expiryDate, new_expiry: liquidRes?.expiry_date || null };
 }
 
-export async function updateLock(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, lock: boolean) {
-  const domain = await getDomain(userId, domainId);
+export async function updateLock(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number, lock: boolean) {
+  const domain = await getDomain(userParam, domainId);
   assertNotSuspended(domain);
   // N5: short-circuit if already in desired state (concurrent tab toggle)
   if (Boolean(domain.locked) === lock) {
@@ -555,8 +557,8 @@ export async function updateLock(user: { id?: number; resellerId: string | null;
   return { locked: lock };
 }
 
-export async function updateNameservers(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, ns: string[]) {
-  const domain = await getDomain(userId, domainId);
+export async function updateNameservers(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number, ns: string[]) {
+  const domain = await getDomain(userParam, domainId);
   assertNotSuspended(domain);
   const liquid = await getLiquid(user);
   await liquid.updateNameservers(String(domain.liquidOrderId || domain.domainName), ns);
@@ -564,21 +566,21 @@ export async function updateNameservers(user: { id?: number; resellerId: string 
   return { domain_id: domainId, nameservers: ns };
 }
 
-export async function getAuthCode(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
-  const domain = await getDomain(userId, domainId);
+export async function getAuthCode(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number) {
+  const domain = await getDomain(userParam, domainId);
   const liquid = await getLiquid(user);
-  return liquid.getAuthCode(String(domain.liquidOrderId || domain.domainName));
+  return liquid.getAuthCode(String(domain.liquidOrderId || domain.domainName || domainId));
 }
 
-export async function updateAuthCode(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, authCode: string) {
-  const domain = await getDomain(userId, domainId);
+export async function updateAuthCode(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number, authCode: string) {
+  const domain = await getDomain(userParam, domainId);
   assertNotSuspended(domain);
   const liquid = await getLiquid(user);
-  return liquid.updateAuthCode(String(domain.liquidOrderId || domain.domainName), authCode);
+  return liquid.updateAuthCode(String(domain.liquidOrderId || domain.domainName || domainId), authCode);
 }
 
-export async function toggleTheftProtection(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, enable: boolean) {
-  const domain = await getDomain(userId, domainId);
+export async function toggleTheftProtection(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number, enable: boolean) {
+  const domain = await getDomain(userParam, domainId);
   assertNotSuspended(domain);
   // N5: short-circuit if already in desired state
   if (Boolean(domain.theftProtection) === enable) {
@@ -610,16 +612,16 @@ export async function toggleTheftProtection(user: { id?: number; resellerId: str
   return { theftProtection: enable };
 }
 
-export async function restoreDomain(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
-  const domain = await getDomain(userId, domainId);
+export async function restoreDomain(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number) {
+  const domain = await getDomain(userParam, domainId);
   const liquid = await getLiquid(user);
   const res = await liquid.restoreDomain(String(domain.liquidOrderId || domain.domainName));
   await db.update(domains).set({ status: "active" }).where(eq(domains.id, domain.id));
   return res;
 }
 
-export async function toggleSuspend(user: { id?: number; resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, suspend: boolean, reason?: string) {
-  let domain = await getDomain(userId, domainId) as any;
+export async function toggleSuspend(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number, suspend: boolean, reason?: string) {
+  let domain = await getDomain(userParam, domainId) as any;
   const liquid = await getLiquid(user);
   const ref = String(domain.liquidOrderId || domain.domainName);
   // Root-cause fix: Resellercamp's /domains LIST endpoint reports `suspended: false` even
@@ -706,7 +708,7 @@ export async function toggleSuspend(user: { id?: number; resellerId: string | nu
   return { status: desiredStatus, reason: suspend ? (reason || null) : null };
 }
 
-export async function deleteDomainRecord(user: { id: number; resellerId: string | null; apiKey: string | null; role?: string | null; email?: string | null }, domainId: number) {
+export async function deleteDomainRecord(user: { id: number; resellerId: string | null; apiKey: string | null; role?: string | null; email?: string | null }, domainId: string | number) {
   const domain = await getDomain(user, domainId);
   // Per LIQUID docs (DELETE /v1/domains/{domain_id}), deletion is allowed regardless of status.
   // We delete the wholesale order first; only then purge the local cache row.
