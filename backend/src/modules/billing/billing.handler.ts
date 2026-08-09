@@ -66,8 +66,18 @@ export async function transactionDetail(ctx: any) {
 }
 
 export async function sync(ctx: any) {
-  const user = await getUser(ctx);
-  const creds = await getResellerCreds(ctx);
-  const result = await svc.syncTransactions({ id: creds.id, role: creds.role, resellerId: creds.resellerId, apiKey: creds.apiKey });
-  return { data: result };
+  try {
+    const user = await getUser(ctx);
+    const creds = await getResellerCreds(ctx);
+    const result = await svc.syncTransactions({ id: creds.id, role: creds.role, resellerId: creds.resellerId, apiKey: creds.apiKey });
+    return { data: result };
+  } catch (err: any) {
+    console.warn("[billing.handler] sync error fallback:", err?.message || err);
+    ctx.set.status = err?.statusCode || 400;
+    const message = err?.message || "Gagal sinkronisasi data billing dari Resellercamp";
+    return {
+      message,
+      data: { synced: 0, message, error: message },
+    };
+  }
 }

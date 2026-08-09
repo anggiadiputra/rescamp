@@ -633,7 +633,7 @@ export async function syncBalanceToLocal(user: { resellerId: string | null; apiK
 
 export async function syncTransactions(user: { id: number; role: string | null; resellerId?: string | null; apiKey?: string | null }) {
   const syncCreds = await resolveResellerCreds(user.id);
-  if (!syncCreds.resellerId || !syncCreds.apiKey) throw new AppError("Reseller credentials not configured", 500);
+  if (!syncCreds.resellerId || !syncCreds.apiKey) throw new AppError("Reseller credentials not configured", 400);
   const liquid = getLiquid(syncCreds);
   let list: any[] = [];
   let count = 0;
