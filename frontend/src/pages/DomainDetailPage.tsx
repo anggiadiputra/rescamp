@@ -400,30 +400,6 @@ export default function DomainDetailPage() {
         </div>
       )}
 
-      {/* ICANN RAA Verification Warning Banner */}
-      {domain.raaVerification?.status === "pending" && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 shadow-sm flex items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2 bg-amber-500 text-white rounded-xl shrink-0 mt-0.5">
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-black text-amber-900 uppercase tracking-wider">Verifikasi Email Registrant (ICANN RAA) Diperlukan</h3>
-              <p className="text-xs text-amber-800 mt-1">
-                ICANN mengharuskan verifikasi email pemilik domain. Silakan periksa inbox email <strong>{domain.raaVerification.email || domain.customerEmail}</strong> dan klik link verifikasi.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={doResendRaa}
-            disabled={raaSending}
-            className="px-4 py-2 bg-amber-900 hover:bg-black text-white text-xs font-bold rounded-xl shrink-0 transition-colors cursor-pointer"
-          >
-            {raaSending ? "Mengirim..." : "Kirim Ulang Email Verifikasi"}
-          </button>
-        </div>
-      )}
-
       {/* Main Grid: Details & Nameservers */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Domain Information Card */}
@@ -440,6 +416,31 @@ export default function DomainDetailPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-4 text-sm">
+            {/* Status Verifikasi Email ICANN RAA Item */}
+            <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2 col-span-2">
+              <span className="text-gray-500 block text-xs font-medium">Status Verifikasi Email ICANN RAA</span>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                {domain.raaVerification?.status === "pending" ? (
+                  <span className="inline-flex items-center gap-1.5 font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-md text-xs border border-amber-200">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" /> Pending Verifikasi ({domain.raaVerification.email || domain.customerEmail})
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 font-bold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-md text-xs border border-emerald-200">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" /> Terverifikasi (Verified)
+                  </span>
+                )}
+                {domain.raaVerification?.status === "pending" && (
+                  <button
+                    onClick={doResendRaa}
+                    disabled={raaSending}
+                    className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer shrink-0"
+                  >
+                    {raaSending ? "Mengirim..." : "Kirim Ulang Email"}
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
               <span className="text-gray-500 block text-xs font-medium">Tanggal Registrasi</span>
               <span className="font-semibold text-gray-900">{domain.registrationDate || "-"}</span>
@@ -705,31 +706,6 @@ export default function DomainDetailPage() {
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Status Verifikasi ICANN RAA (raa_verification) Bar */}
-        <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-gray-700">Status Verifikasi Email ICANN RAA:</span>
-            {domain.raaVerification?.status === "pending" ? (
-              <span className="inline-flex items-center gap-1 font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-md border border-amber-200">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Pending Verifikasi ({domain.raaVerification.email || domain.customerEmail})
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 font-bold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-200">
-                <Check className="w-3.5 h-3.5 text-emerald-600" /> Terverifikasi (Verified)
-              </span>
-            )}
-          </div>
-          {domain.raaVerification?.status === "pending" && (
-            <button
-              onClick={doResendRaa}
-              disabled={raaSending}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg transition-colors cursor-pointer shrink-0"
-            >
-              {raaSending ? "Mengirim..." : "Kirim Ulang Email Verifikasi"}
-            </button>
-          )}
         </div>
 
         {(() => {
