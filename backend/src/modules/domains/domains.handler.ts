@@ -235,9 +235,18 @@ export async function bulkAvailability(ctx: any) {
 }
 
 export async function sync(ctx: any) {
-  const user = await getUser(ctx);
-  const result = await svc.syncDomainsFromLiquid(user);
-  return { message: "Berhasil sinkronisasi domain dari Resellercamp", data: result };
+  try {
+    const user = await getUser(ctx);
+    const result = await svc.syncDomainsFromLiquid(user);
+    return { message: `Berhasil sinkronisasi ${result.syncedCount} domain (${result.newAddedCount} baru) dari Resellercamp`, data: result };
+  } catch (err: any) {
+    console.warn("[domains.handler] sync error fallback:", err?.message || err);
+    ctx.set.status = 200;
+    return {
+      message: err?.message || "Gagal sinkronisasi data domain dari Resellercamp",
+      data: { syncedCount: 0, newAddedCount: 0, total: 0 },
+    };
+  }
 }
 
 export async function listRemote(ctx: any) {

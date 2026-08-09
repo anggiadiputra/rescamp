@@ -1206,7 +1206,7 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
 
   const syncCreds = await resolveResellerCreds(userId);
   if (!syncCreds.resellerId || !syncCreds.apiKey) {
-    throw new AppError("Resellercamp credentials not configured", 400);
+    return { syncedCount: 0, newAddedCount: 0, total: 0 };
   }
 
   const liquid = new LiquidClient(syncCreds.resellerId, syncCreds.apiKey);
@@ -1230,7 +1230,8 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
   let pageNo = 1;
 
   while (true) {
-    const rawDomains = await liquid.listDomains({ limit: "100", page_no: String(pageNo) });
+    const rawDomains = await liquid.listDomains({ limit: "100", page_no: String(pageNo) }).catch(() => null);
+    if (!rawDomains) break;
     const domainList = Array.isArray(rawDomains) ? rawDomains : rawDomains?.data || rawDomains?.domains || [];
     if (domainList.length === 0) break;
 
