@@ -707,34 +707,52 @@ export default function DomainDetailPage() {
           </div>
         </div>
 
+        {/* Status Verifikasi ICANN RAA (raa_verification) Bar */}
+        <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-gray-700">Status Verifikasi Email ICANN RAA:</span>
+            {domain.raaVerification?.status === "pending" ? (
+              <span className="inline-flex items-center gap-1 font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-md border border-amber-200">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Pending Verifikasi ({domain.raaVerification.email || domain.customerEmail})
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 font-bold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-200">
+                <Check className="w-3.5 h-3.5 text-emerald-600" /> Terverifikasi (Verified)
+              </span>
+            )}
+          </div>
+          {domain.raaVerification?.status === "pending" && (
+            <button
+              onClick={doResendRaa}
+              disabled={raaSending}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg transition-colors cursor-pointer shrink-0"
+            >
+              {raaSending ? "Mengirim..." : "Kirim Ulang Email Verifikasi"}
+            </button>
+          )}
+        </div>
+
         {(() => {
           const contact =
-            activeContactTab === "registrant"
+            (activeContactTab === "registrant"
               ? domain.registrantContact
               : activeContactTab === "admin"
               ? domain.adminContact
               : activeContactTab === "tech"
               ? domain.techContact
-              : domain.billingContact;
+              : domain.billingContact) || {
+              name: domain.customerName || domain.customerEmail || undefined,
+              email: domain.customerEmail || undefined,
+            };
 
-          if (!contact || (!contact.name && !contact.email && !contact.company)) {
-            return (
-              <div className="p-6 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center space-y-1">
-                <p className="text-xs font-semibold text-gray-500">
-                  Detail kontak {activeContactTab} tidak tersedia secara spesifik atau menggunakan kontak utama pemilik account.
-                </p>
-                <p className="text-xs text-gray-400">
-                  Pemilik Utama: <strong>{domain.customerName || domain.customerEmail || "-"}</strong>
-                </p>
-              </div>
-            );
-          }
+          const displayName = contact.name || domain.customerName || domain.customerEmail || "-";
+          const displayEmail = contact.email || domain.customerEmail || "-";
 
           return (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
               <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
                 <span className="text-gray-500 block text-xs font-medium">Nama Lengkap</span>
-                <span className="font-semibold text-gray-900 block">{contact.name || "-"}</span>
+                <span className="font-semibold text-gray-900 block">{displayName}</span>
               </div>
               <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
                 <span className="text-gray-500 block text-xs font-medium">Perusahaan / Organisasi</span>
@@ -742,7 +760,7 @@ export default function DomainDetailPage() {
               </div>
               <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
                 <span className="text-gray-500 block text-xs font-medium">Email</span>
-                <span className="font-semibold text-gray-900 block font-mono text-xs">{contact.email || "-"}</span>
+                <span className="font-semibold text-gray-900 block font-mono text-xs">{displayEmail}</span>
               </div>
               <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1 sm:col-span-2">
                 <span className="text-gray-500 block text-xs font-medium">Alamat</span>

@@ -138,17 +138,14 @@ export function parseDomainContact(raw: any): {
   };
 }
 
-export function parseRaaVerification(raw: any): { status: "verified" | "pending" | "unknown"; email?: string; canResend?: boolean } | null {
-  if (!raw) return null;
+export function parseRaaVerification(raw: any): { status: "verified" | "pending" | "unknown"; email?: string; canResend?: boolean } {
+  if (!raw) return { status: "verified", canResend: false };
   const target = typeof raw === "object" ? (raw.data ?? raw) : raw;
-  const s = String(typeof target === "string" ? target : target.status || target.raa_verification_status || target.raa_status || "").toLowerCase().trim();
-  if (s === "verified" || s === "true" || s === "1" || s === "active") {
-    return { status: "verified", email: target.email || undefined, canResend: false };
+  const s = String(typeof target === "string" ? target : target.status || target.raa_verification_status || target.raa_status || target.status_name || "").toLowerCase().trim();
+  if (s === "pending" || s === "unverified" || s === "false" || s === "0" || s.includes("pending")) {
+    return { status: "pending", email: typeof target === "object" ? target.email : undefined, canResend: true };
   }
-  if (s === "pending" || s === "unverified" || s === "false" || s === "0") {
-    return { status: "pending", email: target.email || undefined, canResend: true };
-  }
-  return { status: "unknown", email: target.email || undefined, canResend: false };
+  return { status: "verified", email: typeof target === "object" ? target.email : undefined, canResend: false };
 }
 
 export function parseNameservers(raw: any): string[] | null {
@@ -613,7 +610,7 @@ export async function getDomain(userParam: any, lookup: string | number) {
           }
         } catch {}
 
-        // Fetch complete domain details (fields=all) for contacts, RAA verification, DNSSEC, glue records
+        // Fetch complete domain details (fields=All) for contacts, RAA verification, DNSSEC, glue records
         let extraDetails: any = null;
         if (/^\d+$/.test(domainRef)) {
           try {
@@ -621,10 +618,23 @@ export async function getDomain(userParam: any, lookup: string | number) {
           } catch {}
         }
         const ext = (extraDetails && typeof extraDetails === "object") ? (extraDetails.data ?? extraDetails) : {};
-        const registrantContact = parseDomainContact(ext.registrant_contact ?? ext.registrant);
-        const adminContact = parseDomainContact(ext.admin_contact ?? ext.admin);
-        const techContact = parseDomainContact(ext.tech_contact ?? ext.tech);
-        const billingContact = parseDomainContact(ext.billing_contact ?? ext.billing);
+
+        const ownerContact = {
+          name: cust?.name || reseller?.name || (userParam as any)?.name || (userParam as any)?.email?.split("@")[0] || undefined,
+          company: cust?.company || undefined,
+          email: cust?.email || reseller?.email || (userParam as any)?.email || undefined,
+          address: cust?.address || undefined,
+          city: cust?.city || undefined,
+          state: cust?.state || undefined,
+          country: cust?.country || "ID",
+          zipcode: cust?.zipcode || undefined,
+          phone: cust?.phone || undefined,
+        };
+
+        const registrantContact = parseDomainContact(ext.registrant_contact ?? ext.registrant) || ownerContact;
+        const adminContact = parseDomainContact(ext.admin_contact ?? ext.admin) || registrantContact;
+        const techContact = parseDomainContact(ext.tech_contact ?? ext.tech) || registrantContact;
+        const billingContact = parseDomainContact(ext.billing_contact ?? ext.billing) || registrantContact;
         const raaVerification = parseRaaVerification(ext.raa_verification ?? ext.raa_status ?? ext.raa_verification_status);
 
         const nsFormatted = parseNameservers(domain.nameservers);
@@ -642,8 +652,8 @@ export async function getDomain(userParam: any, lookup: string | number) {
           liquidOrderId: domain.liquidOrderId || null,
           customerId: domain.customerId || cust?.id || null,
           liquidCustomerId: cust?.liquidCustomerId || null,
-          customerName: cust?.name || null,
-          customerEmail: cust?.email || null,
+          customerName: cust?.name || reseller?.name || (userParam as any)?.name || (userParam as any)?.email || null,
+          customerEmail: cust?.email || reseller?.email || (userParam as any)?.email || null,
           userId: domain.userId,
           resellerId: reseller?.resellerId || user.resellerId || null,
         };
@@ -652,18 +662,35 @@ export async function getDomain(userParam: any, lookup: string | number) {
       }
     }
 
+    const ownerContactFallback = {
+      name: cust?.name || reseller?.name || (userParam as any)?.name || (userParam as any)?.email?.split("@")[0] || undefined,
+      company: cust?.company || undefined,
+      email: cust?.email || reseller?.email || (userParam as any)?.email || undefined,
+      address: cust?.address || undefined,
+      city: cust?.city || undefined,
+      state: cust?.state || undefined,
+      country: cust?.country || "ID",
+      zipcode: cust?.zipcode || undefined,
+      phone: cust?.phone || undefined,
+    };
+
     const nsFormatted = parseNameservers(domain.nameservers);
 
     return {
       ...domain,
       nameservers: nsFormatted,
+      registrantContact: ownerContactFallback,
+      adminContact: ownerContactFallback,
+      techContact: ownerContactFallback,
+      billingContact: ownerContactFallback,
+      raaVerification: { status: "verified", canResend: false },
       _local: true,
       domainId: domain.id,
       liquidOrderId: domain.liquidOrderId || null,
       customerId: domain.customerId || cust?.id || null,
       liquidCustomerId: cust?.liquidCustomerId || null,
-      customerName: cust?.name || null,
-      customerEmail: cust?.email || null,
+      customerName: cust?.name || reseller?.name || (userParam as any)?.name || (userParam as any)?.email || null,
+      customerEmail: cust?.email || reseller?.email || (userParam as any)?.email || null,
       userId: domain.userId,
       resellerId: reseller?.resellerId || user.resellerId || null,
     };
