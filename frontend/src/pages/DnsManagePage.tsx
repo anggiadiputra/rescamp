@@ -172,7 +172,7 @@ export default function DnsManagePage() {
   const selectedHelp = RECORD_TYPES.find((t) => t.value === form.type)?.help || "";
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="space-y-6 pb-12">
       {/* Top Header & Navigation */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">

@@ -277,7 +277,7 @@ export default function BillingPage() {
   if (initialLoading) return <LoadingSpinner />;
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="space-y-6 pb-12">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Billing & Transaksi</h1>
