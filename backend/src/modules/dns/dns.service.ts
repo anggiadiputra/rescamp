@@ -1,13 +1,38 @@
 import { db } from "../../db";
 import { domains } from "../../db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { LiquidClient } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { getDomain } from "../domains/domains.service";
-import { resolveCredsFromUser } from "../../lib/reseller-creds";
+import { resolveResellerCreds } from "../../lib/reseller-creds";
 
-function getLiquid(creds: { resellerId?: string | null; apiKey?: string | null }): LiquidClient {
-  return new LiquidClient(creds.resellerId || "", creds.apiKey || "");
+async function getLiquid(user: { id?: number; resellerId?: string | null; apiKey?: string | null }): Promise<LiquidClient> {
+  if (user?.id) {
+    const creds = await resolveResellerCreds(user.id);
+    if (creds.resellerId && creds.apiKey) {
+      return new LiquidClient(creds.resellerId, creds.apiKey);
+    }
+  }
+  return new LiquidClient(user?.resellerId || "", user?.apiKey || "");
+}
+
+async function resolveDomainRef(liquid: LiquidClient, domain: any): Promise<string> {
+  let ref = String(domain.liquidOrderId || "").trim();
+  if (!ref || !/^\d+$/.test(ref)) {
+    if (domain.domainName) {
+      try {
+        const item: any = await liquid.getDomain(domain.domainName);
+        const orderId = String(item?.domain_id || item?.order_id || item?.id || "");
+        if (orderId) {
+          ref = orderId;
+          if (domain._local && domain.id) {
+            await db.update(domains).set({ liquidOrderId: orderId }).where(eq(domains.id, domain.id));
+          }
+        }
+      } catch {}
+    }
+  }
+  return ref || String(domain.domainName || domain.id);
 }
 
 function mapDnsType(type: string): string {
@@ -37,8 +62,10 @@ function normalizeRecord(record: any, type: string): { hostname: string; value: 
 
 export async function listRecords(user: { resellerId: string | null; apiKey: string | null }, userParam: any, domainLookup: string | number, type: string) {
   const domain = await getDomain(userParam, domainLookup);
+  const liquid = await getLiquid(userParam);
+  const domainRef = await resolveDomainRef(liquid, domain);
   const liquidType = mapDnsType(type);
-  const res = await getLiquid(user).getDnsRecords(String(domain.liquidOrderId || domain.domainName), liquidType);
+  const res = await liquid.getDnsRecords(domainRef, liquidType);
   const raw: any[] = Array.isArray(res) ? res : res?.records || res?.data || [];
   return raw.map((r) => normalizeRecord(r, type));
 }
@@ -54,7 +81,9 @@ export async function addRecord(
       409,
     );
   }
-  return getLiquid(user).addDnsRecord(String(domain.liquidOrderId || domain.domainName), mapDnsType(type), data);
+  const liquid = await getLiquid(userParam);
+  const domainRef = await resolveDomainRef(liquid, domain);
+  return liquid.addDnsRecord(domainRef, mapDnsType(type), data);
 }
 
 export async function updateRecord(
@@ -68,7 +97,9 @@ export async function updateRecord(
       409,
     );
   }
-  return getLiquid(user).updateDnsRecord(String(domain.liquidOrderId || domain.domainName), mapDnsType(type), oldHost, oldValue, data);
+  const liquid = await getLiquid(userParam);
+  const domainRef = await resolveDomainRef(liquid, domain);
+  return liquid.updateDnsRecord(domainRef, mapDnsType(type), oldHost, oldValue, data);
 }
 
 export async function deleteRecord(
@@ -82,5 +113,7 @@ export async function deleteRecord(
       409,
     );
   }
-  return getLiquid(user).deleteDnsRecord(String(domain.liquidOrderId || domain.domainName), mapDnsType(type), hostname, value);
+  const liquid = await getLiquid(userParam);
+  const domainRef = await resolveDomainRef(liquid, domain);
+  return liquid.deleteDnsRecord(domainRef, mapDnsType(type), hostname, value);
 }

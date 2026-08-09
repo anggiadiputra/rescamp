@@ -406,10 +406,21 @@ export class LiquidClient {
     return this.request<any>("POST", `/domains/${domainId}/dns/${type}`, data);
   }
   updateDnsRecord(domainId: string, type: string, oldHost: string, oldValue: string, data: Record<string, any>) {
-    return this.request<any>("PUT", `/domains/${domainId}/dns/${type}/${oldHost}/${oldValue}`, data);
+    if (type.toLowerCase() === "txt") {
+      return this.request<any>("PUT", `/domains/${domainId}/dns/txt`, {
+        old_hostname: oldHost,
+        old_value: oldValue,
+        ...data,
+      });
+    }
+    return this.request<any>("PUT", `/domains/${domainId}/dns/${type}/${encodeURIComponent(oldHost)}/${encodeURIComponent(oldValue)}`, data);
   }
   deleteDnsRecord(domainId: string, type: string, hostname: string, value: string) {
-    return this.request<any>("DELETE", `/domains/${domainId}/dns/${type}/${hostname}/${value}`);
+    if (type.toLowerCase() === "txt") {
+      const qs = new URLSearchParams({ hostname, value });
+      return this.request<any>("DELETE", `/domains/${domainId}/dns/txt?${qs.toString()}`);
+    }
+    return this.request<any>("DELETE", `/domains/${domainId}/dns/${type}/${encodeURIComponent(hostname)}/${encodeURIComponent(value)}`);
   }
 
   // --- Forwarding ---
