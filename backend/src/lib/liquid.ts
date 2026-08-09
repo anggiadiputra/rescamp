@@ -508,8 +508,20 @@ export class LiquidClient {
   createEmailForwarding(domainId: string, data: Record<string, any>) {
     return this.request<any>("POST", `/domains/${domainId}/email_forwarding`, data);
   }
+  getSingleEmailForwarding(domainId: string | number, email: string) {
+    return this.request<any>("GET", `/domains/${domainId}/email_forwarding/${encodeURIComponent(email)}`);
+  }
+  updateEmailForwarding(domainId: string | number, email: string, forwardTo: string) {
+    return this.request<any>("PUT", `/domains/${domainId}/email_forwarding/${encodeURIComponent(email)}`, { forward_to: forwardTo });
+  }
   deleteEmailForwarding(domainId: string, email: string) {
-    return this.request<any>("DELETE", `/domains/${domainId}/email_forwarding/${email}`);
+    return this.request<any>("DELETE", `/domains/${domainId}/email_forwarding/${encodeURIComponent(email)}`);
+  }
+  getCatchAllEmailForwarding(domainId: string | number) {
+    return this.request<any>("GET", `/domains/${domainId}/email_forwarding/catch_all`);
+  }
+  updateCatchAllEmailForwarding(domainId: string | number, email?: string) {
+    return this.request<any>("PUT", `/domains/${domainId}/email_forwarding/catch_all`, { email: email || "" });
   }
 
   // --- Privacy ---

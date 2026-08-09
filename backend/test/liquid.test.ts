@@ -206,6 +206,18 @@ describe("LiquidClient", () => {
     await client.resendTransferApprovalEmail("99");
     call = (fetch as any).mock.calls[9];
     expect(call[0]).toContain("/domains/99/transfer/resend_approval_email");
+
+    await client.getEmailForwarding("99");
+    call = (fetch as any).mock.calls[10];
+    expect(call[0]).toContain("/domains/99/email_forwarding");
+
+    await client.getCatchAllEmailForwarding("99");
+    call = (fetch as any).mock.calls[11];
+    expect(call[0]).toContain("/domains/99/email_forwarding/catch_all");
+
+    await client.updateCatchAllEmailForwarding("99", "admin@domain.com");
+    call = (fetch as any).mock.calls[12];
+    expect(call[0]).toContain("/domains/99/email_forwarding/catch_all");
   });
 
   it("should format customer prices correctly regardless of object key or tld property format", () => {
