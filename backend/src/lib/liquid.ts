@@ -453,8 +453,10 @@ export class LiquidClient {
   disablePrivacyProtection(domainId: string) {
     return this.request<any>("DELETE", `/domains/${domainId}/privacy_protection`);
   }
-  buyPrivacyProtection(domainId: string) {
-    return this.request<any>("POST", `/domains/${domainId}/privacy_protection/buy`);
+  buyPrivacyProtection(domainId: string, invoiceOption: string = "no_invoice") {
+    return this.request<any>("POST", `/domains/${domainId}/privacy_protection/buy`, {
+      invoice_option: invoiceOption,
+    });
   }
 
   // --- Customers ---

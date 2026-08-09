@@ -597,10 +597,24 @@ export async function processWebhookPayload(payload: any) {
       if (domainId) {
         const [targetDomain] = await db.select().from(domains).where(eq(domains.id, domainId));
         if (targetDomain) {
-          const domainIdentifier = String(targetDomain.liquidOrderId || targetDomain.domainName);
-          await liquid.buyPrivacyProtection(domainIdentifier);
+          let domainRef = String(targetDomain.liquidOrderId || "").trim();
+          if (!domainRef || !/^\d+$/.test(domainRef)) {
+            if (targetDomain.domainName) {
+              try {
+                const item: any = await liquid.getDomain(targetDomain.domainName);
+                const orderId = String(item?.domain_id || item?.order_id || item?.id || "");
+                if (orderId) {
+                  domainRef = orderId;
+                  await db.update(domains).set({ liquidOrderId: orderId }).where(eq(domains.id, targetDomain.id));
+                }
+              } catch {}
+            }
+          }
+          if (!domainRef) domainRef = String(targetDomain.domainName || domainId);
+
+          await liquid.buyPrivacyProtection(domainRef, "no_invoice");
           try {
-            await liquid.enablePrivacyProtection(domainIdentifier);
+            await liquid.enablePrivacyProtection(domainRef);
           } catch (e) {
             console.warn(`[payments.service] Auto-enable privacy protection after purchase warning:`, e);
           }

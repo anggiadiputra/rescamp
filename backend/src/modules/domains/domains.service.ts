@@ -34,15 +34,15 @@ export function parsePrivacyProtectionStatus(raw: any): boolean {
   if (typeof raw === "number") return raw === 1;
   if (typeof raw === "string") {
     const s = raw.trim().toLowerCase();
-    return s === "true" || s === "1" || s === "active" || s === "enabled" || s === "on";
+    return s === "true" || s === "1" || s === "active" || s === "enabled" || s === "enable" || s === "on" || s === "purchased" || s === "success";
   }
   if (typeof raw === "object") {
     const target = raw.data ?? raw;
     if (typeof target === "boolean") return target;
     if (typeof target === "number") return target === 1;
-    if (typeof target === "string") {
-      const s = target.trim().toLowerCase();
-      return s === "true" || s === "1" || s === "active" || s === "enabled" || s === "on";
+    if (typeof raw === "string") {
+      const s = raw.trim().toLowerCase();
+      return s === "true" || s === "1" || s === "active" || s === "enabled" || s === "enable" || s === "on" || s === "purchased" || s === "success";
     }
 
     const val =
@@ -58,7 +58,7 @@ export function parsePrivacyProtectionStatus(raw: any): boolean {
       if (typeof val === "number") return val === 1;
       if (typeof val === "string") {
         const s = val.trim().toLowerCase();
-        return s === "true" || s === "1" || s === "active" || s === "enabled" || s === "on";
+        return s === "true" || s === "1" || s === "active" || s === "enabled" || s === "enable" || s === "on" || s === "purchased" || s === "success";
       }
       if (typeof val === "object") {
         return parsePrivacyProtectionStatus(val);
@@ -72,7 +72,7 @@ export function parsePrivacyProtectionStatus(raw: any): boolean {
     if (target.status !== undefined && target.domain_name === undefined && target.name === undefined) {
       const s = String(target.status).trim().toLowerCase();
       if (s === "disabled" || s === "off" || s === "false" || s === "0" || s === "unbound" || s === "inactive") return false;
-      return s === "true" || s === "1" || s === "active" || s === "enabled" || s === "on";
+      return s === "true" || s === "1" || s === "active" || s === "enabled" || s === "enable" || s === "on" || s === "purchased" || s === "success";
     }
   }
   return false;
