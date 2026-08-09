@@ -27,55 +27,90 @@ function assertNotSuspended(domain: { status: string | null }) {
   }
 }
 
+async function resolveDomainRef(liquid: LiquidClient, domain: any): Promise<string> {
+  let ref = String(domain.liquidOrderId || "").trim();
+  if (!ref || !/^\d+$/.test(ref)) {
+    if (domain.domainName) {
+      try {
+        const item: any = await liquid.getDomain(domain.domainName);
+        const orderId = String(item?.domain_id || item?.order_id || item?.id || "");
+        if (orderId) {
+          ref = orderId;
+          if (domain.id) {
+            await db.update(domains).set({ liquidOrderId: orderId }).where(eq(domains.id, domain.id));
+          }
+        }
+      } catch {}
+    }
+  }
+  return ref || String(domain.domainName || domain.id);
+}
+
 // Domain forwarding
 export async function getDomainForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
   const domain = await getDomain(userId, domainId);
-  return getLiquid(user).getDomainForwarding(String(domain.liquidOrderId || domain.domainName));
+  const liquid = getLiquid(user);
+  const domainRef = await resolveDomainRef(liquid, domain);
+  return liquid.getDomainForwarding(domainRef);
 }
 
 export async function updateDomainForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, data: { destination_url: string; enabled: boolean }) {
   const domain = await getDomain(userId, domainId);
   assertNotSuspended(domain);
-  return getLiquid(user).updateDomainForwarding(String(domain.liquidOrderId || domain.domainName), data);
+  const liquid = getLiquid(user);
+  const domainRef = await resolveDomainRef(liquid, domain);
+  return liquid.updateDomainForwarding(domainRef, data);
 }
 
 // Email forwarding
 export async function getEmailForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
   const domain = await getDomain(userId, domainId);
-  return getLiquid(user).getEmailForwarding(String(domain.liquidOrderId || domain.domainName));
+  const liquid = getLiquid(user);
+  const domainRef = await resolveDomainRef(liquid, domain);
+  return liquid.getEmailForwarding(domainRef);
 }
 
 export async function createEmailForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, data: { email: string; forward_to: string }) {
   const domain = await getDomain(userId, domainId);
   assertNotSuspended(domain);
-  return getLiquid(user).createEmailForwarding(String(domain.liquidOrderId || domain.domainName), data);
+  const liquid = getLiquid(user);
+  const domainRef = await resolveDomainRef(liquid, domain);
+  return liquid.createEmailForwarding(domainRef, data);
 }
 
 export async function deleteEmailForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, email: string) {
   const domain = await getDomain(userId, domainId);
   assertNotSuspended(domain);
-  return getLiquid(user).deleteEmailForwarding(String(domain.liquidOrderId || domain.domainName), email);
+  const liquid = getLiquid(user);
+  const domainRef = await resolveDomainRef(liquid, domain);
+  return liquid.deleteEmailForwarding(domainRef, email);
 }
 
 // Privacy
 export async function getPrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
   const domain = await getDomain(userId, domainId);
-  return getLiquid(user).getPrivacyProtection(String(domain.liquidOrderId || domain.domainName));
+  const liquid = getLiquid(user);
+  const domainRef = await resolveDomainRef(liquid, domain);
+  return liquid.getPrivacyProtection(domainRef);
 }
 
 export async function enablePrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
   const domain = await getDomain(userId, domainId);
   assertNotSuspended(domain);
-  const res = await getLiquid(user).enablePrivacyProtection(String(domain.liquidOrderId || domain.domainName));
-  await db.update(domains).set({ privacyProtection: 1 }).where(eq(domains.id, domainId));
+  const liquid = getLiquid(user);
+  const domainRef = await resolveDomainRef(liquid, domain);
+  const res = await liquid.enablePrivacyProtection(domainRef);
+  await db.update(domains).set({ privacyProtection: 1 }).where(eq(domains.id, domain.id));
   return res;
 }
 
 export async function disablePrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
   const domain = await getDomain(userId, domainId);
   assertNotSuspended(domain);
-  const res = await getLiquid(user).disablePrivacyProtection(String(domain.liquidOrderId || domain.domainName));
-  await db.update(domains).set({ privacyProtection: 0 }).where(eq(domains.id, domainId));
+  const liquid = getLiquid(user);
+  const domainRef = await resolveDomainRef(liquid, domain);
+  const res = await liquid.disablePrivacyProtection(domainRef);
+  await db.update(domains).set({ privacyProtection: 0 }).where(eq(domains.id, domain.id));
   return res;
 }
 
@@ -83,13 +118,13 @@ export async function buyPrivacy(user: { resellerId: string | null; apiKey: stri
   const domain = await getDomain(userId, domainId);
   assertNotSuspended(domain);
   const liquid = getLiquid(user);
-  const domainRef = String(domain.liquidOrderId || domain.domainName);
+  const domainRef = await resolveDomainRef(liquid, domain);
   const res = await liquid.buyPrivacyProtection(domainRef);
   try {
     await liquid.enablePrivacyProtection(domainRef);
   } catch (e) {
     console.warn(`[forwarding.service] Auto-enable privacy protection after purchase warning:`, e);
   }
-  await db.update(domains).set({ privacyProtection: 1 }).where(eq(domains.id, domainId));
+  await db.update(domains).set({ privacyProtection: 1 }).where(eq(domains.id, domain.id));
   return res;
 }

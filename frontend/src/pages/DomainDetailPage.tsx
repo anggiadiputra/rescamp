@@ -186,9 +186,14 @@ export default function DomainDetailPage() {
 
   async function togglePrivacy() {
     if (!domain) return;
+    const currentPrivacy = Boolean(domain.privacyProtection);
+    const targetState = currentPrivacy ? 0 : 1;
     setPrivacyToggling(true);
+
+    setDomain(prev => prev ? { ...prev, privacyProtection: targetState } : prev);
+
     try {
-      if (domain.privacyProtection) {
+      if (currentPrivacy) {
         await api.delete(`/domains/${id}/privacy`);
         toast("WHOIS Privacy protection berhasil dinonaktifkan");
       } else {
@@ -197,6 +202,7 @@ export default function DomainDetailPage() {
       }
       await fetchDomain();
     } catch (e: any) {
+      setDomain(prev => prev ? { ...prev, privacyProtection: currentPrivacy ? 1 : 0 } : prev);
       toast(e.message || "Gagal mengubah status WHOIS Privacy", "error");
     }
     setPrivacyToggling(false);
