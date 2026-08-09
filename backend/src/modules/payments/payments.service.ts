@@ -454,7 +454,7 @@ export async function processWebhookPayload(payload: any) {
           domainName: meta.domainName,
           tld: meta.tld || meta.domainName.split(".").slice(1).join("."),
           years: meta.years || 1,
-          status: "pending_transfer",
+          status: "pending",
           autoRenew: meta.autoRenew ? 1 : 0,
           privacyProtection: meta.privacyProtection ? 1 : 0,
           liquidOrderId: liquidOrderId ? String(liquidOrderId) : null,
