@@ -28,6 +28,77 @@ async function getLiquid(user?: { id?: number; resellerId?: string | null; apiKe
   return new LiquidClient(resellerId, apiKey);
 }
 
+export function parsePrivacyProtectionStatus(raw: any): boolean {
+  if (raw === null || raw === undefined) return false;
+  if (typeof raw === "boolean") return raw;
+  if (typeof raw === "number") return raw === 1;
+  if (typeof raw === "string") {
+    const s = raw.trim().toLowerCase();
+    return s === "true" || s === "1" || s === "active" || s === "enabled" || s === "on";
+  }
+  if (typeof raw === "object") {
+    const target = raw.data ?? raw;
+    if (typeof target === "boolean") return target;
+    if (typeof target === "number") return target === 1;
+    if (typeof target === "string") {
+      const s = target.trim().toLowerCase();
+      return s === "true" || s === "1" || s === "active" || s === "enabled" || s === "on";
+    }
+
+    const val =
+      target.privacy_protection ??
+      target.privacy_protection_enabled ??
+      target.purchase_privacy_protection ??
+      target.privacy_protection_status ??
+      target.privacy_protect ??
+      target.privacy ??
+      target.status ??
+      target.enabled;
+
+    if (val === null || val === undefined) return false;
+    if (typeof val === "boolean") return val;
+    if (typeof val === "number") return val === 1;
+    if (typeof val === "string") {
+      const s = val.trim().toLowerCase();
+      return s === "true" || s === "1" || s === "active" || s === "enabled" || s === "on";
+    }
+    if (typeof val === "object") {
+      return parsePrivacyProtectionStatus(val);
+    }
+  }
+  return false;
+}
+
+export function extractAuthCode(raw: any): string | null {
+  if (!raw) return null;
+  if (typeof raw === "string" && raw.trim() && raw.trim() !== "-") return raw.trim();
+  if (typeof raw === "object") {
+    const target = raw.data ?? raw;
+    if (typeof target === "string" && target.trim() && target.trim() !== "-") return target.trim();
+    if (typeof target === "object") {
+      const val =
+        target.auth_code ??
+        target.authcode ??
+        target.auth_code_secret ??
+        target.epp_code ??
+        target.eppCode ??
+        target.code ??
+        target.secret ??
+        target.domain_secret ??
+        target.authCode;
+
+      if (val && typeof val === "string" && val.trim() && val.trim() !== "-") {
+        return val.trim();
+      }
+      if (val && typeof val === "number") {
+        return String(val);
+      }
+    }
+  }
+  return null;
+}
+
+
 export async function checkAvailability(user: { id?: number; resellerId: string | null; apiKey: string | null; role?: string }, domain: string) {
   const liquid = await getLiquid(user);
   const res = await liquid.checkAvailability(domain);
@@ -219,7 +290,7 @@ export async function orderBuyPrivacy(
   } catch (e) {}
 
   return createDomainOrderPayment({
-    userId,
+    userId: user.id,
     type: "privacy",
     domainName: domain.domainName,
     tld: domain.tld,
@@ -227,6 +298,7 @@ export async function orderBuyPrivacy(
     customerId: domain.customerId || undefined,
     amount: privacyPrice,
   });
+
 }
 
 export async function registerDomain(
@@ -380,28 +452,33 @@ export async function getDomain(userParam: any, lookup: string | number) {
       reseller = u || null;
     }
 
-    // Defensive: if local column says privacy=0 but Resellercamp reports it active (race between
-    // pre-existing row and bundled-register webhook), probe live once and reconcile. Read-only on
-    // Resellercamp side; only flips the local column when upstream confirms. Single try/catch so a
-    // transient upstream failure never breaks the read.
-    if (!domain.privacyProtection && domain.liquidOrderId) {
+    // Probe live WHOIS privacy status & resolve liquidOrderId if missing
+    const ref = String(domain.liquidOrderId || domain.domainName || "").trim();
+    if (ref && ref !== "null" && ref !== "undefined") {
       try {
         const liquid = await getLiquid(userParam);
-        const live: any = await liquid.getPrivacyProtection(String(domain.liquidOrderId));
-        const liveFlag = live && (
-          live.privacy_protection === "true" ||
-          live.privacy_protection === true ||
-          live === true ||
-          (typeof live === "object" && (live.status === "active" || live.data?.privacy_protection === "true"))
-        );
-        if (liveFlag) {
-          await db.update(domains).set({ privacyProtection: 1 }).where(eq(domains.id, domain.id));
-          domain.privacyProtection = 1;
+        if (!domain.liquidOrderId && domain.domainName) {
+          try {
+            const item: any = await liquid.getDomain(domain.domainName);
+            const orderId = String(item?.domain_id || item?.order_id || item?.id || "");
+            if (orderId) {
+              await db.update(domains).set({ liquidOrderId: orderId }).where(eq(domains.id, domain.id));
+              domain.liquidOrderId = orderId;
+            }
+          } catch {}
+        }
+        const live: any = await liquid.getPrivacyProtection(String(domain.liquidOrderId || domain.domainName));
+        const liveFlag = parsePrivacyProtectionStatus(live);
+        const dbFlag = domain.privacyProtection === 1;
+        if (liveFlag !== dbFlag) {
+          await db.update(domains).set({ privacyProtection: liveFlag ? 1 : 0 }).where(eq(domains.id, domain.id));
+          domain.privacyProtection = liveFlag ? 1 : 0;
         }
       } catch {
         // ignore — fall back to local column
       }
     }
+
 
     return {
       ...domain,
@@ -569,8 +646,48 @@ export async function updateNameservers(user: { id?: number; resellerId: string 
 export async function getAuthCode(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number) {
   const domain = await getDomain(userParam, domainId);
   const liquid = await getLiquid(user);
-  return liquid.getAuthCode(String(domain.liquidOrderId || domain.domainName || domainId));
+
+  let ref = String(domain.liquidOrderId || "").trim();
+  if (!ref && domain.domainName) {
+    try {
+      const item: any = await liquid.getDomain(domain.domainName);
+      const orderId = String(item?.domain_id || item?.order_id || item?.id || "");
+      if (orderId) {
+        ref = orderId;
+        await db.update(domains).set({ liquidOrderId: orderId }).where(eq(domains.id, domain.id));
+      }
+    } catch {}
+  }
+  if (!ref) ref = String(domain.domainName || domainId);
+
+  // Strategy 1: Call GET /domains/{ref}/auth_code
+  try {
+    const raw = await liquid.getAuthCode(ref);
+    const code = extractAuthCode(raw);
+    if (code) return { auth_code: code };
+  } catch (err: any) {
+    console.warn(`[getAuthCode] liquid.getAuthCode failed for ref=${ref}:`, err?.message);
+  }
+
+  // Strategy 2: Try domainName if ref was numeric or vice versa
+  if (domain.domainName && ref !== domain.domainName) {
+    try {
+      const raw = await liquid.getAuthCode(domain.domainName);
+      const code = extractAuthCode(raw);
+      if (code) return { auth_code: code };
+    } catch {}
+  }
+
+  // Strategy 3: Try GET /domains/{ref} details
+  try {
+    const item: any = await liquid.getDomain(ref);
+    const code = extractAuthCode(item);
+    if (code) return { auth_code: code };
+  } catch {}
+
+  return { auth_code: "-" };
 }
+
 
 export async function updateAuthCode(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number, authCode: string) {
   const domain = await getDomain(userParam, domainId);
@@ -631,6 +748,7 @@ export async function toggleSuspend(user: { id?: number; resellerId: string | nu
   // the list shows "active" and the suspend banner vanishes after the next refresh.
   // Solution: ensure a local row exists BEFORE the short-circuit so the overlay has data to consult,
   // and skip the short-circuit when the status came from the live fallback (untrusted source).
+  const targetUserId = user.id || domain.userId || (typeof userParam === "object" ? userParam.id : Number(userParam)) || 0;
   if (!domain._local && ref) {
     try {
       const liquidItem = await liquid.getDomain(ref);
@@ -640,7 +758,7 @@ export async function toggleSuspend(user: { id?: number; resellerId: string | nu
         if (fullDomainName) {
           const tld = fullDomainName.split(".").slice(1).join(".");
           await db.insert(domains).values({
-            userId: userId,
+            userId: targetUserId,
             customerId: liquidItem.customer_id ? Number(liquidItem.customer_id) : null,
             domainName: fullDomainName,
             tld,
@@ -651,7 +769,7 @@ export async function toggleSuspend(user: { id?: number; resellerId: string | nu
             registrationDate: liquidItem.creation_time || null,
             expiryDate: liquidItem.expiry_date || null,
           } as any).onDuplicateKeyUpdate({ set: { domainName: sql`${domains.domainName}` } });
-          domain = await getDomain(userId, domainId);
+          domain = await getDomain(userParam, domainId);
         }
       }
     } catch (e: any) {
@@ -659,6 +777,7 @@ export async function toggleSuspend(user: { id?: number; resellerId: string | nu
       // call against Resellercamp still goes through.
     }
   }
+
   // N5: short-circuit only when sourced from a real local row. Live-fallback status is
   // Resellercamp's list endpoint, which is unreliable for suspend — always proceed.
   const desiredStatus = suspend ? "suspended" : "active";
@@ -896,6 +1015,10 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
           }
         }
 
+        const privacyFlag = parsePrivacyProtectionStatus(item);
+        const isLocked = item.status === "transferlock" || item.locked === "true" || item.locked === true;
+        const isTheft = item.theft_protection === "true" || item.theft_protection === true;
+
         if (existing) {
           await db.update(domains).set({
             liquidOrderId: orderIdStr || existing.liquidOrderId,
@@ -903,6 +1026,9 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
             status: status as any,
             registrationDate: regDate || existing.registrationDate || null,
             expiryDate: expDate || existing.expiryDate || null,
+            privacyProtection: privacyFlag ? 1 : existing.privacyProtection,
+            locked: isLocked ? 1 : existing.locked,
+            theftProtection: isTheft ? 1 : existing.theftProtection,
           }).where(eq(domains.id, existing.id));
           syncedCount++;
         } else {
@@ -916,10 +1042,14 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
             liquidOrderId: orderIdStr || null,
             registrationDate: regDate,
             expiryDate: expDate,
+            privacyProtection: privacyFlag ? 1 : 0,
+            locked: isLocked ? 1 : 0,
+            theftProtection: isTheft ? 1 : 0,
           }).onDuplicateKeyUpdate({ set: { domainName: sql`${domains.domainName}` } });
           newAddedCount++;
           syncedCount++;
         }
+
       } catch (err) {
         console.error(`[syncDomains] skip ${item?.domain_name || item?.name || item?.id}:`, err);
       }

@@ -54,6 +54,7 @@ export default function DomainDetailPage() {
   const [lockLoading, setLockLoading] = useState(false);
   const [theftLoading, setTheftLoading] = useState(false);
   const [privacyBuying, setPrivacyBuying] = useState(false);
+  const [privacyToggling, setPrivacyToggling] = useState(false);
 
   const fetchDomain = useCallback(async () => {
     setLoading(true);
@@ -151,15 +152,54 @@ export default function DomainDetailPage() {
   async function getAuthCode() {
     setAuthLoading(true);
     try {
-      const res = await api.get<{ auth_code?: string; epp_code?: string; data?: any }>(`/domains/${id}/auth-code`);
-      const code = res.auth_code || res.epp_code || (res.data && (res.data.auth_code || res.data.epp_code)) || "-";
-      setAuthCode(code);
+      const res: any = await api.get(`/domains/${id}/auth-code`);
+      let code = "-";
+      if (typeof res === "string" && res.trim()) {
+        code = res.trim();
+      } else if (res && typeof res === "object") {
+        const payload = res.data ?? res;
+        if (typeof payload === "string" && payload.trim()) {
+          code = payload.trim();
+        } else if (payload && typeof payload === "object") {
+          code =
+            payload.auth_code ||
+            payload.authcode ||
+            payload.auth_code_secret ||
+            payload.epp_code ||
+            payload.eppCode ||
+            payload.code ||
+            payload.secret ||
+            payload.authCode ||
+            payload.domain_secret ||
+            "-";
+        }
+      }
+      setAuthCode(typeof code === "string" ? code : String(code));
       setAuthCodeOpen(true);
     } catch (e: any) {
       toast(e.message || "Gagal mengambil EPP Auth Code dari Resellercamp", "error");
     }
     setAuthLoading(false);
   }
+
+  async function togglePrivacy() {
+    if (!domain) return;
+    setPrivacyToggling(true);
+    try {
+      if (domain.privacyProtection) {
+        await api.delete(`/domains/${id}/privacy`);
+        toast("WHOIS Privacy protection berhasil dinonaktifkan");
+      } else {
+        await api.put(`/domains/${id}/privacy`);
+        toast("WHOIS Privacy protection berhasil diaktifkan");
+      }
+      await fetchDomain();
+    } catch (e: any) {
+      toast(e.message || "Gagal mengubah status WHOIS Privacy", "error");
+    }
+    setPrivacyToggling(false);
+  }
+
 
   function toggleSuspend() {
     if (!domain) return;
@@ -369,9 +409,23 @@ export default function DomainDetailPage() {
             </div>
             <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2">
               <span className="text-gray-500 block text-xs font-medium">WHOIS Privacy</span>
-              <span className={`font-bold ${domain.privacyProtection ? "text-emerald-600" : "text-gray-500"}`}>
+              <span className={`font-bold block ${domain.privacyProtection ? "text-emerald-600" : "text-gray-500"}`}>
                 {domain.privacyProtection ? "✓ Aktif" : "Non-Aktif"}
               </span>
+              {Boolean(domain.privacyProtection) && !isIdDomain && (
+                <button
+                  onClick={togglePrivacy}
+                  disabled={privacyToggling || domain.status === "suspended"}
+                  className={`mt-1 w-full text-xs font-bold rounded-lg py-1.5 px-2 transition-colors flex items-center justify-center gap-1.5 ${
+                    domain.status === "suspended"
+                      ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                      : "bg-gray-200 hover:bg-gray-300 text-gray-800 cursor-pointer"
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  {privacyToggling ? "Memproses..." : "Matikan WHOIS Privacy"}
+                </button>
+              )}
               {!domain.privacyProtection && !isIdDomain && (
                 <button
                   onClick={doBuyPrivacy}
@@ -390,6 +444,7 @@ export default function DomainDetailPage() {
                 <p className="text-[10px] text-gray-400 italic">Tidak tersedia untuk domain .id</p>
               )}
             </div>
+
             <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
               <span className="text-gray-500 block text-xs font-medium">Transfer Lock</span>
               <span className={`font-bold flex items-center gap-1.5 ${domain.locked ? "text-emerald-600" : "text-amber-600"}`}>
