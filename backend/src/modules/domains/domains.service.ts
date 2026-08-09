@@ -1134,26 +1134,44 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
   const baseKeyword = parts[0];
   const requestedTld = parts.length > 1 ? parts.slice(1).join(".") : null;
 
-  // Only default to TLDs that are active in Resellercamp prices (COM, ID, CO.ID, MY.ID, OR.ID, AC.ID, SCH.ID, XYZ)
-  const defaultTlds = ["com", "id", "co.id", "my.id", "or.id", "ac.id", "sch.id", "xyz"];
   let prices: any = {};
+  const tldSet = new Set<string>();
+
+  // 1. Fetch active customer prices from Resellercamp
   try {
     const raw = await liquid.getCustomerPrices();
     prices = formatCustomerPrices(raw);
-  } catch {
-    prices = {};
+    for (const k of Object.keys(prices)) {
+      if (k && k !== "addons") tldSet.add(k.toLowerCase());
+    }
+  } catch (e: any) {
+    console.warn("[bulkAvailability] getCustomerPrices warning:", e?.message);
   }
 
-  // Merge default TLDs with custom priced TLDs returned by Resellercamp API
-  const tldSet = new Set<string>();
-  if (prices && typeof prices === "object") {
-    const custKeys = Object.keys(prices).filter(k => k !== "addons");
-    for (const k of custKeys) {
-      if (k) tldSet.add(k.toLowerCase());
-    }
-  }
-  // Fallback to defaultTlds if prices returned empty
+  // 2. Also try liquid.getPrices() fallback if getCustomerPrices returned empty
   if (tldSet.size === 0) {
+    try {
+      const raw = await liquid.getPrices();
+      prices = formatCustomerPrices(raw);
+      for (const k of Object.keys(prices)) {
+        if (k && k !== "addons") tldSet.add(k.toLowerCase());
+      }
+    } catch {}
+  }
+
+  // 3. Query GET /v1/tlds from Resellercamp to get all supported dashboard TLDs
+  try {
+    const tldRes = await liquid.getTlds().catch(() => null);
+    const arr = Array.isArray(tldRes) ? tldRes : tldRes?.data || tldRes?.tlds || [];
+    for (const item of arr) {
+      const name = String(typeof item === "string" ? item : item?.tld || item?.name || item?.extension || "").replace(/^\./, "").toLowerCase();
+      if (name) tldSet.add(name);
+    }
+  } catch {}
+
+  // Fallback default TLDs if still empty
+  if (tldSet.size === 0) {
+    const defaultTlds = ["com", "id", "co.id", "my.id", "or.id", "web.id", "ac.id", "sch.id", "biz", "info", "xyz"];
     for (const t of defaultTlds) tldSet.add(t);
   }
 

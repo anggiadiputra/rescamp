@@ -160,4 +160,32 @@ describe("LiquidClient", () => {
     call = (fetch as any).mock.calls[1];
     expect(call[0]).toContain("/tlds/com");
   });
+
+  it("should format customer prices correctly regardless of object key or tld property format", () => {
+    const { formatCustomerPrices } = require("../src/lib/liquid");
+
+    // Case 1: Keyed by TLD without tld_label
+    const rawKeyed = {
+      com: { create: { "1": "150.00" }, renew: { "1": "150.00" } },
+      "co.id": { create: { "1": "110.00" }, renew: { "1": "110.00" } },
+    };
+    const res1 = formatCustomerPrices(rawKeyed);
+    expect(res1.com).toBeDefined();
+    expect(res1.com.price_new).toBe(150000);
+    expect(res1["co.id"]).toBeDefined();
+    expect(res1["co.id"].price_new).toBe(110000);
+
+    // Case 2: Nested under data array
+    const rawArray = {
+      data: [
+        { tld: "web.id", create: { "1": "50.00" } },
+        { extension: "my.id", create: { "1": "55.00" } },
+      ],
+    };
+    const res2 = formatCustomerPrices(rawArray);
+    expect(res2["web.id"]).toBeDefined();
+    expect(res2["web.id"].price_new).toBe(50000);
+    expect(res2["my.id"]).toBeDefined();
+    expect(res2["my.id"].price_new).toBe(55000);
+  });
 });

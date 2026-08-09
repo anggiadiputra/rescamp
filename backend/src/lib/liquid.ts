@@ -729,44 +729,59 @@ export function formatCustomerPrices(raw: Record<string, any>): Record<string, a
   const result: Record<string, any> = {};
   if (!raw || typeof raw !== "object") return result;
 
+  const sourceObj = raw.data || raw.prices || raw;
+  if (!sourceObj || typeof sourceObj !== "object") return result;
+
+  const entries = Array.isArray(sourceObj)
+    ? sourceObj.map((item: any) => [item.tld_label || item.tld || item.name || item.extension || "", item])
+    : Object.entries(sourceObj);
+
   const formatYearsMap = (yearsMap: Record<string, any> | undefined) => {
     if (!yearsMap || typeof yearsMap !== "object") return undefined;
     const res: Record<number, number> = {};
     for (const [yr, val] of Object.entries(yearsMap)) {
-      if (val) {
+      if (val !== undefined && val !== null && val !== "") {
         const numVal = Number(val);
-        res[Number(yr)] = Math.round(numVal * 1000);
+        if (!isNaN(numVal)) {
+          res[Number(yr)] = numVal < 1000 ? Math.round(numVal * 1000) : Math.round(numVal);
+        }
       }
     }
-    return res;
+    return Object.keys(res).length > 0 ? res : undefined;
   };
 
   const parsePrice = (val: any) => {
-    if (!val) return null;
+    if (val === undefined || val === null || val === "") return null;
     const num = Number(val);
     if (isNaN(num)) return null;
-    return Math.round(num * 1000);
+    return num < 1000 ? Math.round(num * 1000) : Math.round(num);
   };
 
-  for (const item of Object.values(raw)) {
-    if (!item || typeof item !== "object" || !item.tld_label) continue;
-    const tld = item.tld_label.replace(/^\./, "").toLowerCase();
-    const createPrice = parsePrice(item.create?.["1"] || item.create?.[1]);
-    const renewPrice = parsePrice(item.renew?.["1"] || item.renew?.[1]);
-    const transferPrice = parsePrice(item.transfer?.["1"] || item.transfer?.[1]);
-    const restorePrice = parsePrice(item.restore?.["1"] || item.restore?.[1]);
+  for (const [key, item] of entries) {
+    if (!item || typeof item !== "object") continue;
+    const rawTld = String(item.tld_label || item.tld || item.name || item.extension || key || "").trim();
+    if (!rawTld || rawTld === "rec_count" || rawTld === "status" || rawTld === "addons" || rawTld === "message") continue;
+
+    const tld = rawTld.replace(/^\./, "").toLowerCase();
+
+    const createPrice = parsePrice(item.create?.["1"] || item.create?.[1] || item.add?.["1"] || item.add?.[1] || item.register?.["1"] || item.register?.[1] || item.create_price || item.price_new || item.price);
+    const renewPrice = parsePrice(item.renew?.["1"] || item.renew?.[1] || item.renew_price);
+    const transferPrice = parsePrice(item.transfer?.["1"] || item.transfer?.[1] || item.transfer_price);
+    const restorePrice = parsePrice(item.restore?.["1"] || item.restore?.[1] || item.restore_price);
 
     result[tld] = {
+      tld,
       price_new: createPrice,
       price_register: createPrice,
-      price_renew: renewPrice,
-      price_transfer: transferPrice,
+      price_renew: renewPrice || createPrice,
+      price_transfer: transferPrice || createPrice,
       price_restore: restorePrice,
-      create_years: formatYearsMap(item.create),
+      create_years: formatYearsMap(item.create || item.add || item.register),
       renew_years: formatYearsMap(item.renew),
       privacy_protect: parsePrice(item.privacy_protect) || 70000,
-      currency: "IDR",
+      currency: item.currency || "IDR",
     };
   }
+
   return result;
 }
