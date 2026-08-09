@@ -43,6 +43,13 @@
       "when": 1785736017362,
       "tag": "0005_jazzy_odin",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1786298976730,
+      "tag": "0006_privacy_purchased",
+      "breakpoints": true
     }
   ]
 }

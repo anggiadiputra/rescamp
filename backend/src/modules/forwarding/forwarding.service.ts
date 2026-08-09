@@ -131,7 +131,7 @@ export async function buyPrivacy(user: { resellerId: string | null; apiKey: stri
     console.warn(`[forwarding.service] Auto-enable privacy protection after purchase warning:`, e);
   }
   if (domain.id && domain.id > 0) {
-    await db.update(domains).set({ privacyProtection: 1 }).where(eq(domains.id, domain.id));
+    await db.update(domains).set({ privacyProtection: 1, privacyPurchased: 1 }).where(eq(domains.id, domain.id));
   }
   return res;
 }

@@ -16,6 +16,7 @@ export const domains = mysqlTable("domains", {
   locked: tinyint("locked").default(0),
   theftProtection: tinyint("theft_protection").default(0),
   privacyProtection: tinyint("privacy_protection").default(0),
+  privacyPurchased: tinyint("privacy_purchased").default(0),
   liquidOrderId: varchar("liquid_order_id", { length: 100 }),
   suspendReason: varchar("suspend_reason", { length: 500 }),
   suspendedAt: timestamp("suspended_at"),

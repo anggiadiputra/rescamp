@@ -618,7 +618,7 @@ export async function processWebhookPayload(payload: any) {
           } catch (e) {
             console.warn(`[payments.service] Auto-enable privacy protection after purchase warning:`, e);
           }
-          await db.update(domains).set({ privacyProtection: 1 }).where(eq(domains.id, domainId));
+          await db.update(domains).set({ privacyProtection: 1, privacyPurchased: 1 }).where(eq(domains.id, domainId));
         }
       }
     } else if (meta.type === "renew") {

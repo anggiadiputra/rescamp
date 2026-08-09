@@ -53,6 +53,7 @@ export interface Domain {
   locked: number;
   theftProtection: number;
   privacyProtection: number;
+  privacyPurchased: number;
   liquidOrderId: string | null;
   suspendReason?: string | null;
   suspendedAt?: string | null;
