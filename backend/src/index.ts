@@ -30,22 +30,44 @@ const app = new Elysia()
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     })
   )
+  .onRequest(({ request }) => {
+    (request as any)._startTime = performance.now();
+  })
+  .onAfterHandle(({ request, set }) => {
+    const start = (request as any)._startTime || performance.now();
+    const duration = (performance.now() - start).toFixed(1);
+    const method = request.method;
+    const url = new URL(request.url).pathname;
+    const status = set.status || 200;
+    console.log(`[HTTP] ${method} ${url} ${status} (${duration}ms)`);
+  })
   .error({ AppError })
-  .onError(({ code, error, set }) => {
+  .onError(({ code, error, set, request }) => {
+    const start = (request as any)?._startTime || performance.now();
+    const duration = (performance.now() - start).toFixed(1);
+    const method = request?.method || "HTTP";
+    const url = request?.url ? new URL(request.url).pathname : "";
+
     if (error instanceof AppError) {
       set.status = error.statusCode;
+      console.warn(`[HTTP WARN] ${method} ${url} ${error.statusCode} (${duration}ms) - ${error.message}`);
       return { error: error.message, statusCode: error.statusCode };
     }
     if (code === "VALIDATION") {
-      set.status = (error as any).status || 422;
-      return { error: error.message, statusCode: (error as any).status || 422 };
+      const status = (error as any).status || 422;
+      set.status = status;
+      console.warn(`[HTTP VALIDATION] ${method} ${url} ${status} (${duration}ms) - ${error.message}`);
+      return { error: error.message, statusCode: status };
     }
     if (code === "NOT_FOUND") {
       set.status = 404;
+      console.warn(`[HTTP NOT_FOUND] ${method} ${url} 404 (${duration}ms)`);
       return { error: "Not found", statusCode: 404 };
     }
     set.status = 500;
-    return { error: error instanceof Error ? error.message : "Internal server error", statusCode: 500 };
+    const errMsg = error instanceof Error ? error.message : "Internal server error";
+    console.error(`[HTTP ERROR] ${method} ${url} 500 (${duration}ms) - ${errMsg}`, error);
+    return { error: errMsg, statusCode: 500 };
   })
   .get("/", () => ({ message: "Domain Dashboard API", version: "1.0.0" }))
   .group("/api", (app) =>
