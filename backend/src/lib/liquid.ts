@@ -400,6 +400,9 @@ export class LiquidClient {
   resendRaaVerification(domainId: string) {
     return this.request<any>("POST", `/domains/${domainId}/raa_verification/resend`);
   }
+  getContactDetails(customerId: string, contactId: string) {
+    return this.request<any>("GET", `/customers/${customerId}/contacts/${contactId}`);
+  }
 
   // --- DNS ---
   getDnsRecords(domainId: string, type: string) {

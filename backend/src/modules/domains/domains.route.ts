@@ -9,6 +9,7 @@ export const domainRoutes = new Elysia({ prefix: "/domains" })
   .get("/availability", h.checkAvailability as any, { detail: { tags: ["Domains"], summary: "Check availability" } })
   .get("/bulk-availability", h.bulkAvailability as any, { detail: { tags: ["Domains"], summary: "Bulk availability across TLDs" } })
   .get("/suggestion", h.suggestions as any, { detail: { tags: ["Domains"], summary: "Suggestions" } })
+  .post("/verify-contact", h.verifyContactPublic as any, { detail: { tags: ["Domains"], summary: "Public ICANN RAA / Contact verification" } })
   .guard({ beforeHandle: authGuard }, (app) =>
     app
       .post("/", h.register as any, { body: domainRegisterSchema, detail: { tags: ["Domains"], summary: "Register domain" } })

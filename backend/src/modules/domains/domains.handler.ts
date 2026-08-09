@@ -291,3 +291,49 @@ export async function listRemote(ctx: any) {
     };
   }
 }
+
+export async function verifyContactPublic(ctx: any) {
+  const body = ctx.body || {};
+  const { param1, param2, param3 } = body;
+
+  function safeDecode(str: string): string {
+    if (!str) return "";
+    try {
+      const decoded = Buffer.from(str, "base64").toString("utf-8");
+      if (/^[\w\.\-@+]+$/.test(decoded)) {
+        return decoded;
+      }
+    } catch {}
+    return str;
+  }
+
+  const dec1 = safeDecode(param1 || "");
+  const dec2 = safeDecode(param2 || "");
+  const dec3 = safeDecode(param3 || "");
+
+  let customerId = "";
+  let contactId = "";
+  let email = "";
+
+  for (const item of [dec1, dec2, dec3]) {
+    if (item.includes("@")) {
+      email = item;
+    } else if (!customerId && /^\d+$/.test(item)) {
+      customerId = item;
+    } else if (!contactId && /^\d+$/.test(item)) {
+      contactId = item;
+    }
+  }
+
+  const result = await svc.verifyContactPublicService({ customerId, contactId, email, rawParams: { param1, param2, param3 } });
+  ctx.set.status = 200;
+  return {
+    message: "Verifikasi email kontak berhasil dikonfirmasi",
+    data: {
+      success: true,
+      customerId,
+      contactId,
+      ...result,
+    },
+  };
+}

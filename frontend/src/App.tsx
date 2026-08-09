@@ -23,6 +23,7 @@ import ProfilePage from "./pages/ProfilePage";
 import CompleteProfilePage from "./pages/CompleteProfilePage";
 import RegisterResellerPage from "./pages/RegisterResellerPage";
 import LandingPage from "./pages/LandingPage";
+import VerifyPage from "./pages/VerifyPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -74,6 +75,8 @@ export default function App() {
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/settings" element={<ResellerRoute><SettingsPage /></ResellerRoute>} />
             <Route path="/complete-profile" element={<CompleteProfilePage />} />
+            <Route path="/verify/:param1?/:param2?/:param3?" element={<VerifyPage />} />
+            <Route path="/verify/*" element={<VerifyPage />} />
             <Route path="*" element={<PublicLayout><div className="text-center py-16"><p className="text-lg text-gray-500">404 — Page not found</p></div></PublicLayout>} />
           </Routes>
         </BrowserRouter>
