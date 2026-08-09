@@ -190,6 +190,22 @@ describe("LiquidClient", () => {
     await client.getDomainForwarding("99");
     call = (fetch as any).mock.calls[5];
     expect(call[0]).toContain("/domains/99/domain_forwarding");
+
+    await client.checkTransferValidity("domain.com", "AUTH123");
+    call = (fetch as any).mock.calls[6];
+    expect(call[0]).toContain("/domains/transfer/validity");
+
+    await client.resendIrtpVerification("99");
+    call = (fetch as any).mock.calls[7];
+    expect(call[0]).toContain("/domains/99/irtp_verification/resend");
+
+    await client.cancelDomainTransfer("99");
+    call = (fetch as any).mock.calls[8];
+    expect(call[0]).toContain("/domains/99/transfer/cancel");
+
+    await client.resendTransferApprovalEmail("99");
+    call = (fetch as any).mock.calls[9];
+    expect(call[0]).toContain("/domains/99/transfer/resend_approval_email");
   });
 
   it("should format customer prices correctly regardless of object key or tld property format", () => {

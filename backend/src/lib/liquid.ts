@@ -364,6 +364,27 @@ export class LiquidClient {
       invoice_option: data.invoice_option || "keep_invoice",
     });
   }
+  checkTransferValidity(domainName: string, authCode?: string) {
+    const payload: Record<string, string> = { domain_name: domainName };
+    if (authCode) payload.auth_code = authCode;
+    return this.request<any>("POST", "/domains/transfer/validity", payload);
+  }
+  updateDomainContactsPending(domainId: string | number, data: Record<string, any>) {
+    return this.request<any>("PUT", `/domains/${domainId}/contacts-pending`, {
+      ...data,
+      is_domain_pending: "1",
+      is_trans_execute_queue: "1",
+    });
+  }
+  resendIrtpVerification(domainId: string | number, type: string = "email") {
+    return this.request<any>("POST", `/domains/${domainId}/irtp_verification/resend`, { type });
+  }
+  cancelDomainTransfer(domainId: string | number) {
+    return this.request<any>("POST", `/domains/${domainId}/transfer/cancel`);
+  }
+  resendTransferApprovalEmail(domainId: string | number) {
+    return this.request<any>("POST", `/domains/${domainId}/transfer/resend_approval_email`);
+  }
   deleteDomain(domainId: string) {
     return this.request<any>("DELETE", `/domains/${domainId}`);
   }
