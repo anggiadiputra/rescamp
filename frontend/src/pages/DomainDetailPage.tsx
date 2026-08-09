@@ -55,6 +55,19 @@ export default function DomainDetailPage() {
   const [theftLoading, setTheftLoading] = useState(false);
   const [privacyBuying, setPrivacyBuying] = useState(false);
   const [privacyToggling, setPrivacyToggling] = useState(false);
+  const [raaSending, setRaaSending] = useState(false);
+  const [activeContactTab, setActiveContactTab] = useState<"registrant" | "admin" | "tech" | "billing">("registrant");
+
+  async function doResendRaa() {
+    setRaaSending(true);
+    try {
+      await api.post(`/domains/${id}/raa-verification/resend`);
+      toast("Email verifikasi ICANN RAA berhasil dikirim ulang!");
+    } catch (e: any) {
+      toast(e.message || "Gagal mengirim ulang email verifikasi RAA", "error");
+    }
+    setRaaSending(false);
+  }
 
   const fetchDomain = useCallback(async () => {
     setLoading(true);
