@@ -82,7 +82,14 @@ export async function disablePrivacy(user: { resellerId: string | null; apiKey: 
 export async function buyPrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
   const domain = await getDomain(userId, domainId);
   assertNotSuspended(domain);
-  const res = await getLiquid(user).buyPrivacyProtection(String(domain.liquidOrderId || domain.domainName));
+  const liquid = getLiquid(user);
+  const domainRef = String(domain.liquidOrderId || domain.domainName);
+  const res = await liquid.buyPrivacyProtection(domainRef);
+  try {
+    await liquid.enablePrivacyProtection(domainRef);
+  } catch (e) {
+    console.warn(`[forwarding.service] Auto-enable privacy protection after purchase warning:`, e);
+  }
   await db.update(domains).set({ privacyProtection: 1 }).where(eq(domains.id, domainId));
   return res;
 }

@@ -599,6 +599,11 @@ export async function processWebhookPayload(payload: any) {
         if (targetDomain) {
           const domainIdentifier = String(targetDomain.liquidOrderId || targetDomain.domainName);
           await liquid.buyPrivacyProtection(domainIdentifier);
+          try {
+            await liquid.enablePrivacyProtection(domainIdentifier);
+          } catch (e) {
+            console.warn(`[payments.service] Auto-enable privacy protection after purchase warning:`, e);
+          }
           await db.update(domains).set({ privacyProtection: 1 }).where(eq(domains.id, domainId));
         }
       }

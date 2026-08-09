@@ -371,7 +371,11 @@ export class LiquidClient {
     return this.request<any>("GET", `/domains/${domainId}/ns`);
   }
   updateNameservers(domainId: string, ns: string[]) {
-    return this.request<any>("PUT", `/domains/${domainId}/ns`, { ns: ns.join(",") });
+    const payload: Record<string, string> = { ns: ns.join(",") };
+    ns.forEach((item, index) => {
+      payload[`ns${index + 1}`] = item;
+    });
+    return this.request<any>("PUT", `/domains/${domainId}/ns`, payload);
   }
   getDomainSuggestions(keyword: string, tld?: string) {
     const qs = new URLSearchParams({ keyword });

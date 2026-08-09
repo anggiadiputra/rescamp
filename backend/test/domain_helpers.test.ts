@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { parsePrivacyProtectionStatus, extractAuthCode } from "../src/modules/domains/domains.service";
+import { parsePrivacyProtectionStatus, extractAuthCode, parseNameservers } from "../src/modules/domains/domains.service";
 
 describe("parsePrivacyProtectionStatus", () => {
   it("parses boolean values", () => {
@@ -42,3 +42,27 @@ describe("extractAuthCode", () => {
     expect(extractAuthCode({ data: "KEY123" })).toBe("KEY123");
   });
 });
+
+describe("parseNameservers", () => {
+  it("parses array format", () => {
+    expect(parseNameservers(["ns1.foo.com", "ns2.foo.com"])).toEqual(["ns1.foo.com", "ns2.foo.com"]);
+  });
+
+  it("parses string comma or space separated format", () => {
+    expect(parseNameservers("ns1.foo.com, ns2.foo.com")).toEqual(["ns1.foo.com", "ns2.foo.com"]);
+    expect(parseNameservers("ns1.foo.com ns2.foo.com")).toEqual(["ns1.foo.com", "ns2.foo.com"]);
+  });
+
+  it("parses object formats with ns1, ns2 or nameservers keys", () => {
+    expect(parseNameservers({ ns1: "ns1.foo.com", ns2: "ns2.foo.com" })).toEqual(["ns1.foo.com", "ns2.foo.com"]);
+    expect(parseNameservers({ ns: ["ns1.foo.com", "ns2.foo.com"] })).toEqual(["ns1.foo.com", "ns2.foo.com"]);
+    expect(parseNameservers({ data: { nameservers: "ns1.foo.com,ns2.foo.com" } })).toEqual(["ns1.foo.com", "ns2.foo.com"]);
+  });
+
+  it("returns null for empty or null inputs", () => {
+    expect(parseNameservers(null)).toBe(null);
+    expect(parseNameservers([])).toBe(null);
+    expect(parseNameservers("")).toBe(null);
+  });
+});
+

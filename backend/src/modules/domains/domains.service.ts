@@ -51,19 +51,28 @@ export function parsePrivacyProtectionStatus(raw: any): boolean {
       target.purchase_privacy_protection ??
       target.privacy_protection_status ??
       target.privacy_protect ??
-      target.privacy ??
-      target.status ??
-      target.enabled;
+      target.privacy;
 
-    if (val === null || val === undefined) return false;
-    if (typeof val === "boolean") return val;
-    if (typeof val === "number") return val === 1;
-    if (typeof val === "string") {
-      const s = val.trim().toLowerCase();
-      return s === "true" || s === "1" || s === "active" || s === "enabled" || s === "on";
+    if (val !== null && val !== undefined) {
+      if (typeof val === "boolean") return val;
+      if (typeof val === "number") return val === 1;
+      if (typeof val === "string") {
+        const s = val.trim().toLowerCase();
+        return s === "true" || s === "1" || s === "active" || s === "enabled" || s === "on";
+      }
+      if (typeof val === "object") {
+        return parsePrivacyProtectionStatus(val);
+      }
     }
-    if (typeof val === "object") {
-      return parsePrivacyProtectionStatus(val);
+
+    if ("privacy_protection" in target || "privacy_protection_status" in target || "privacy" in target) {
+      return false;
+    }
+
+    if (target.status !== undefined && target.domain_name === undefined && target.name === undefined) {
+      const s = String(target.status).trim().toLowerCase();
+      if (s === "disabled" || s === "off" || s === "false" || s === "0" || s === "unbound" || s === "inactive") return false;
+      return s === "true" || s === "1" || s === "active" || s === "enabled" || s === "on";
     }
   }
   return false;
@@ -94,6 +103,67 @@ export function extractAuthCode(raw: any): string | null {
         return String(val);
       }
     }
+  }
+  return null;
+}
+
+export function parseNameservers(raw: any): string[] | null {
+  if (raw === null || raw === undefined) return null;
+  if (Array.isArray(raw)) {
+    const list = raw.map((s) => String(s || "").trim()).filter(Boolean);
+    return list.length > 0 ? list : null;
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const parsedJson = JSON.parse(trimmed);
+        if (Array.isArray(parsedJson)) {
+          const list = parsedJson.map((s) => String(s || "").trim()).filter(Boolean);
+          return list.length > 0 ? list : null;
+        }
+      } catch {}
+    }
+    const list = trimmed.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+    return list.length > 0 ? list : null;
+  }
+  if (typeof raw === "object") {
+    const target = raw.data ?? raw;
+    if (Array.isArray(target)) {
+      const list = target.map((s) => String(s || "").trim()).filter(Boolean);
+      return list.length > 0 ? list : null;
+    }
+    if (typeof target === "string") {
+      return parseNameservers(target);
+    }
+    const nsList: string[] = [];
+    if (target.nameservers) {
+      const parsed = parseNameservers(target.nameservers);
+      if (parsed) return parsed;
+    }
+    if (target.ns) {
+      const parsed = parseNameservers(target.ns);
+      if (parsed) return parsed;
+    }
+    for (let i = 1; i <= 10; i++) {
+      const val = target[`ns${i}`] || target[`ns_${i}`] || target[`nameserver${i}`] || target[String(i - 1)] || target[String(i)];
+      if (val && typeof val === "string" && val.trim()) {
+        nsList.push(val.trim());
+      }
+    }
+    if (nsList.length === 0) {
+      for (const key of Object.keys(target)) {
+        const val = target[key];
+        if (typeof val === "string" && val.includes(".")) {
+          const trimmed = val.trim();
+          if (trimmed && !nsList.includes(trimmed)) {
+            nsList.push(trimmed);
+          }
+        }
+      }
+    }
+    if (nsList.length > 0) return nsList;
   }
   return null;
 }
@@ -467,21 +537,48 @@ export async function getDomain(userParam: any, lookup: string | number) {
             }
           } catch {}
         }
-        const live: any = await liquid.getPrivacyProtection(String(domain.liquidOrderId || domain.domainName));
-        const liveFlag = parsePrivacyProtectionStatus(live);
+        const domainRef = String(domain.liquidOrderId || domain.domainName);
+        const live: any = await liquid.getPrivacyProtection(domainRef);
+        let liveFlag = parsePrivacyProtectionStatus(live);
         const dbFlag = domain.privacyProtection === 1;
+
+        if (!liveFlag && dbFlag) {
+          try {
+            await liquid.enablePrivacyProtection(domainRef);
+            const recheck: any = await liquid.getPrivacyProtection(domainRef);
+            if (parsePrivacyProtectionStatus(recheck)) {
+              liveFlag = true;
+            }
+          } catch {}
+        }
+
         if (liveFlag !== dbFlag) {
           await db.update(domains).set({ privacyProtection: liveFlag ? 1 : 0 }).where(eq(domains.id, domain.id));
           domain.privacyProtection = liveFlag ? 1 : 0;
         }
+
+        try {
+          const liveNsRaw = await liquid.getNameservers(domainRef);
+          const liveNs = parseNameservers(liveNsRaw);
+          if (liveNs && liveNs.length > 0) {
+            const currentNs = Array.isArray(domain.nameservers) ? domain.nameservers : [];
+            if (JSON.stringify(liveNs) !== JSON.stringify(currentNs)) {
+              await db.update(domains).set({ nameservers: liveNs }).where(eq(domains.id, domain.id));
+              domain.nameservers = liveNs;
+            }
+          }
+        } catch {}
       } catch {
         // ignore — fall back to local column
       }
     }
 
 
+    const nsFormatted = parseNameservers(domain.nameservers);
+
     return {
       ...domain,
+      nameservers: nsFormatted,
       _local: true,
       domainId: domain.id,
       liquidOrderId: domain.liquidOrderId || null,
@@ -565,6 +662,33 @@ export async function getDomain(userParam: any, lookup: string | number) {
     }
   }
 
+  let livePrivacyFlag = parsePrivacyProtectionStatus(liquidItem);
+  if (liquidDomainId) {
+    try {
+      const livePriv = await liquid.getPrivacyProtection(liquidDomainId);
+      const privFlag = parsePrivacyProtectionStatus(livePriv);
+      if (privFlag) {
+        livePrivacyFlag = true;
+      } else if (!livePrivacyFlag) {
+        try {
+          await liquid.enablePrivacyProtection(liquidDomainId);
+          const recheck = await liquid.getPrivacyProtection(liquidDomainId);
+          if (parsePrivacyProtectionStatus(recheck)) {
+            livePrivacyFlag = true;
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
+  let liveNs = parseNameservers(liquidItem.nameservers) || parseNameservers(liquidItem.ns) || parseNameservers(liquidItem);
+  if ((!liveNs || liveNs.length === 0) && liquidDomainId) {
+    try {
+      const liveNsRaw = await liquid.getNameservers(liquidDomainId);
+      liveNs = parseNameservers(liveNsRaw);
+    } catch {}
+  }
+
   return {
     _local: false,
     id: Number(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || lookupNum) || 0,
@@ -580,9 +704,9 @@ export async function getDomain(userParam: any, lookup: string | number) {
     autoRenew: liquidItem.renewal_mode === "auto" || liquidItem.renewal_mode === "auto_renew" ? 1 : 0,
     locked: liquidItem.status === "transferlock" || liquidItem.locked === "true" || liquidItem.locked === true ? 1 : 0,
     theftProtection: liquidItem.theft_protection === "true" || liquidItem.theft_protection === true ? 1 : 0,
-    privacyProtection: liquidItem.privacy_protection === "true" || liquidItem.privacy_protection === true ? 1 : 0,
+    privacyProtection: livePrivacyFlag ? 1 : 0,
     liquidOrderId: liquidDomainId,
-    nameservers: liquidItem.nameservers || null,
+    nameservers: liveNs || null,
     customerId: liquidItem.customer_id ? Number(liquidItem.customer_id) : null,
     customerName: liquidItem.customer_name || null,
     customerEmail: liquidItem.customer_email || null,
@@ -638,9 +762,58 @@ export async function updateNameservers(user: { id?: number; resellerId: string 
   const domain = await getDomain(userParam, domainId);
   assertNotSuspended(domain);
   const liquid = await getLiquid(user);
-  await liquid.updateNameservers(String(domain.liquidOrderId || domain.domainName), ns);
-  await db.update(domains).set({ nameservers: ns }).where(eq(domains.id, domain.id));
-  return { domain_id: domainId, nameservers: ns };
+
+  let domainRef = String(domain.liquidOrderId || "").trim();
+  if (!domainRef || !/^\d+$/.test(domainRef)) {
+    if (domain.domainName) {
+      try {
+        const item: any = await liquid.getDomain(domain.domainName);
+        const orderId = String(item?.domain_id || item?.order_id || item?.id || "");
+        if (orderId) {
+          domainRef = orderId;
+          if (domain._local && domain.id) {
+            await db.update(domains).set({ liquidOrderId: orderId }).where(eq(domains.id, domain.id));
+          }
+        }
+      } catch {}
+    }
+  }
+  if (!domainRef) domainRef = String(domain.domainName || domainId);
+
+  const cleanNs = ns.map((s) => s.trim()).filter(Boolean);
+
+  await liquid.updateNameservers(domainRef, cleanNs);
+
+  let verifiedNs = cleanNs;
+  try {
+    const liveNsRaw = await liquid.getNameservers(domainRef);
+    const parsed = parseNameservers(liveNsRaw);
+    if (parsed && parsed.length > 0) {
+      verifiedNs = parsed;
+    }
+  } catch {}
+
+  const targetUserId = typeof userParam === "object" ? userParam.id : Number(userParam);
+  if (domain._local && domain.id) {
+    await db.update(domains).set({ nameservers: verifiedNs }).where(eq(domains.id, domain.id));
+  } else if (domain.domainName) {
+    try {
+      await db.insert(domains).values({
+        userId: targetUserId || user.id,
+        customerId: domain.customerId || null,
+        domainName: domain.domainName,
+        tld: domain.tld || domain.domainName.split(".").slice(1).join("."),
+        years: domain.years || 1,
+        status: (domain.status as any) || "active",
+        liquidOrderId: domain.liquidOrderId || null,
+        nameservers: verifiedNs,
+      }).onDuplicateKeyUpdate({ set: { nameservers: verifiedNs } });
+    } catch (e) {
+      console.warn(`[updateNameservers] Failed to upsert local domain for ${domain.domainName}:`, e);
+    }
+  }
+
+  return { domain_id: domainId, nameservers: verifiedNs };
 }
 
 export async function getAuthCode(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number) {
@@ -1135,7 +1308,7 @@ export async function listDomainsFromLiquid(
         autoRenew: item.renewal_mode === "auto" || item.renewal_mode === "auto_renew" ? 1 : 0,
         locked: item.status === "transferlock" || item.locked === "true" || item.locked === true ? 1 : 0,
         theftProtection: item.theft_protection === "true" || item.theft_protection === true ? 1 : 0,
-        privacyProtection: item.privacy_protection === "true" || item.privacy_protection === true ? 1 : 0,
+        privacyProtection: parsePrivacyProtectionStatus(item) ? 1 : 0,
         customerId: item.customer_id ? String(item.customer_id) : null,
         customerName: item.customer_name || null,
         customerEmail: item.customer_email || null,
@@ -1155,6 +1328,7 @@ export async function listDomainsFromLiquid(
         status: domains.status,
         suspendReason: domains.suspendReason,
         suspendedAt: domains.suspendedAt,
+        privacyProtection: domains.privacyProtection,
       })
       .from(domains)
       .where(inArray(domains.liquidOrderId, liquidIds));
@@ -1162,6 +1336,9 @@ export async function listDomainsFromLiquid(
     for (const it of items as any[]) {
       const local = byId.get(String(it.liquidOrderId));
       if (!local) continue;
+      if (local.privacyProtection === 1) {
+        it.privacyProtection = 1;
+      }
       if (local.status === "suspended") {
         it.status = "suspended";
         if (local.suspendReason) it.suspendReason = local.suspendReason;

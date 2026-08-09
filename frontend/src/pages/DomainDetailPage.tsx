@@ -139,7 +139,9 @@ export default function DomainDetailPage() {
     setNsLoading(true);
     setMsg("");
     try {
-      await api.put(`/domains/${id}/ns`, { nameservers: validNs });
+      const res: any = await api.put(`/domains/${id}/ns`, { nameservers: validNs });
+      const updatedNs = res?.nameservers || validNs;
+      setDomain(prev => prev ? { ...prev, nameservers: updatedNs } : prev);
       toast("Nameservers berhasil diperbarui!");
       setNsOpen(false);
       await fetchDomain();
