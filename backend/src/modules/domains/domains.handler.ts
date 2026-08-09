@@ -238,13 +238,18 @@ export async function sync(ctx: any) {
   try {
     const user = await getUser(ctx);
     const result = await svc.syncDomainsFromLiquid(user);
-    return { message: `Berhasil sinkronisasi ${result.syncedCount} domain (${result.newAddedCount} baru) dari Resellercamp`, data: result };
+    const message = `Berhasil sinkronisasi ${result.syncedCount} domain (${result.newAddedCount} baru) dari Resellercamp`;
+    return {
+      message,
+      data: { ...result, message },
+    };
   } catch (err: any) {
     console.warn("[domains.handler] sync error fallback:", err?.message || err);
     ctx.set.status = 200;
+    const message = err?.message || "Gagal sinkronisasi data domain dari Resellercamp";
     return {
-      message: err?.message || "Gagal sinkronisasi data domain dari Resellercamp",
-      data: { syncedCount: 0, newAddedCount: 0, total: 0 },
+      message,
+      data: { syncedCount: 0, newAddedCount: 0, total: 0, message, error: message },
     };
   }
 }

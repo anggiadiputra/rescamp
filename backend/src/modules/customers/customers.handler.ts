@@ -92,17 +92,19 @@ export async function sync(ctx: any) {
   try {
     const userId = Number(ctx.store?.user?.sub);
     const result = await svc.syncCustomersFromLiquid(userId);
+    const message = `Berhasil sinkronisasi ${result.syncedCount} customer (${result.newAddedCount} baru) dari Resellercamp`;
     ctx.set.status = 200;
     return {
-      message: `Berhasil sinkronisasi ${result.syncedCount} customer (${result.newAddedCount} baru) dari Resellercamp ke database lokal.`,
-      data: result,
+      message,
+      data: { ...result, message },
     };
   } catch (err: any) {
     console.warn("[customers.handler] sync error fallback:", err?.message || err);
     ctx.set.status = 200;
+    const message = err?.message || "Gagal sinkronisasi data customer dari Resellercamp";
     return {
-      message: err?.message || "Gagal sinkronisasi data customer dari Resellercamp",
-      data: { syncedCount: 0, newAddedCount: 0, total: 0 },
+      message,
+      data: { syncedCount: 0, newAddedCount: 0, total: 0, message, error: message },
     };
   }
 }

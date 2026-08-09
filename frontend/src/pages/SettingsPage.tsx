@@ -898,29 +898,35 @@ export default function SettingsPage() {
                     {syncing ? "Syncing..." : "Sync Sekarang"}
                   </Button>
                   {syncResult && (
-                    <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg p-3 space-y-1.5 w-full">
-                      <p className="font-bold border-b border-green-200 pb-1 text-green-800">Hasil Sinkronisasi Resellercamp:</p>
+                    <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg p-3.5 space-y-1.5 w-full">
+                      <p className="font-bold border-b border-green-200 pb-1.5 text-green-800 flex items-center justify-between">
+                        <span>Hasil Sinkronisasi Resellercamp:</span>
+                        <span className="text-[10px] bg-green-200 text-green-900 px-2 py-0.5 rounded-full font-semibold">Selesai</span>
+                      </p>
                       {syncResult.reseller_id && (
                         <p><strong>Reseller ID:</strong> {syncResult.reseller_id}</p>
                       )}
                       <p>
                         <strong>Saldo Reseller:</strong>{" "}
-                        {typeof syncResult.balance === "number"
-                          ? `Rp ${syncResult.balance.toLocaleString("id-ID")}`
-                          : syncResult.balance?.available || syncResult.balance?.balance || "—"}
+                        {(() => {
+                          if (!syncResult.balance) return "Gagal membaca saldo (Resellercamp API offline/IP blocked)";
+                          if (typeof syncResult.balance === "number") return `Rp ${syncResult.balance.toLocaleString("id-ID")}`;
+                          if (typeof syncResult.balance === "string") return `Rp ${parseFloat(syncResult.balance || "0").toLocaleString("id-ID")}`;
+                          const val = syncResult.balance?.available ?? syncResult.balance?.balance;
+                          if (val !== undefined && val !== null) return `Rp ${parseFloat(String(val)).toLocaleString("id-ID")}`;
+                          return "Rp 0";
+                        })()}
                       </p>
-                      {syncResult.customerSync?.message && (
-                        <p><strong>Status Customer DB:</strong> ✅ {syncResult.customerSync.message}</p>
-                      )}
-                      {syncResult.customerSync?.error && (
-                        <p className="text-amber-700"><strong>Status Customer DB:</strong> ⚠️ {syncResult.customerSync.error}</p>
-                      )}
-                      {syncResult.domainSync?.message && (
-                        <p><strong>Status Domain DB:</strong> ✅ {syncResult.domainSync.message}</p>
-                      )}
-                      {syncResult.domainSync?.error && (
-                        <p className="text-amber-700"><strong>Status Domain DB:</strong> ⚠️ {syncResult.domainSync.error}</p>
-                      )}
+                      <p>
+                        <strong>Status Customer DB:</strong>{" "}
+                        {syncResult.customerSync?.message ||
+                         (syncResult.customerSync?.syncedCount !== undefined ? `✅ Berhasil sinkronisasi ${syncResult.customerSync.syncedCount} customer` : "✅ Selesai")}
+                      </p>
+                      <p>
+                        <strong>Status Domain DB:</strong>{" "}
+                        {syncResult.domainSync?.message ||
+                         (syncResult.domainSync?.syncedCount !== undefined ? `✅ Berhasil sinkronisasi ${syncResult.domainSync.syncedCount} domain` : "✅ Selesai")}
+                      </p>
                     </div>
                   )}
                   {syncError && (
