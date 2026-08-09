@@ -93,6 +93,13 @@ export async function renew(ctx: any) {
   return { data: result };
 }
 
+export async function buyPrivacy(ctx: any) {
+  const user = await getUser(ctx);
+  const creds = user.role === "customer" ? await getResellerCreds(ctx) : user;
+  const result = await svc.orderBuyPrivacy(creds as any, user, ctx.params.id);
+  return { data: result };
+}
+
 export async function lock(ctx: any) {
   const user = await getUser(ctx);
   const creds = user.role === "customer" ? await getResellerCreds(ctx) : user;
