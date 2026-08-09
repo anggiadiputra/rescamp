@@ -11,15 +11,30 @@ function getLiquid(creds: { resellerId: string; apiKey: string }): LiquidClient 
   return new LiquidClient(creds.resellerId || "", creds.apiKey || "");
 }
 
+function parseLiquidTransactionList(raw: any): any[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "object") {
+    if (Array.isArray(raw.data)) return raw.data;
+    if (Array.isArray(raw.transactions)) return raw.transactions;
+    if (Array.isArray(raw.items)) return raw.items;
+    // Resellercamp / LogicBoxes API returns { "1": { transaction_id: "...", ... }, "2": { ... }, "rec_count": 2 }
+    return Object.entries(raw)
+      .filter(([k]) => k !== "rec_count" && !isNaN(Number(k)))
+      .map(([_, v]) => v);
+  }
+  return [];
+}
+
 async function fetchAllLiquidTransactions(liquid: LiquidClient, customerId?: string): Promise<any[]> {
   const all: any[] = [];
   let pageNo = 1;
   while (true) {
     const params = { limit: "100", page_no: String(pageNo) };
     const res = customerId
-      ? await liquid.listCustomerTransactions(customerId, false, params)
-      : await liquid.getTransactions(params);
-    const list = Array.isArray(res) ? res : res?.data || res?.transactions || [];
+      ? await liquid.listCustomerTransactions(customerId, false, params).catch(() => null)
+      : await liquid.getTransactions(params).catch(() => null);
+    const list = parseLiquidTransactionList(res);
     if (list.length === 0) break;
     all.push(...list);
     if (list.length < 100) break;
@@ -383,8 +398,8 @@ export async function listTransactionsFromLiquid(
   const raw = await liquid.getTransactions({
     limit: String(perPage),
     page_no: String(page),
-  });
-  const list: any[] = Array.isArray(raw) ? raw : raw?.data || raw?.transactions || [];
+  }).catch(() => null);
+  const list = parseLiquidTransactionList(raw);
 
   const statusMap: Record<string, string> = {
     paid: "completed", completed: "completed", success: "completed", done: "completed", approved: "completed",
@@ -403,9 +418,9 @@ export async function listTransactionsFromLiquid(
 
   const items = list
     .map((item: any) => {
-      const txnId = String(item.transaction_id || item.id || "");
+      const txnId = String(item.transaction_id || item.transactionid || item.id || item.invoice_id || "").trim();
       if (!txnId) return null;
-      const amountVal = Math.abs(Number(item.amount || item.net_amount || 0));
+      const amountVal = Math.abs(Number(item.amount || item.net_amount || item.total || 0));
       const statusVal = statusMap[String(item.status || "").toLowerCase()] || "pending_payment";
       const typeVal = typeMap[String(item.transaction_type || item.type || "domain").toLowerCase()] || "register";
 
