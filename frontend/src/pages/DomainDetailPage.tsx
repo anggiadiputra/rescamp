@@ -478,33 +478,28 @@ export default function DomainDetailPage() {
                   {privacyToggling ? "Memproses..." : "Matikan WHOIS Privacy"}
                 </button>
               )}
-              {!domain.privacyProtection && Boolean(domain.privacyPurchased) && !isIdDomain && (
-                <button
-                  onClick={togglePrivacy}
-                  disabled={privacyToggling || domain.status === "suspended"}
-                  className={`mt-1 w-full text-xs font-bold rounded-lg py-2 px-3 transition-colors flex items-center justify-center gap-1.5 ${
-                    domain.status === "suspended"
-                      ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                      : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
-                  }`}
-                >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  {privacyToggling ? "Memproses..." : "Aktifkan WHOIS Privacy"}
-                </button>
-              )}
-              {!domain.privacyProtection && !Boolean(domain.privacyPurchased) && !isIdDomain && (
-                <button
-                  onClick={doBuyPrivacy}
-                  disabled={privacyBuying || domain.status === "suspended"}
-                  className={`mt-1 w-full text-xs font-bold rounded-lg py-2 px-3 transition-colors flex items-center justify-center gap-1.5 ${
-                    domain.status === "suspended"
-                      ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                      : "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
-                  }`}
-                >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  {privacyBuying ? "Memproses..." : "Beli WHOIS Protection"}
-                </button>
+              {!domain.privacyProtection && !isIdDomain && (
+                <div className="space-y-1.5 mt-1">
+                  <button
+                    onClick={togglePrivacy}
+                    disabled={privacyToggling || domain.status === "suspended"}
+                    className={`w-full text-xs font-bold rounded-lg py-2 px-3 transition-colors flex items-center justify-center gap-1.5 ${
+                      domain.status === "suspended"
+                        ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                        : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    {privacyToggling ? "Memproses..." : "Aktifkan WHOIS Privacy"}
+                  </button>
+                  <button
+                    onClick={doBuyPrivacy}
+                    disabled={privacyBuying || domain.status === "suspended"}
+                    className="w-full text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline transition-colors text-center block pt-0.5"
+                  >
+                    {privacyBuying ? "Memproses order..." : "Beli / Perpanjang WHOIS Protection"}
+                  </button>
+                </div>
               )}
               {isIdDomain && (
                 <p className="text-[10px] text-gray-400 italic">Tidak tersedia untuk domain .id</p>
