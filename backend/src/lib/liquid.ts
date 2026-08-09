@@ -525,31 +525,63 @@ export class LiquidClient {
     return this.request<any>("DELETE", `/customers/${customerId}`);
   }
 
-  // --- Customer Transactions / Invoices ---
+  // --- Customer Transactions / Invoices (luquid.md Lines 80-213) ---
+  getCustomerBalance(customerId: string | number) {
+    return this.request<any>("GET", `/customers/${customerId}/balance`);
+  }
   /** List customer transactions (invoices). Set only_pending=true for pending only. */
-  listCustomerTransactions(customerId: string, onlyPending: boolean = false, params?: Record<string, string>) {
+  listCustomerTransactions(customerId: string | number, onlyPending: boolean = false, params?: Record<string, string>) {
     const qs = new URLSearchParams(params || {}).toString();
     const suffix = onlyPending ? (qs ? `&only_pending=true` : `?only_pending=true`) : (qs ? `?${qs}` : "");
     return this.request<any>("GET", `/customers/${customerId}/transactions${suffix}`);
   }
+  getCustomerTransaction(customerId: string | number, transactionId: string | number) {
+    return this.request<any>("GET", `/customers/${customerId}/transactions/${transactionId}`);
+  }
   /** Pay a keep_invoice transaction → triggers domain creation + deducts reseller balance */
-  payCustomerTransaction(customerId: string, transactionId: string, subtractBalance: boolean = false) {
+  payCustomerTransaction(customerId: string | number, transactionId: string | number, subtractBalance: boolean = false) {
     return this.request<any>("POST", `/customers/${customerId}/transactions/pay`, {
-      transaction_id: transactionId,
+      transaction_id: String(transactionId),
       subtract_balance: subtractBalance ? "true" : "false",
     });
   }
+  payCustomerTransactionAddOnly(customerId: string | number, transactionId: string | number) {
+    return this.request<any>("POST", `/customers/${customerId}/transactions/pay_add_only`, {
+      transaction_id: String(transactionId),
+    });
+  }
   /** Cancel a pending invoice */
-  cancelCustomerTransaction(customerId: string, transactionId: string) {
+  cancelCustomerTransaction(customerId: string | number, transactionId: string | number) {
     return this.request<any>("POST", `/customers/${customerId}/transactions/cancel`, {
-      transaction_id: transactionId,
+      transaction_id: String(transactionId),
     });
   }
   /** Execute a pending order-only transaction */
-  executeCustomerTransaction(customerId: string, transactionId: string, cancelInvoice: boolean = false) {
+  executeCustomerTransaction(customerId: string | number, transactionId: string | number, cancelInvoice: boolean = false) {
     return this.request<any>("POST", `/customers/${customerId}/transactions/execute`, {
-      transaction_id: transactionId,
+      transaction_id: String(transactionId),
       cancel_invoice: cancelInvoice ? "true" : "false",
+    });
+  }
+  addCustomerFund(customerId: string | number, data: { amount: number | string; description: string }) {
+    return this.request<any>("POST", `/customers/${customerId}/transactions/fund`, {
+      amount: String(data.amount),
+      description: data.description,
+    });
+  }
+  addCustomerDebitNote(customerId: string | number, data: { amount: number | string; description: string; subtract_total_receipts?: number | string }) {
+    const payload: Record<string, string> = {
+      amount: String(data.amount),
+      description: data.description,
+    };
+    if (data.subtract_total_receipts !== undefined) {
+      payload.subtract_total_receipts = String(data.subtract_total_receipts);
+    }
+    return this.request<any>("POST", `/customers/${customerId}/transactions/debit_note`, payload);
+  }
+  retryCustomerTransaction(customerId: string | number, transactionId: string | number) {
+    return this.request<any>("POST", `/customers/${customerId}/transactions/retry`, {
+      transaction_id: String(transactionId),
     });
   }
 

@@ -114,4 +114,35 @@ describe("LiquidClient", () => {
     expect(call[0]).toContain("/resellers/889/transactions/debit_note");
     expect(call[1].body).toContain("subtract_total_receipts=1");
   });
+
+  it("should call customer balance and transaction endpoints per luquid.md lines 80-213", async () => {
+    (globalThis as any).fetch = mock(() => ({
+      ok: true,
+      text: async () => JSON.stringify({ balance: "50000.00" }),
+    }));
+
+    await client.getCustomerBalance("555");
+    let call = (fetch as any).mock.calls[0];
+    expect(call[0]).toContain("/customers/555/balance");
+
+    await client.getCustomerTransaction("555", "777");
+    call = (fetch as any).mock.calls[1];
+    expect(call[0]).toContain("/customers/555/transactions/777");
+
+    await client.addCustomerFund("555", { amount: 25000, description: "Customer topup" });
+    call = (fetch as any).mock.calls[2];
+    expect(call[0]).toContain("/customers/555/transactions/fund");
+
+    await client.addCustomerDebitNote("555", { amount: 5000, description: "Debit customer" });
+    call = (fetch as any).mock.calls[3];
+    expect(call[0]).toContain("/customers/555/transactions/debit_note");
+
+    await client.payCustomerTransactionAddOnly("555", "777");
+    call = (fetch as any).mock.calls[4];
+    expect(call[0]).toContain("/customers/555/transactions/pay_add_only");
+
+    await client.retryCustomerTransaction("555", "777");
+    call = (fetch as any).mock.calls[5];
+    expect(call[0]).toContain("/customers/555/transactions/retry");
+  });
 });
