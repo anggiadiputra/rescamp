@@ -89,3 +89,13 @@ export async function listRemote(ctx: any) {
     source: "liquid",
   };
 }
+
+export async function sync(ctx: any) {
+  const userId = Number(ctx.store?.user?.sub);
+  const result = await svc.syncCustomersFromLiquid(userId);
+  ctx.set.status = 200;
+  return {
+    message: `Berhasil sinkronisasi ${result.syncedCount} customer (${result.newAddedCount} baru) dari Resellercamp ke database lokal.`,
+    data: result,
+  };
+}

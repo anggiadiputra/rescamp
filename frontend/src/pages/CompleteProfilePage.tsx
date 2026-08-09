@@ -6,11 +6,6 @@ import { api } from "../lib/api";
 
 const COUNTRIES = [
   { code: "ID", name: "Indonesia", phone_cc: "62" },
-  { code: "US", name: "United States", phone_cc: "1" },
-  { code: "SG", name: "Singapore", phone_cc: "65" },
-  { code: "MY", name: "Malaysia", phone_cc: "60" },
-  { code: "AU", name: "Australia", phone_cc: "61" },
-  { code: "GB", name: "United Kingdom", phone_cc: "44" },
 ];
 
 export default function CompleteProfilePage() {
@@ -20,7 +15,7 @@ export default function CompleteProfilePage() {
     company: "",
     address: "",
     city: "",
-    state: "Not Applicable",
+    state: "",
     country: "ID",
     zipcode: "",
     phone_cc: "62",
@@ -74,11 +69,11 @@ export default function CompleteProfilePage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">City *</label>
-              <input value={form.city} onChange={set("city")} className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-black" required />
+              <input value={form.city} onChange={set("city")} className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-black" placeholder="Kota" required />
             </div>
             <div>
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">State *</label>
-              <input value={form.state} onChange={set("state")} className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-black" required />
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">State / Provinsi *</label>
+              <input value={form.state} onChange={set("state")} className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-black" placeholder="Provinsi" required />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">

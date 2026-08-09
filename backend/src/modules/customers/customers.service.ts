@@ -246,3 +246,92 @@ export async function listCustomersFromLiquid(
 
   return { items, total, reachedEnd };
 }
+
+/**
+ * Auto-sync all customers from Resellercamp into local MySQL `customers` table.
+ * Performs full upsert (insert new, update existing) with complete fields.
+ */
+export async function syncCustomersFromLiquid(userId: number) {
+  const creds = await resolveResellerCreds(userId);
+  if (!creds?.resellerId || !creds?.apiKey) {
+    throw new AppError("Resellercamp credentials not configured", 400);
+  }
+
+  const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
+  let pageNo = 1;
+  let syncedCount = 0;
+  let newAddedCount = 0;
+  let totalRemote = 0;
+
+  while (true) {
+    const raw = await liquid.listCustomers({ limit: "100", page_no: String(pageNo) }).catch(() => null);
+    const list: any[] = Array.isArray(raw) ? raw : raw?.data || raw?.customers || [];
+    if (list.length === 0) break;
+    totalRemote += list.length;
+
+    for (const c of list) {
+      try {
+        const liquidId = String(c.customer_id || c.id || "").trim();
+        const email = (c.email || c.customer_email || "").trim().toLowerCase();
+        if (!email) continue;
+
+        const name = c.name || c.customer_name || email.split("@")[0] || "Customer";
+        const company = c.company || null;
+        const address = c.address_line_1 || c.address || null;
+        const city = c.city || null;
+        const state = c.state || null;
+        const country = (c.country_code || c.country || "ID").slice(0, 2).toUpperCase();
+        const zipcode = c.zipcode || c.zip || null;
+        const phone_cc = String(c.tel_cc_no || c.phone_cc || "62");
+        const phone = String(c.tel_no || c.phone || "");
+
+        // Match local user ID by email if exists
+        const [matchedUser] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+        const linkedUserId = matchedUser?.id || null;
+
+        // Check if customer exists locally by liquidCustomerId or email
+        let [existing] = liquidId
+          ? await db.select().from(customers).where(eq(customers.liquidCustomerId, liquidId)).limit(1)
+          : [];
+
+        if (!existing) {
+          [existing] = await db.select().from(customers).where(eq(customers.email, email)).limit(1);
+        }
+
+        const dataToSave = {
+          liquidCustomerId: liquidId || null,
+          name,
+          email,
+          company,
+          address,
+          city,
+          state,
+          country,
+          zipcode,
+          phone_cc,
+          phone,
+          ...(linkedUserId ? { userId: linkedUserId } : {}),
+        };
+
+        if (existing) {
+          await db.update(customers).set(dataToSave).where(eq(customers.id, existing.id));
+          syncedCount++;
+        } else {
+          await db.insert(customers).values({
+            userId: linkedUserId,
+            ...dataToSave,
+          });
+          newAddedCount++;
+          syncedCount++;
+        }
+      } catch (e: any) {
+        console.warn(`[syncCustomers] Failed to sync customer ${c.email}:`, e?.message || e);
+      }
+    }
+
+    if (list.length < 100) break;
+    pageNo++;
+  }
+
+  return { syncedCount, newAddedCount, total: totalRemote };
+}
