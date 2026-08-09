@@ -245,7 +245,7 @@ export async function sync(ctx: any) {
     };
   } catch (err: any) {
     console.warn("[domains.handler] sync error fallback:", err?.message || err);
-    ctx.set.status = 200;
+    ctx.set.status = err?.statusCode || 400;
     const message = err?.message || "Gagal sinkronisasi data domain dari Resellercamp";
     return {
       message,

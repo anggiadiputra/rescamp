@@ -15,7 +15,7 @@ async function getUser(ctx: any) {
 async function getResellerCreds(ctx: any) {
   const u = await getUser(ctx);
   const creds = await resolveResellerCreds(u.id);
-  return { id: u.id, resellerId: creds.resellerId || "", apiKey: creds.apiKey || "", role: u.role };
+  return { id: u.id, resellerId: creds.resellerId || "", apiKey: creds.apiKey || "", role: u.role || undefined };
 }
 
 export async function balance(ctx: any) {

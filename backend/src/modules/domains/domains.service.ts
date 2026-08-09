@@ -1206,7 +1206,7 @@ export async function syncDomainsFromLiquid(userParam: { id: number; role?: stri
 
   const syncCreds = await resolveResellerCreds(userId);
   if (!syncCreds.resellerId || !syncCreds.apiKey) {
-    return { syncedCount: 0, newAddedCount: 0, total: 0 };
+    throw new AppError("Resellercamp credentials not configured", 400);
   }
 
   const liquid = new LiquidClient(syncCreds.resellerId, syncCreds.apiKey);

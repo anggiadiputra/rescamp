@@ -153,26 +153,29 @@ export default function SettingsPage() {
     setSyncError("");
     setSyncResult(null);
     try {
-      const [resellerRes, custSyncRes, domainSyncRes] = await Promise.all([
-        api.get<any>("/auth/reseller-data").catch((e) => ({ error: e.message })),
-        api.post<any>("/customers/sync", {}).catch((e) => ({ error: e.message })),
-        api.post<any>("/domains/sync", {}).catch((e) => ({ error: e.message })),
+      const [resellerRes, custSyncRes, domainSyncRes, billingSyncRes] = await Promise.all([
+        api.get<any>("/auth/reseller-data").catch((e) => ({ error: e.message || "Gagal memuat data reseller" })),
+        api.post<any>("/customers/sync", {}).catch((e) => ({ error: e.message || "Gagal sinkronisasi customer" })),
+        api.post<any>("/domains/sync", {}).catch((e) => ({ error: e.message || "Gagal sinkronisasi domain" })),
+        api.post<any>("/billing/sync", {}).catch((e) => ({ error: e.message || "Gagal sinkronisasi billing" })),
       ]);
 
-      const resData = resellerRes.data || resellerRes;
-      const custData = custSyncRes.data || custSyncRes;
-      const domainData = domainSyncRes.data || domainSyncRes;
+      const resData = resellerRes?.data || resellerRes;
+      const custData = custSyncRes?.data || custSyncRes;
+      const domainData = domainSyncRes?.data || domainSyncRes;
+      const billingData = billingSyncRes?.data || billingSyncRes;
 
-      if (resData.error && custData.error && domainData.error) {
-        throw new Error(resData.error || custData.error || domainData.error);
+      if (resData.error && custData.error && domainData.error && billingData.error) {
+        throw new Error(resData.error || custData.error || domainData.error || billingData.error);
       }
 
       setSyncResult({
         ...resData,
         customerSync: custData,
         domainSync: domainData,
+        billingSync: billingData,
       });
-      toast("Data reseller, customer & domain berhasil disinkronkan ke database!");
+      toast("Data reseller, customer, domain & billing berhasil disinkronkan ke database!");
     } catch (e: any) {
       setSyncError(e.message || "Gagal sinkronisasi data reseller");
     }
@@ -919,13 +922,33 @@ export default function SettingsPage() {
                       </p>
                       <p>
                         <strong>Status Customer DB:</strong>{" "}
-                        {syncResult.customerSync?.message ||
-                         (syncResult.customerSync?.syncedCount !== undefined ? `✅ Berhasil sinkronisasi ${syncResult.customerSync.syncedCount} customer` : "✅ Selesai")}
+                        {(() => {
+                          const c = syncResult.customerSync;
+                          if (c?.error) return <span className="text-red-600 font-semibold">❌ Gagal: {c.error}</span>;
+                          if (c?.syncedCount !== undefined) return `✅ Berhasil sinkronisasi ${c.syncedCount} customer (${c.newAddedCount ?? 0} baru)`;
+                          if (c?.message) return `✅ ${c.message}`;
+                          return "✅ Selesai";
+                        })()}
                       </p>
                       <p>
                         <strong>Status Domain DB:</strong>{" "}
-                        {syncResult.domainSync?.message ||
-                         (syncResult.domainSync?.syncedCount !== undefined ? `✅ Berhasil sinkronisasi ${syncResult.domainSync.syncedCount} domain` : "✅ Selesai")}
+                        {(() => {
+                          const d = syncResult.domainSync;
+                          if (d?.error) return <span className="text-red-600 font-semibold">❌ Gagal: {d.error}</span>;
+                          if (d?.syncedCount !== undefined) return `✅ Berhasil sinkronisasi ${d.syncedCount} domain (${d.newAddedCount ?? 0} baru)`;
+                          if (d?.message) return `✅ ${d.message}`;
+                          return "✅ Selesai";
+                        })()}
+                      </p>
+                      <p>
+                        <strong>Status Billing DB:</strong>{" "}
+                        {(() => {
+                          const b = syncResult.billingSync;
+                          if (b?.error) return <span className="text-red-600 font-semibold">❌ Gagal: {b.error}</span>;
+                          if (b?.synced !== undefined) return `✅ Berhasil sinkronisasi ${b.synced} transaksi wholesale`;
+                          if (b?.message) return `✅ ${b.message}`;
+                          return "✅ Selesai";
+                        })()}
                       </p>
                     </div>
                   )}
