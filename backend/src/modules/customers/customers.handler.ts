@@ -14,8 +14,6 @@ async function getUser(ctx: any) {
   return user;
 }
 
-import { resolveResellerCreds } from "../../lib/reseller-creds";
-
 // Resolve Resellercamp credentials for the calling user.
 async function getResellerCreds(ctx: any): Promise<{ resellerId: string; apiKey: string }> {
   const u = await getUser(ctx);
