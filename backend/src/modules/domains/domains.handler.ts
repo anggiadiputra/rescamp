@@ -184,6 +184,13 @@ export async function remove(ctx: any) {
   return;
 }
 
+export async function resendRaa(ctx: any) {
+  const user = await getUser(ctx);
+  const creds = user.role === "customer" ? await getResellerCreds(ctx) : user;
+  const result = await svc.resendRaaVerification(creds as any, user, ctx.params.id);
+  return { message: "Email verifikasi RAA berhasil dikirim ulang", data: result };
+}
+
 // For customer: auto-resolve or auto-create their LIQUID customer_id
 async function resolveCustomerId(u: any): Promise<number | undefined> {
   if (u.role !== "customer") return undefined;

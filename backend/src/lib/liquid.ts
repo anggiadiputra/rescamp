@@ -397,6 +397,9 @@ export class LiquidClient {
   getSuspendStatus(domainId: string) {
     return this.request<any>("GET", `/domains/${domainId}/suspended`);
   }
+  resendRaaVerification(domainId: string) {
+    return this.request<any>("POST", `/domains/${domainId}/raa_verification/resend`);
+  }
 
   // --- DNS ---
   getDnsRecords(domainId: string, type: string) {

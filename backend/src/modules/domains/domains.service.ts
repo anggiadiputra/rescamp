@@ -107,6 +107,50 @@ export function extractAuthCode(raw: any): string | null {
   return null;
 }
 
+export function parseDomainContact(raw: any): {
+  contactId?: string | number;
+  name?: string;
+  company?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  zipcode?: string;
+  phone?: string;
+} | null {
+  if (!raw || typeof raw !== "object") return null;
+  const c = raw.data ?? raw;
+  const name = c.name || c.contact_name || c.fullname || c.name_1 || "";
+  const email = c.email || c.email_address || c.contact_email || "";
+  if (!name && !email && !c.company) return null;
+  return {
+    contactId: c.contact_id || c.id || undefined,
+    name: name || undefined,
+    company: c.company || c.company_name || undefined,
+    email: email || undefined,
+    address: c.address_line_1 || c.address1 || c.address || undefined,
+    city: c.city || undefined,
+    state: c.state || undefined,
+    country: c.country_code || c.country || undefined,
+    zipcode: c.zipcode || c.zip || undefined,
+    phone: c.tel_no || c.phone || c.telephone || undefined,
+  };
+}
+
+export function parseRaaVerification(raw: any): { status: "verified" | "pending" | "unknown"; email?: string; canResend?: boolean } | null {
+  if (!raw) return null;
+  const target = typeof raw === "object" ? (raw.data ?? raw) : raw;
+  const s = String(typeof target === "string" ? target : target.status || target.raa_verification_status || target.raa_status || "").toLowerCase().trim();
+  if (s === "verified" || s === "true" || s === "1" || s === "active") {
+    return { status: "verified", email: target.email || undefined, canResend: false };
+  }
+  if (s === "pending" || s === "unverified" || s === "false" || s === "0") {
+    return { status: "pending", email: target.email || undefined, canResend: true };
+  }
+  return { status: "unknown", email: target.email || undefined, canResend: false };
+}
+
 export function parseNameservers(raw: any): string[] | null {
   if (raw === null || raw === undefined) return null;
   if (Array.isArray(raw)) {
@@ -568,11 +612,45 @@ export async function getDomain(userParam: any, lookup: string | number) {
             }
           }
         } catch {}
+
+        // Fetch complete domain details (fields=all) for contacts, RAA verification, DNSSEC, glue records
+        let extraDetails: any = null;
+        if (/^\d+$/.test(domainRef)) {
+          try {
+            extraDetails = await liquid.getDomain(domainRef);
+          } catch {}
+        }
+        const ext = (extraDetails && typeof extraDetails === "object") ? (extraDetails.data ?? extraDetails) : {};
+        const registrantContact = parseDomainContact(ext.registrant_contact ?? ext.registrant);
+        const adminContact = parseDomainContact(ext.admin_contact ?? ext.admin);
+        const techContact = parseDomainContact(ext.tech_contact ?? ext.tech);
+        const billingContact = parseDomainContact(ext.billing_contact ?? ext.billing);
+        const raaVerification = parseRaaVerification(ext.raa_verification ?? ext.raa_status ?? ext.raa_verification_status);
+
+        const nsFormatted = parseNameservers(domain.nameservers);
+
+        return {
+          ...domain,
+          nameservers: nsFormatted,
+          registrantContact,
+          adminContact,
+          techContact,
+          billingContact,
+          raaVerification,
+          _local: true,
+          domainId: domain.id,
+          liquidOrderId: domain.liquidOrderId || null,
+          customerId: domain.customerId || cust?.id || null,
+          liquidCustomerId: cust?.liquidCustomerId || null,
+          customerName: cust?.name || null,
+          customerEmail: cust?.email || null,
+          userId: domain.userId,
+          resellerId: reseller?.resellerId || user.resellerId || null,
+        };
       } catch {
         // ignore — fall back to local column
       }
     }
-
 
     const nsFormatted = parseNameservers(domain.nameservers);
 
@@ -689,6 +767,12 @@ export async function getDomain(userParam: any, lookup: string | number) {
     } catch {}
   }
 
+  const registrantContact = parseDomainContact(liquidItem.registrant_contact ?? liquidItem.registrant);
+  const adminContact = parseDomainContact(liquidItem.admin_contact ?? liquidItem.admin);
+  const techContact = parseDomainContact(liquidItem.tech_contact ?? liquidItem.tech);
+  const billingContact = parseDomainContact(liquidItem.billing_contact ?? liquidItem.billing);
+  const raaVerification = parseRaaVerification(liquidItem.raa_verification ?? liquidItem.raa_status ?? liquidItem.raa_verification_status);
+
   return {
     _local: false,
     id: Number(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || lookupNum) || 0,
@@ -707,6 +791,11 @@ export async function getDomain(userParam: any, lookup: string | number) {
     privacyProtection: livePrivacyFlag ? 1 : 0,
     liquidOrderId: liquidDomainId,
     nameservers: liveNs || null,
+    registrantContact,
+    adminContact,
+    techContact,
+    billingContact,
+    raaVerification,
     customerId: liquidItem.customer_id ? Number(liquidItem.customer_id) : null,
     customerName: liquidItem.customer_name || null,
     customerEmail: liquidItem.customer_email || null,
@@ -1357,4 +1446,21 @@ export async function listDomainsFromLiquid(
   const total = reachedEnd ? (page - 1) * perPage + list.length : page * perPage + 1;
 
   return { items, total, reachedEnd };
+}
+
+export async function resendRaaVerification(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number) {
+  const domain = await getDomain(userParam, domainId);
+  const liquid = await getLiquid(user);
+  let domainRef = String(domain.liquidOrderId || "").trim();
+  if (!domainRef || !/^\d+$/.test(domainRef)) {
+    if (domain.domainName) {
+      try {
+        const item: any = await liquid.getDomain(domain.domainName);
+        const orderId = String(item?.domain_id || item?.order_id || item?.id || "");
+        if (orderId) domainRef = orderId;
+      } catch {}
+    }
+  }
+  if (!domainRef) domainRef = String(domain.domainName || domainId);
+  return liquid.resendRaaVerification(domainRef);
 }

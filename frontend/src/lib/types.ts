@@ -4,6 +4,43 @@ export interface User {
   name: string;
 }
 
+export interface DomainContact {
+  contactId?: string | number;
+  name?: string;
+  company?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  zipcode?: string;
+  phone?: string;
+}
+
+export interface RaaVerificationInfo {
+  status: "verified" | "pending" | "unknown";
+  email?: string;
+  canResend?: boolean;
+}
+
+export interface DnssecRecord {
+  keytag: number;
+  algorithm: number;
+  digesttype: number;
+  digest: string;
+}
+
+export interface ChildNsRecord {
+  hostname: string;
+  ipAddress: string;
+}
+
+export interface DomainForwardingInfo {
+  enabled: boolean;
+  destinationUrl?: string;
+  urlMasking?: boolean;
+}
+
 export interface Domain {
   id: number;
   domainName: string;
@@ -23,6 +60,14 @@ export interface Domain {
   customerId: number | null;
   customerName?: string | null;
   customerEmail?: string | null;
+  registrantContact?: DomainContact | null;
+  adminContact?: DomainContact | null;
+  techContact?: DomainContact | null;
+  billingContact?: DomainContact | null;
+  raaVerification?: RaaVerificationInfo | null;
+  dnssecRecords?: DnssecRecord[] | null;
+  childNsRecords?: ChildNsRecord[] | null;
+  forwardingInfo?: DomainForwardingInfo | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -387,6 +387,30 @@ export default function DomainDetailPage() {
         </div>
       )}
 
+      {/* ICANN RAA Verification Warning Banner */}
+      {domain.raaVerification?.status === "pending" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 shadow-sm flex items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-amber-500 text-white rounded-xl shrink-0 mt-0.5">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-amber-900 uppercase tracking-wider">Verifikasi Email Registrant (ICANN RAA) Diperlukan</h3>
+              <p className="text-xs text-amber-800 mt-1">
+                ICANN mengharuskan verifikasi email pemilik domain. Silakan periksa inbox email <strong>{domain.raaVerification.email || domain.customerEmail}</strong> dan klik link verifikasi.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={doResendRaa}
+            disabled={raaSending}
+            className="px-4 py-2 bg-amber-900 hover:bg-black text-white text-xs font-bold rounded-xl shrink-0 transition-colors cursor-pointer"
+          >
+            {raaSending ? "Mengirim..." : "Kirim Ulang Email Verifikasi"}
+          </button>
+        </div>
+      )}
+
       {/* Main Grid: Details & Nameservers */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Domain Information Card */}
@@ -415,7 +439,13 @@ export default function DomainDetailPage() {
               <span className="text-gray-500 block text-xs font-medium">Durasi Kontrak</span>
               <span className="font-semibold text-gray-900">{domain.years} Tahun</span>
             </div>
-            <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2">
+            <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
+              <span className="text-gray-500 block text-xs font-medium">Perpanjangan Otomatis</span>
+              <span className={`font-semibold ${domain.autoRenew ? "text-emerald-600" : "text-gray-700"}`}>
+                {domain.autoRenew ? "✓ Auto-Renew" : "Manual"}
+              </span>
+            </div>
+            <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2 col-span-2 sm:col-span-1">
               <span className="text-gray-500 block text-xs font-medium">WHOIS Privacy</span>
               <span className={`font-bold block ${domain.privacyProtection ? "text-emerald-600" : "text-gray-500"}`}>
                 {domain.privacyProtection ? "✓ Aktif" : "Non-Aktif"}
@@ -635,6 +665,93 @@ export default function DomainDetailPage() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Complete Domain Contact Information Card (Registrant, Admin, Tech, Billing) */}
+      <div className="bg-white rounded-2xl border border-gray-200/80 p-6 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div>
+            <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+              <User className="w-4 h-4 text-blue-600" /> Detail Kontak Informasi Domain (WHOIS)
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">Kontak terdaftar untuk Registrant, Administrative, Technical, dan Billing.</p>
+          </div>
+          
+          <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl shrink-0">
+            {(["registrant", "admin", "tech", "billing"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveContactTab(tab)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition-all cursor-pointer ${
+                  activeContactTab === tab
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                {tab === "registrant" ? "Registrant" : tab === "admin" ? "Admin" : tab === "tech" ? "Technical" : "Billing"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {(() => {
+          const contact =
+            activeContactTab === "registrant"
+              ? domain.registrantContact
+              : activeContactTab === "admin"
+              ? domain.adminContact
+              : activeContactTab === "tech"
+              ? domain.techContact
+              : domain.billingContact;
+
+          if (!contact || (!contact.name && !contact.email && !contact.company)) {
+            return (
+              <div className="p-6 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center space-y-1">
+                <p className="text-xs font-semibold text-gray-500">
+                  Detail kontak {activeContactTab} tidak tersedia secara spesifik atau menggunakan kontak utama pemilik account.
+                </p>
+                <p className="text-xs text-gray-400">
+                  Pemilik Utama: <strong>{domain.customerName || domain.customerEmail || "-"}</strong>
+                </p>
+              </div>
+            );
+          }
+
+          return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+              <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
+                <span className="text-gray-500 block text-xs font-medium">Nama Lengkap</span>
+                <span className="font-semibold text-gray-900 block">{contact.name || "-"}</span>
+              </div>
+              <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
+                <span className="text-gray-500 block text-xs font-medium">Perusahaan / Organisasi</span>
+                <span className="font-semibold text-gray-900 block">{contact.company || "-"}</span>
+              </div>
+              <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
+                <span className="text-gray-500 block text-xs font-medium">Email</span>
+                <span className="font-semibold text-gray-900 block font-mono text-xs">{contact.email || "-"}</span>
+              </div>
+              <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1 sm:col-span-2">
+                <span className="text-gray-500 block text-xs font-medium">Alamat</span>
+                <span className="font-semibold text-gray-900 block">{contact.address || "-"}</span>
+              </div>
+              <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
+                <span className="text-gray-500 block text-xs font-medium">Kota / Provinsi / Negara</span>
+                <span className="font-semibold text-gray-900 block">
+                  {[contact.city, contact.state, contact.country].filter(Boolean).join(", ") || "-"}
+                </span>
+              </div>
+              <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
+                <span className="text-gray-500 block text-xs font-medium">Kode Pos</span>
+                <span className="font-semibold text-gray-900 block">{contact.zipcode || "-"}</span>
+              </div>
+              <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
+                <span className="text-gray-500 block text-xs font-medium">No. Telepon</span>
+                <span className="font-semibold text-gray-900 block">{contact.phone || "-"}</span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Renew Modal */}
