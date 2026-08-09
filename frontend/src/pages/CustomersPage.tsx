@@ -137,31 +137,31 @@ export default function CustomersPage() {
       ) : visibleCustomers.length === 0 && search ? (
         <EmptyState icon={User} title="Customer Tidak Ditemukan" description="Coba gunakan kata kunci pencarian yang berbeda" />
       ) : (
-        <Card className="p-0 overflow-hidden border border-gray-200/80 shadow-xs rounded-2xl">
+        <Card className="p-0 overflow-hidden border border-gray-200 shadow-xs rounded-xl">
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50/70 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  <th className="px-5 py-4">Customer / Company</th>
-                  <th className="px-5 py-4">Email</th>
-                  <th className="px-5 py-4">Phone</th>
-                  <th className="px-5 py-4">Location</th>
-                  <th className="px-5 py-4 text-right">Actions</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">Customer / Company</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">Email</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">Phone</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">Location</th>
+                  <th className="px-4 py-3.5 text-right whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-sm">
                 {visibleCustomers.map((c) => (
                   <tr key={c.id} className="hover:bg-gray-50/70 transition-colors cursor-pointer group" onClick={() => setOverviewId(c.id)}>
-                    <td className="px-5 py-4">
+                    <td className="px-4 py-3.5 whitespace-nowrap">
                       <p className="text-sm text-gray-900 font-bold group-hover:text-black">{c.name}</p>
                       {c.company && <p className="text-xs text-gray-500 font-medium">{c.company}</p>}
                     </td>
-                    <td className="px-5 py-4 text-sm text-gray-700 font-medium">{c.email}</td>
-                    <td className="px-5 py-4 text-sm text-gray-700 font-medium">{c.phone || "-"}</td>
-                    <td className="px-5 py-4 text-sm text-gray-600">
+                    <td className="px-4 py-3.5 text-sm text-gray-700 font-medium whitespace-nowrap">{c.email}</td>
+                    <td className="px-4 py-3.5 text-sm text-gray-700 font-medium whitespace-nowrap">{c.phone || "-"}</td>
+                    <td className="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">
                       {[c.city, c.country].filter(Boolean).join(", ") || c.country}
                     </td>
-                    <td className="px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-4 py-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => openEdit(c)}

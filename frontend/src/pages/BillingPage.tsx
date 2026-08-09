@@ -436,25 +436,25 @@ export default function BillingPage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-50/70 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                      <th className="px-5 py-4">Invoice #</th>
-                      <th className="px-5 py-4">Date</th>
-                      <th className="px-5 py-4">Description</th>
-                      <th className="px-5 py-4">Berlaku Hingga</th>
-                      <th className="px-5 py-4 text-right">Amount</th>
-                      <th className="px-5 py-4 text-center">Status</th>
-                      <th className="px-5 py-4 text-right">Action</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap">Invoice #</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap">Date</th>
+                      <th className="px-4 py-3.5 min-w-[240px]">Description</th>
+                      <th className="px-4 py-3.5 whitespace-nowrap">Berlaku Hingga</th>
+                      <th className="px-4 py-3.5 text-right whitespace-nowrap">Amount</th>
+                      <th className="px-4 py-3.5 text-center whitespace-nowrap">Status</th>
+                      <th className="px-4 py-3.5 text-right whitespace-nowrap">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white text-sm">
                     {transactions.map((t) => (
                       <tr key={t.id} className="hover:bg-gray-50/70 transition-colors group">
-                        <td className="px-5 py-4 text-sm font-bold text-gray-900">
+                        <td className="px-4 py-3.5 text-sm font-bold text-gray-900 whitespace-nowrap">
                           #{getInvoiceNumber(t)}
                         </td>
-                        <td className="px-5 py-4 text-sm text-gray-600">
+                        <td className="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">
                           {new Date(t.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
                         </td>
-                        <td className="px-5 py-4 text-sm text-gray-800 font-medium">
+                        <td className="px-4 py-3.5 text-sm text-gray-800 font-medium">
                           {(() => {
                             const fallback = t.description || `${t.type === "domain" ? "Domain Registration Order" : "Service Order"}`;
                             if ((t as any).isWholesale || (t as any).invoiceType === "wholesale") return fallback;
@@ -465,7 +465,7 @@ export default function BillingPage() {
                             return `${typeLabel} - ${info.domainName} (${info.years} yr) - ${info.registerDate} → ${info.expiryDate}`;
                           })()}
                         </td>
-                        <td className="px-5 py-4 text-sm text-gray-600">
+                        <td className="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">
                           {(() => {
                             const info = getTxnInfo(t);
                             if (!info.expiresAt) return "—";
@@ -474,24 +474,24 @@ export default function BillingPage() {
                             return dt.toLocaleString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
                           })()}
                         </td>
-                        <td className="px-5 py-4 text-sm text-gray-900 font-bold text-right">
+                        <td className="px-4 py-3.5 text-sm text-gray-900 font-bold text-right whitespace-nowrap">
                           {fmtPrice(t.amount)}
                         </td>
-                        <td className="px-5 py-4 text-center">
+                        <td className="px-4 py-3.5 text-center whitespace-nowrap">
                           {renderStatusBadge(t)}
                         </td>
-                        <td className="px-5 py-4 text-right">
+                        <td className="px-4 py-3.5 text-right whitespace-nowrap">
                           {isPending(t) ? (
                             <button
                               onClick={() => handleInvoiceClick(t)}
-                              className="px-3.5 py-2 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-lg transition-all shadow-2xs inline-flex items-center gap-1.5 cursor-pointer"
+                              className="px-3.5 py-2 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-lg transition-all shadow-2xs inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                             >
                               <CreditCard className="w-3.5 h-3.5" /> Bayar Sekarang
                             </button>
                           ) : (
                             <button
                               onClick={() => openInvoice(t)}
-                              className="px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 hover:text-black text-xs font-bold rounded-lg transition-colors shadow-2xs inline-flex items-center gap-1.5 cursor-pointer"
+                              className="px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 hover:text-black text-xs font-bold rounded-lg transition-colors shadow-2xs inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                             >
                               <Receipt className="w-3.5 h-3.5 text-gray-500" /> Invoice
                             </button>
