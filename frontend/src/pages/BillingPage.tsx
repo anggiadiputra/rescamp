@@ -369,50 +369,52 @@ export default function BillingPage() {
         )}
       </div>
 
-      <Card className="p-6 bg-white border border-gray-200/80 rounded-2xl shadow-xs space-y-4">
-        {!isCustomer && (
-          <div className="flex flex-wrap border-b border-gray-100 pb-3 gap-2">
-            <button
-              onClick={() => { setCategoryTab("retail"); setPage(1); }}
-              className={`py-2.5 px-4 font-bold text-xs sm:text-sm rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
-                categoryTab === "retail"
-                  ? "bg-gray-900 text-white shadow-xs"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              <ShoppingBag className="w-4 h-4" />
-              Invoice Customer
-            </button>
-            <button
-              onClick={() => { setCategoryTab("wholesale"); setPage(1); }}
-              className={`py-2.5 px-4 font-bold text-xs sm:text-sm rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
-                categoryTab === "wholesale"
-                  ? "bg-gray-900 text-white shadow-xs"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              <CreditCard className="w-4 h-4" />
-              Mutasi &amp; Deposit Reseller
-            </button>
-          </div>
-        )}
+      <Card className="p-0 overflow-hidden bg-white border border-gray-200 rounded-xl shadow-xs">
+        <div className="p-4 sm:p-5 space-y-3 border-b border-gray-100">
+          {!isCustomer && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => { setCategoryTab("retail"); setPage(1); }}
+                className={`py-2.5 px-4 font-bold text-xs sm:text-sm rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
+                  categoryTab === "retail"
+                    ? "bg-gray-900 text-white shadow-xs"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                <ShoppingBag className="w-4 h-4" />
+                Invoice Customer
+              </button>
+              <button
+                onClick={() => { setCategoryTab("wholesale"); setPage(1); }}
+                className={`py-2.5 px-4 font-bold text-xs sm:text-sm rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
+                  categoryTab === "wholesale"
+                    ? "bg-gray-900 text-white shadow-xs"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                <CreditCard className="w-4 h-4" />
+                Mutasi &amp; Deposit Reseller
+              </button>
+            </div>
+          )}
 
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-gray-900">
-              {isCustomer
-                ? "Riwayat Tagihan & Invoice"
-                : categoryTab === "retail"
-                ? "Invoice Penjualan Customer (Retail)"
-                : "Mutasi & Potong Saldo Reseller (Wholesale)"}
-            </h2>
-            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-              {isCustomer
-                ? "Daftar seluruh transaksi pendaftaran, perpanjangan, dan transfer domain Anda."
-                : categoryTab === "retail"
-                ? "Daftar faktur tagihan penjualan domain resmi yang ditagihkan kepada Customer."
-                : "Daftar mutasi pemotongan dan topup saldo deposit."}
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-gray-900">
+                {isCustomer
+                  ? "Riwayat Tagihan & Invoice"
+                  : categoryTab === "retail"
+                  ? "Invoice Penjualan Customer (Retail)"
+                  : "Mutasi & Potong Saldo Reseller (Wholesale)"}
+              </h2>
+              <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                {isCustomer
+                  ? "Daftar seluruh transaksi pendaftaran, perpanjangan, dan transfer domain Anda."
+                  : categoryTab === "retail"
+                  ? "Daftar faktur tagihan penjualan domain resmi yang ditagihkan kepada Customer."
+                  : "Daftar mutasi pemotongan dan topup saldo deposit."}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -438,7 +440,7 @@ export default function BillingPage() {
                     <tr className="bg-gray-50/70 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
                       <th className="px-4 py-3.5 whitespace-nowrap">Invoice #</th>
                       <th className="px-4 py-3.5 whitespace-nowrap">Date</th>
-                      <th className="px-4 py-3.5 min-w-[240px]">Description</th>
+                      <th className="px-4 py-3.5 min-w-[280px]">Description</th>
                       <th className="px-4 py-3.5 whitespace-nowrap">Berlaku Hingga</th>
                       <th className="px-4 py-3.5 text-right whitespace-nowrap">Amount</th>
                       <th className="px-4 py-3.5 text-center whitespace-nowrap">Status</th>
@@ -503,7 +505,7 @@ export default function BillingPage() {
                 </table>
               </div>
 
-              <div className="md:hidden space-y-3">
+              <div className="md:hidden space-y-3 p-4">
                 {transactions.map((t) => (
                   <div key={t.id} className="rounded-xl border border-gray-200 bg-white p-4 space-y-2.5 shadow-2xs">
                     <div className="flex items-center justify-between">
@@ -546,7 +548,7 @@ export default function BillingPage() {
             </div>
 
             {total > perPage && (
-              <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+              <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
                 <Pagination
                   page={page}
                   totalPages={Math.ceil(total / perPage)}
