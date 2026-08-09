@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import {
-  Globe, ShieldCheck, Lock, Unlock, Key, RefreshCw, Server,
+  Globe, ShieldCheck, Lock, Unlock, Key, RefreshCw, Server, Mail,
   AlertTriangle, Trash2, Copy, Check, ExternalLink, Calendar, User, ArrowLeft
 } from "lucide-react";
 import { Button, LoadingSpinner, Modal, InfoBanner, ConfirmDialog, toast, PaymentModal } from "../components/ui";
@@ -643,9 +643,11 @@ export default function DomainDetailPage() {
 
       {/* Action Control Panel */}
       <div className="bg-white rounded-2xl border border-gray-200/80 p-6 shadow-sm space-y-6">
-        <div className="border-b border-gray-100 pb-3">
-          <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Pusat Aksi & Kontrol Domain</h2>
-          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Kelola seluruh fitur keamanan, transfer, perpanjangan, dan konfigurasi domain.</p>
+        <div className="border-b border-gray-100 pb-3 flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wider">Pusat Aksi & Kontrol Domain</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Akses cepat ke konfigurasi DNS, perpanjangan, transfer auth code, dan administrasi domain.</p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -655,17 +657,19 @@ export default function DomainDetailPage() {
             onClick={(e) => { if (domain.status === "suspended") e.preventDefault(); }}
             aria-disabled={domain.status === "suspended"}
             title={domain.status === "suspended" ? "Domain suspended — unsuspend dulu" : undefined}
-            className={`p-4 sm:p-5 bg-gray-50 border border-gray-200/80 rounded-xl transition-all flex flex-col justify-between gap-3 group ${domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-100/80 cursor-pointer"}`}
+            className={`p-4 sm:p-5 bg-gray-50 border border-gray-200/80 rounded-xl transition-all flex flex-col justify-between gap-3 group ${
+              domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-100/90 hover:border-gray-300 cursor-pointer shadow-2xs"
+            }`}
           >
             <div className="flex items-center justify-between">
-              <div className="p-2.5 bg-black text-white rounded-xl group-hover:scale-105 transition-transform">
+              <div className="p-2.5 bg-gray-900 text-white rounded-xl group-hover:scale-105 transition-transform">
                 <Server className="w-5 h-5" />
               </div>
               <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-black transition-colors" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-gray-900">Kelola DNS Record</h3>
-              <p className="text-xs text-gray-500 mt-1">Atur A, CNAME, MX, TXT, AAAA record secara instan.</p>
+              <p className="text-xs text-gray-500 mt-1">Atur A, CNAME, MX, TXT, AAAA record secara langsung.</p>
             </div>
           </Link>
 
@@ -674,92 +678,93 @@ export default function DomainDetailPage() {
             onClick={() => { setRenewYears(1); setRenewOpen(true); }}
             disabled={domain.status === "suspended"}
             title={domain.status === "suspended" ? "Domain suspended — unsuspend dulu" : undefined}
-            className={`p-4 sm:p-5 bg-gray-50 border border-gray-200/80 rounded-xl transition-all flex flex-col justify-between gap-3 text-left group ${domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-emerald-50/50 hover:border-emerald-200 cursor-pointer"}`}
+            className={`p-4 sm:p-5 bg-gray-50 border border-gray-200/80 rounded-xl transition-all flex flex-col justify-between gap-3 text-left group ${
+              domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-emerald-50/60 hover:border-emerald-200 cursor-pointer shadow-2xs"
+            }`}
           >
             <div className="flex items-center justify-between">
               <div className="p-2.5 bg-emerald-600 text-white rounded-xl group-hover:scale-105 transition-transform">
                 <RefreshCw className="w-5 h-5" />
               </div>
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-gray-900">Perpanjang Domain</h3>
-              <p className="text-xs text-gray-500 mt-1">Perpanjang masa berlaku domain 1-10 tahun.</p>
-            </div>
-          </button>
-
-          {/* Action 3: Lock/Unlock */}
-          <button
-            onClick={toggleLock}
-            disabled={lockLoading || domain.status === "suspended"}
-            title={domain.status === "suspended" ? "Domain suspended — unsuspend dulu" : undefined}
-            className={`p-4 sm:p-5 bg-gray-50 border rounded-xl transition-all flex flex-col justify-between gap-3 text-left group ${domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : `cursor-pointer ${domain.locked ? 'hover:bg-amber-50/50 hover:border-amber-200' : 'hover:bg-emerald-50/50 hover:border-emerald-200'}`}`}
-          >
-            <div className="flex items-center justify-between">
-              <div className={`p-2.5 text-white rounded-xl group-hover:scale-105 transition-transform ${domain.locked ? 'bg-amber-600' : 'bg-emerald-600'}`}>
-                {domain.locked ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
-              </div>
-              <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded bg-gray-200 text-gray-700">
-                {domain.locked ? "Locked" : "Unlocked"}
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                Extend
               </span>
             </div>
             <div>
-              <h3 className="text-sm font-bold text-gray-900">{domain.locked ? "Unlock Domain" : "Lock Domain"}</h3>
-              <p className="text-xs text-gray-500 mt-1">Cegah pemindahan domain (Transfer Lock).</p>
+              <h3 className="text-sm font-bold text-gray-900">Perpanjang Domain</h3>
+              <p className="text-xs text-gray-500 mt-1">Tambah masa aktif domain 1-10 tahun.</p>
             </div>
           </button>
 
-          {/* Action 4: Get Auth Code */}
+          {/* Action 3: Get Auth Code */}
           <button
             onClick={getAuthCode}
             disabled={authLoading || domain.status === "suspended"}
             title={domain.status === "suspended" ? "Domain suspended — unsuspend dulu" : undefined}
-            className={`p-4 sm:p-5 bg-gray-50 border border-gray-200/80 rounded-xl transition-all flex flex-col justify-between gap-3 text-left group ${domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-50/50 hover:border-blue-200 cursor-pointer"}`}
+            className={`p-4 sm:p-5 bg-gray-50 border border-gray-200/80 rounded-xl transition-all flex flex-col justify-between gap-3 text-left group ${
+              domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-50/60 hover:border-blue-200 cursor-pointer shadow-2xs"
+            }`}
           >
             <div className="flex items-center justify-between">
               <div className="p-2.5 bg-blue-600 text-white rounded-xl group-hover:scale-105 transition-transform">
                 <Key className="w-5 h-5" />
               </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                EPP Auth
+              </span>
             </div>
             <div>
-              <h3 className="text-sm font-bold text-gray-900">Get EPP Auth Code</h3>
-              <p className="text-xs text-gray-500 mt-1">Dapatkan kode otorisasi transfer domain.</p>
+              <h3 className="text-sm font-bold text-gray-900">Dapatkan EPP Auth Code</h3>
+              <p className="text-xs text-gray-500 mt-1">Kode otorisasi resmi untuk transfer domain.</p>
+            </div>
+          </button>
+
+          {/* Action 4: Resend RAA Verification */}
+          <button
+            onClick={doResendRaa}
+            disabled={raaSending || domain.status === "suspended"}
+            title={domain.status === "suspended" ? "Domain suspended — unsuspend dulu" : undefined}
+            className={`p-4 sm:p-5 bg-gray-50 border border-gray-200/80 rounded-xl transition-all flex flex-col justify-between gap-3 text-left group ${
+              domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-indigo-50/60 hover:border-indigo-200 cursor-pointer shadow-2xs"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="p-2.5 bg-indigo-600 text-white rounded-xl group-hover:scale-105 transition-transform">
+                <Mail className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200">
+                ICANN
+              </span>
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-gray-900">Verifikasi RAA ICANN</h3>
+              <p className="text-xs text-gray-500 mt-1">Kirim ulang email verifikasi kontak domain.</p>
             </div>
           </button>
         </div>
 
-        {/* Advanced & Danger Actions */}
-        <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <button
-              onClick={toggleTheft}
-              disabled={theftLoading || domain.status === "suspended"}
-              title={domain.status === "suspended" ? "Domain suspended — unsuspend dulu" : undefined}
-              className={`px-4 py-2.5 bg-gray-100 text-gray-800 text-xs sm:text-sm font-bold rounded-xl transition-colors flex items-center gap-2 ${domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-200 cursor-pointer"}`}
-            >
-              <ShieldCheck className="w-4.5 h-4.5 text-blue-600" />
-              {domain.theftProtection ? "Matikan Theft Protection" : "Aktifkan Theft Protection"}
-            </button>
-            {isReseller && (
+        {/* Reseller Administrative Controls (Danger Zone / Admin Actions) */}
+        {isReseller && (
+          <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <button
                 onClick={toggleSuspend}
                 disabled={suspendLoading}
-                className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs sm:text-sm font-bold rounded-xl border border-amber-200 transition-colors flex items-center gap-2 cursor-pointer"
+                className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs sm:text-sm font-bold rounded-xl border border-amber-200 transition-colors flex items-center gap-2 cursor-pointer shadow-2xs"
               >
                 <AlertTriangle className="w-4.5 h-4.5 text-amber-600" />
                 {domain.status === "suspended" ? "Unsuspend Domain" : "Suspend Domain"}
               </button>
-            )}
-          </div>
+            </div>
 
-          {isReseller && (
             <button
               onClick={() => setDeleteOpen(true)}
-              className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs sm:text-sm font-bold rounded-xl border border-rose-200 transition-colors flex items-center gap-2 cursor-pointer"
+              className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs sm:text-sm font-bold rounded-xl border border-rose-200 transition-colors flex items-center gap-2 cursor-pointer shadow-2xs"
             >
               <Trash2 className="w-4.5 h-4.5 text-rose-600" /> Hapus Record Domain
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Complete Domain Contact Information Card (Registrant, Admin, Tech, Billing) */}
