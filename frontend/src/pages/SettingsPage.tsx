@@ -153,17 +153,26 @@ export default function SettingsPage() {
     setSyncError("");
     setSyncResult(null);
     try {
-      const [resellerRes, custSyncRes] = await Promise.all([
+      const [resellerRes, custSyncRes, domainSyncRes] = await Promise.all([
         api.get<any>("/auth/reseller-data").catch((e) => ({ error: e.message })),
         api.post<any>("/customers/sync", {}).catch((e) => ({ error: e.message })),
+        api.post<any>("/domains/sync", {}).catch((e) => ({ error: e.message })),
       ]);
+
       const resData = resellerRes.data || resellerRes;
       const custData = custSyncRes.data || custSyncRes;
+      const domainData = domainSyncRes.data || domainSyncRes;
+
+      if (resData.error && custData.error && domainData.error) {
+        throw new Error(resData.error || custData.error || domainData.error);
+      }
+
       setSyncResult({
         ...resData,
         customerSync: custData,
+        domainSync: domainData,
       });
-      toast("Data reseller & customer berhasil disinkronkan ke database!");
+      toast("Data reseller, customer & domain berhasil disinkronkan ke database!");
     } catch (e: any) {
       setSyncError(e.message || "Gagal sinkronisasi data reseller");
     }
@@ -889,13 +898,29 @@ export default function SettingsPage() {
                     {syncing ? "Syncing..." : "Sync Sekarang"}
                   </Button>
                   {syncResult && (
-                    <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 space-y-1">
-                      <p><strong>Status Reseller:</strong> {syncResult.synced ? "✅ Profil & Saldo berhasil disinkronkan" : "⚠️ Selesai"}</p>
+                    <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg p-3 space-y-1.5 w-full">
+                      <p className="font-bold border-b border-green-200 pb-1 text-green-800">Hasil Sinkronisasi Resellercamp:</p>
+                      {syncResult.reseller_id && (
+                        <p><strong>Reseller ID:</strong> {syncResult.reseller_id}</p>
+                      )}
+                      <p>
+                        <strong>Saldo Reseller:</strong>{" "}
+                        {typeof syncResult.balance === "number"
+                          ? `Rp ${syncResult.balance.toLocaleString("id-ID")}`
+                          : syncResult.balance?.available || syncResult.balance?.balance || "—"}
+                      </p>
                       {syncResult.customerSync?.message && (
                         <p><strong>Status Customer DB:</strong> ✅ {syncResult.customerSync.message}</p>
                       )}
-                      {syncResult.reseller_id && <p><strong>Reseller ID:</strong> {syncResult.reseller_id}</p>}
-                      <p><strong>Balance:</strong> {typeof syncResult.balance === "number" ? `Rp ${syncResult.balance.toLocaleString("id-ID")}` : syncResult.balance?.available || syncResult.balance?.balance || "—"}</p>
+                      {syncResult.customerSync?.error && (
+                        <p className="text-amber-700"><strong>Status Customer DB:</strong> ⚠️ {syncResult.customerSync.error}</p>
+                      )}
+                      {syncResult.domainSync?.message && (
+                        <p><strong>Status Domain DB:</strong> ✅ {syncResult.domainSync.message}</p>
+                      )}
+                      {syncResult.domainSync?.error && (
+                        <p className="text-amber-700"><strong>Status Domain DB:</strong> ⚠️ {syncResult.domainSync.error}</p>
+                      )}
                     </div>
                   )}
                   {syncError && (
