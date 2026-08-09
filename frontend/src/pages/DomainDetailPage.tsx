@@ -702,14 +702,14 @@ export default function DomainDetailPage() {
             disabled={authLoading || domain.status === "suspended"}
             title={domain.status === "suspended" ? "Domain suspended — unsuspend dulu" : undefined}
             className={`p-4 sm:p-5 bg-gray-50 border border-gray-200/80 rounded-xl transition-all flex flex-col justify-between gap-3 text-left group ${
-              domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-50/60 hover:border-blue-200 cursor-pointer shadow-2xs"
+              domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-100/60 hover:border-gray-300 cursor-pointer shadow-2xs"
             }`}
           >
             <div className="flex items-center justify-between">
-              <div className="p-2.5 bg-blue-600 text-white rounded-xl group-hover:scale-105 transition-transform">
+              <div className="p-2.5 bg-black text-white rounded-xl group-hover:scale-105 transition-transform">
                 <Key className="w-5 h-5" />
               </div>
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-gray-100 text-gray-800 border border-gray-200">
                 EPP Auth
               </span>
             </div>
