@@ -404,6 +404,29 @@ export class LiquidClient {
     return this.request<any>("GET", `/customers/${customerId}/contacts/${contactId}`);
   }
 
+  // --- Common Utilities (luquid.md Section 3: lines 288-356) ---
+  getAgreement(type: string) {
+    return this.request<any>("GET", `/agreements/${type}`);
+  }
+  getCountries() {
+    return this.request<any>("GET", "/countries");
+  }
+  getCountryStates(countryCode: string) {
+    return this.request<any>("GET", `/countries/${countryCode}/states`);
+  }
+  getCurrencies() {
+    return this.request<any>("GET", "/currencies");
+  }
+  getCurrency(symbol: string) {
+    return this.request<any>("GET", `/currencies/${symbol}`);
+  }
+  getTlds() {
+    return this.request<any>("GET", "/tlds");
+  }
+  getTld(name: string) {
+    return this.request<any>("GET", `/tlds/${name}`);
+  }
+
   // --- DNS ---
   getDnsRecords(domainId: string, type: string) {
     return this.request<any>("GET", `/domains/${domainId}/dns/${type}`);

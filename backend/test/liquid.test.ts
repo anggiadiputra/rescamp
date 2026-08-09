@@ -145,4 +145,19 @@ describe("LiquidClient", () => {
     call = (fetch as any).mock.calls[5];
     expect(call[0]).toContain("/customers/555/transactions/retry");
   });
+
+  it("should call TLD endpoints per luquid.md lines 339-355", async () => {
+    (globalThis as any).fetch = mock(() => ({
+      ok: true,
+      text: async () => JSON.stringify([{ tld: "com" }]),
+    }));
+
+    await client.getTlds();
+    let call = (fetch as any).mock.calls[0];
+    expect(call[0]).toContain("/tlds");
+
+    await client.getTld("com");
+    call = (fetch as any).mock.calls[1];
+    expect(call[0]).toContain("/tlds/com");
+  });
 });
