@@ -9,11 +9,17 @@ function getLiquid(creds: { resellerId?: string | null; apiKey?: string | null }
   return new LiquidClient(creds.resellerId || "", creds.apiKey || "");
 }
 
-async function getDomain(userId: number, domainId: number) {
-  const [domain] = await db.select().from(domains).where(and(
-    or(eq(domains.id, domainId), eq(domains.liquidOrderId, String(domainId))),
-    eq(domains.userId, userId),
-  ));
+async function getDomain(userOrId: any, domainId: number | string) {
+  const strId = String(domainId || "").trim();
+  const numId = Number(strId);
+  const isNum = !isNaN(numId) && strId !== "";
+
+  const orConditions = [eq(domains.liquidOrderId, strId), eq(domains.domainName, strId.toLowerCase())];
+  if (isNum) {
+    orConditions.push(eq(domains.id, numId));
+  }
+
+  const [domain] = await db.select().from(domains).where(or(...orConditions)).limit(1);
   if (!domain) throw new AppError("Domain not found", 404);
   return domain;
 }
@@ -47,14 +53,14 @@ async function resolveDomainRef(liquid: LiquidClient, domain: any): Promise<stri
 }
 
 // Domain forwarding
-export async function getDomainForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
+export async function getDomainForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string) {
   const domain = await getDomain(userId, domainId);
   const liquid = getLiquid(user);
   const domainRef = await resolveDomainRef(liquid, domain);
   return liquid.getDomainForwarding(domainRef);
 }
 
-export async function updateDomainForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, data: { destination_url: string; enabled: boolean }) {
+export async function updateDomainForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string, data: { destination_url: string; enabled: boolean }) {
   const domain = await getDomain(userId, domainId);
   assertNotSuspended(domain);
   const liquid = getLiquid(user);
@@ -63,14 +69,14 @@ export async function updateDomainForwarding(user: { resellerId: string | null; 
 }
 
 // Email forwarding
-export async function getEmailForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
+export async function getEmailForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string) {
   const domain = await getDomain(userId, domainId);
   const liquid = getLiquid(user);
   const domainRef = await resolveDomainRef(liquid, domain);
   return liquid.getEmailForwarding(domainRef);
 }
 
-export async function createEmailForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, data: { email: string; forward_to: string }) {
+export async function createEmailForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string, data: { email: string; forward_to: string }) {
   const domain = await getDomain(userId, domainId);
   assertNotSuspended(domain);
   const liquid = getLiquid(user);
@@ -78,7 +84,7 @@ export async function createEmailForwarding(user: { resellerId: string | null; a
   return liquid.createEmailForwarding(domainRef, data);
 }
 
-export async function deleteEmailForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number, email: string) {
+export async function deleteEmailForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string, email: string) {
   const domain = await getDomain(userId, domainId);
   assertNotSuspended(domain);
   const liquid = getLiquid(user);
@@ -87,14 +93,14 @@ export async function deleteEmailForwarding(user: { resellerId: string | null; a
 }
 
 // Privacy
-export async function getPrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
+export async function getPrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string) {
   const domain = await getDomain(userId, domainId);
   const liquid = getLiquid(user);
   const domainRef = await resolveDomainRef(liquid, domain);
   return liquid.getPrivacyProtection(domainRef);
 }
 
-export async function enablePrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
+export async function enablePrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string) {
   const domain = await getDomain(userId, domainId);
   assertNotSuspended(domain);
   const liquid = getLiquid(user);
@@ -104,7 +110,7 @@ export async function enablePrivacy(user: { resellerId: string | null; apiKey: s
   return res;
 }
 
-export async function disablePrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
+export async function disablePrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string) {
   const domain = await getDomain(userId, domainId);
   assertNotSuspended(domain);
   const liquid = getLiquid(user);
@@ -114,7 +120,7 @@ export async function disablePrivacy(user: { resellerId: string | null; apiKey: 
   return res;
 }
 
-export async function buyPrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number) {
+export async function buyPrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string) {
   const domain = await getDomain(userId, domainId);
   assertNotSuspended(domain);
   const liquid = getLiquid(user);

@@ -22,50 +22,50 @@ async function getResellerCreds(ctx: any) {
 
 export async function getDomainFwd(ctx: any) {
   const { user, creds } = await getResellerCreds(ctx);
-  const result = await svc.getDomainForwarding(creds, user.id, parseInt(ctx.params.id));
+  const result = await svc.getDomainForwarding(creds, user.id, ctx.params.id);
   return { data: result };
 }
 
 export async function updateDomainFwd(ctx: any) {
   const { user, creds } = await getResellerCreds(ctx);
-  const result = await svc.updateDomainForwarding(creds, user.id, parseInt(ctx.params.id), ctx.body);
+  const result = await svc.updateDomainForwarding(creds, user.id, ctx.params.id, ctx.body);
   return { data: result };
 }
 
 export async function getEmailFwd(ctx: any) {
   const { user, creds } = await getResellerCreds(ctx);
-  const result = await svc.getEmailForwarding(creds, user.id, parseInt(ctx.params.id));
+  const result = await svc.getEmailForwarding(creds, user.id, ctx.params.id);
   return { data: Array.isArray(result) ? result : [] };
 }
 
 export async function createEmailFwd(ctx: any) {
   const { user, creds } = await getResellerCreds(ctx);
-  const result = await svc.createEmailForwarding(creds, user.id, parseInt(ctx.params.id), ctx.body);
+  const result = await svc.createEmailForwarding(creds, user.id, ctx.params.id, ctx.body);
   ctx.set.status = 201;
   return { data: result };
 }
 
 export async function deleteEmailFwd(ctx: any) {
   const { user, creds } = await getResellerCreds(ctx);
-  await svc.deleteEmailForwarding(creds, user.id, parseInt(ctx.params.id), ctx.params.email);
+  await svc.deleteEmailForwarding(creds, user.id, ctx.params.id, ctx.params.email);
   return new Response(null, { status: 204 });
 }
 
 export async function getPrivacy(ctx: any) {
   const { user, creds } = await getResellerCreds(ctx);
-  const result = await svc.getPrivacy(creds, user.id, parseInt(ctx.params.id));
+  const result = await svc.getPrivacy(creds, user.id, ctx.params.id);
   return { data: result };
 }
 
 export async function enablePrivacy(ctx: any) {
   const { user, creds } = await getResellerCreds(ctx);
-  const result = await svc.enablePrivacy(creds, user.id, parseInt(ctx.params.id));
+  const result = await svc.enablePrivacy(creds, user.id, ctx.params.id);
   return { data: result };
 }
 
 export async function disablePrivacy(ctx: any) {
   const { user, creds } = await getResellerCreds(ctx);
-  await svc.disablePrivacy(creds, user.id, parseInt(ctx.params.id));
+  await svc.disablePrivacy(creds, user.id, ctx.params.id);
   return new Response(null, { status: 204 });
 }
 
@@ -74,6 +74,6 @@ export async function buyPrivacy(ctx: any) {
   // Create a Sumopod payment link instead of charging reseller balance directly.
   // On payment completion (webhook), svc.buyPrivacy is invoked to actually
   // purchase privacy on Resellercamp and flip the local flag.
-  const result = await domainsSvc.orderBuyPrivacy(creds as any, user.id, parseInt(ctx.params.id));
+  const result = await domainsSvc.orderBuyPrivacy(creds as any, user.id, ctx.params.id);
   return { data: result };
 }
