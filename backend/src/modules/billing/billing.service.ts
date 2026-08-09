@@ -89,6 +89,39 @@ function resolveTransactionType(item: any): string {
   return "register";
 }
 
+export function parseLiquidDate(item: any): Date | null {
+  if (!item) return null;
+
+  const rawDate =
+    item.transaction_date ||
+    item.timestamp ||
+    item.date ||
+    item.date_created ||
+    item.creation_time ||
+    item.created_at ||
+    item.datetime ||
+    item.time;
+
+  if (!rawDate) return null;
+
+  if (typeof rawDate === "number" || (typeof rawDate === "string" && /^\d+$/.test(rawDate.trim()))) {
+    const num = Number(rawDate);
+    if (!isNaN(num) && num > 0) {
+      const ms = num < 10000000000 ? num * 1000 : num;
+      const d = new Date(ms);
+      if (!isNaN(d.getTime())) return d;
+    }
+  }
+
+  if (typeof rawDate === "string") {
+    const cleanStr = rawDate.trim().replace(" ", "T");
+    const d = new Date(cleanStr);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  return null;
+}
+
 async function upsertLiquidTransaction(userId: number, item: any) {
   const liquidTxnId = String(item.transaction_id || item.id || "");
   if (!liquidTxnId) return;
@@ -103,18 +136,15 @@ async function upsertLiquidTransaction(userId: number, item: any) {
   };
   const statusVal = statusMap[String(item.status || "").toLowerCase()] || "pending_payment";
   const typeVal = resolveTransactionType(item);
+  const txnDate = parseLiquidDate(item) || new Date();
 
   // Resolve expires_at: prefer item.expiry_date, fallback created+1h, fallback now+1h
   const computeExpiresAt = () => {
     if (item.expiry_date) {
-      const d = new Date(item.expiry_date);
-      if (!isNaN(d.getTime())) return d;
+      const d = parseLiquidDate({ date: item.expiry_date });
+      if (d) return d;
     }
-    if (item.date_created) {
-      const d = new Date(item.date_created);
-      if (!isNaN(d.getTime())) return new Date(d.getTime() + 60 * 60 * 1000);
-    }
-    return new Date(Date.now() + 60 * 60 * 1000);
+    return new Date(txnDate.getTime() + 60 * 60 * 1000);
   };
   const expiresAt = computeExpiresAt();
 
@@ -126,10 +156,17 @@ async function upsertLiquidTransaction(userId: number, item: any) {
     .limit(1);
 
   if (existing) {
-    // Update local status if Resellercamp status differs
+    const updates: any = {};
     if (existing.status !== statusVal) {
+      updates.status = statusVal as any;
+      updates.paymentStatus = statusVal as any;
+    }
+    if (txnDate) {
+      updates.createdAt = txnDate;
+    }
+    if (Object.keys(updates).length > 0) {
       await db.update(transactions)
-        .set({ status: statusVal as any, paymentStatus: statusVal as any })
+        .set(updates)
         .where(eq(transactions.id, existing.id));
     }
     return;
@@ -144,6 +181,7 @@ async function upsertLiquidTransaction(userId: number, item: any) {
       currency: item.currency || "IDR",
       description: item.description || item.details || `Resellercamp #${liquidTxnId}`,
       liquidTransactionId: liquidTxnId,
+      createdAt: txnDate,
       expiresAt,
       metadata: JSON.stringify({ liquidTransactionId: liquidTxnId, syncedFromLiquid: true, expiresAt: expiresAt.toISOString() }),
     });
@@ -447,17 +485,13 @@ export async function listTransactionsFromLiquid(
       const statusVal = statusMap[String(item.status || "").toLowerCase()] || "pending_payment";
       const typeVal = resolveTransactionType(item);
 
-      let expiresAt: Date | null = null;
-      if (item.expiry_date) {
-        const d = new Date(item.expiry_date);
-        if (!isNaN(d.getTime())) expiresAt = d;
+      const txnDate = parseLiquidDate(item) || new Date();
+      let expiresAt: Date | null = item.expiry_date ? parseLiquidDate({ date: item.expiry_date }) : null;
+      if (!expiresAt) {
+        expiresAt = new Date(txnDate.getTime() + 60 * 60 * 1000);
       }
-      if (!expiresAt && item.date_created) {
-        const d = new Date(item.date_created);
-        if (!isNaN(d.getTime())) expiresAt = new Date(d.getTime() + 60 * 60 * 1000);
-      }
-      const expiresAtIso = expiresAt ? expiresAt.toISOString() : new Date(Date.now() + 60 * 60 * 1000).toISOString();
-      const createdAtIso = item.date_created || item.creation_time || new Date().toISOString();
+      const expiresAtIso = expiresAt.toISOString();
+      const createdAtIso = txnDate.toISOString();
 
       return {
         id: txnId,
