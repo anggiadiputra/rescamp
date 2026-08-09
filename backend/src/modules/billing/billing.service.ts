@@ -327,22 +327,12 @@ export async function listTransactions(
     console.warn("[billing] auto-expire check failed:", e);
   }
 
-  // Auto-sync transactions from Resellercamp for customer/reseller if available
+  // Auto-sync transactions from Resellercamp ONLY for reseller role (wholesale account transactions)
   try {
-    const syncCreds = await resolveResellerCreds(userId);
-    if (syncCreds.resellerId && syncCreds.apiKey) {
-      const liquid = getLiquid(syncCreds);
-      const [userRecord] = await db.select().from(users).where(eq(users.id, userId));
-      if (userRecord?.role === "customer") {
-        const [cust] = await db.select({ liquidCustomerId: customers.liquidCustomerId }).from(customers).where(eq(customers.userId, userId));
-        if (cust?.liquidCustomerId) {
-          const list = await fetchAllLiquidTransactions(liquid, cust.liquidCustomerId).catch(() => []);
-          for (const item of list) {
-            await upsertLiquidTransaction(userId, item);
-          }
-        }
-      } else {
-        // Reseller: sync from account/transactions
+    if (userRole === "reseller") {
+      const syncCreds = await resolveResellerCreds(userId);
+      if (syncCreds.resellerId && syncCreds.apiKey) {
+        const liquid = getLiquid(syncCreds);
         const list = await fetchAllLiquidTransactions(liquid).catch(() => []);
         for (const item of list) {
           await upsertLiquidTransaction(userId, item);
@@ -354,7 +344,13 @@ export async function listTransactions(
   }
 
   let userCondition = inArray(transactions.userId, allowedUserIds);
-  if (userRole === "reseller" && params?.category === "retail") {
+  if (userRole === "customer") {
+    // Customer ONLY sees local retail invoices created between customer & reseller in DB
+    userCondition = and(
+      inArray(transactions.userId, allowedUserIds),
+      sql`(${transactions.metadata} IS NULL OR ${transactions.metadata} NOT LIKE '%"syncedFromLiquid":true%')`
+    ) as any;
+  } else if (userRole === "reseller" && params?.category === "retail") {
     userCondition = or(
       inArray(transactions.userId, allowedUserIds),
       isNotNull(transactions.customerId)
@@ -363,9 +359,9 @@ export async function listTransactions(
   let where = userCondition;
   if (params?.type) where = and(where, eq(transactions.type, params.type as any)) as any;
   if (params?.status) where = and(where, eq(transactions.status, params.status as any)) as any;
-  if (params?.category === "retail") {
+  if (userRole === "reseller" && params?.category === "retail") {
     where = and(where, sql`(${transactions.metadata} IS NULL OR ${transactions.metadata} NOT LIKE '%"syncedFromLiquid":true%')`) as any;
-  } else if (params?.category === "wholesale") {
+  } else if (userRole === "reseller" && params?.category === "wholesale") {
     where = and(where, sql`${transactions.metadata} LIKE '%"syncedFromLiquid":true%'`) as any;
   }
   if (params?.search && String(params.search).trim()) {
