@@ -146,7 +146,21 @@ export function LoadingSpinner({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   );
 }
 
-export function EmptyState({ icon: Icon, title, description, action }: { icon: any; title: string; description: string; action?: { label: string; onClick: () => void } }) {
+export function EmptyState({ icon: Icon, title, description, action, embedded = false }: { icon: any; title: string; description: string; action?: { label: string; onClick: () => void }; embedded?: boolean }) {
+  if (embedded) {
+    return (
+      <div className="text-center py-16 px-6">
+        <Icon className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+        <p className="text-sm font-medium text-gray-500">{title}</p>
+        <p className="text-xs text-gray-400 mt-1">{description}</p>
+        {action && (
+          <button onClick={action.onClick} className="mt-4 px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
+            {action.label}
+          </button>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="text-center py-16 bg-white rounded-xl border border-gray-200 shadow-sm p-6">
       <Icon className="w-12 h-12 mx-auto mb-3 text-gray-300" />

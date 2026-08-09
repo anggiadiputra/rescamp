@@ -426,6 +426,7 @@ export default function BillingPage() {
         ) : transactions.length === 0 ? (
           <div className="py-12">
             <EmptyState
+              embedded
               icon={Receipt}
               title={isCustomer ? "No invoices found" : "No transactions yet"}
               description={isCustomer ? "Your domain registration invoices will appear here once registered." : "System transactions will appear here."}
