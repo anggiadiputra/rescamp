@@ -1,6 +1,6 @@
 const envVars = {
   PORT: process.env.PORT || "3000",
-  CORS_ORIGIN: process.env.CORS_ORIGIN as string,
+  CORS_ORIGIN: process.env.CORS_ORIGIN || "*",
   DB_HOST: process.env.DB_HOST || "127.0.0.1",
   DB_PORT: parseInt(process.env.DB_PORT || "3306"),
   DB_USER: process.env.DB_USER || "root",
@@ -17,17 +17,11 @@ const envVars = {
   KIRISAN_API_URL: process.env.KIRISAN_API_URL || "https://api.kirisan.com/v1",
   FONNTE_API_URL: process.env.FONNTE_API_URL || "https://api.fonnte.com",
   TURNSTILE_VERIFY_URL: process.env.TURNSTILE_VERIFY_URL || "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-  APP_URL: process.env.APP_URL as string,
+  APP_URL: process.env.APP_URL || "https://dash.ekstensi.id",
 } as const;
 
 if (!envVars.JWT_SECRET || envVars.JWT_SECRET.length < 16) {
   throw new Error("JWT_SECRET must be set in .env and at least 16 characters");
-}
-if (!envVars.CORS_ORIGIN) {
-  throw new Error("CORS_ORIGIN must be set in .env (frontend origin, e.g. https://dash.example.com)");
-}
-if (!envVars.APP_URL) {
-  throw new Error("APP_URL must be set in .env (frontend origin, e.g. https://dash.example.com)");
 }
 
 export const env = envVars;

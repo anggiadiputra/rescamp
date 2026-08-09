@@ -16,8 +16,28 @@ import { AppError } from "./lib/error";
 // Ensure MySQL database schema (ENUMS) match codebase
 ensureDatabaseSchema().catch((e) => console.warn("[db] ensureDatabaseSchema failed:", e));
 
+const allowedOrigins = (env.CORS_ORIGIN || "*")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 const app = new Elysia()
-  .use(cors({ origin: env.CORS_ORIGIN }))
+  .use(
+    cors({
+      origin: (request: Request): boolean => {
+        const origin = request.headers.get("origin");
+        if (!origin) return true;
+        if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) return true;
+        if (origin.endsWith(".ekstensi.id") || origin.endsWith(".diurusin.id") || origin.includes("localhost")) {
+          return true;
+        }
+        return true;
+      },
+      credentials: true,
+      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    })
+  )
   .error({ AppError })
   .onError(({ code, error, set }) => {
     if (error instanceof AppError) {
