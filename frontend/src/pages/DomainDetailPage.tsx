@@ -459,6 +459,7 @@ export default function DomainDetailPage() {
                 {domain.autoRenew ? "✓ Auto-Renew" : "Manual"}
               </span>
             </div>
+            {/* WHOIS Privacy Card */}
             <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2.5 col-span-2 sm:col-span-1">
               <div className="flex items-center justify-between">
                 <span className="text-gray-500 block text-xs font-medium">WHOIS Privacy</span>
@@ -499,32 +500,97 @@ export default function DomainDetailPage() {
                     </button>
                   </div>
 
-                  <button
-                    onClick={doBuyPrivacy}
-                    disabled={privacyBuying || domain.status === "suspended"}
-                    className="w-full text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline transition-colors text-center block pt-0.5"
-                  >
-                    {privacyBuying ? "Memproses order..." : "+ Beli / Perpanjang WHOIS Protection"}
-                  </button>
+                  {!domain.privacyProtection && (
+                    <button
+                      onClick={doBuyPrivacy}
+                      disabled={privacyBuying || domain.status === "suspended"}
+                      className="w-full text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline transition-colors text-center block pt-0.5"
+                    >
+                      {privacyBuying ? "Memproses order..." : "+ Beli WHOIS Protection"}
+                    </button>
+                  )}
                 </div>
               ) : (
                 <p className="text-[10px] text-gray-400 italic">Tidak tersedia untuk domain .id</p>
               )}
             </div>
 
-            <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
-              <span className="text-gray-500 block text-xs font-medium">Transfer Lock</span>
-              <span className={`font-bold flex items-center gap-1.5 ${domain.locked ? "text-emerald-600" : "text-amber-600"}`}>
-                {domain.locked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                {domain.locked ? "Terkunci (Locked)" : "Terbuka (Unlocked)"}
-              </span>
+            {/* Transfer Lock Card */}
+            <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2.5 col-span-2 sm:col-span-1">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500 block text-xs font-medium">Transfer Lock</span>
+                {domain.locked ? (
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    🔒 Terkunci
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full">
+                    🔓 Terbuka
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-gray-200 shadow-2xs">
+                <div className="flex items-center gap-2">
+                  {domain.locked ? <Lock className="w-4 h-4 text-emerald-600" /> : <Unlock className="w-4 h-4 text-amber-600" />}
+                  <span className="text-xs font-semibold text-gray-800">
+                    {lockLoading ? "Memproses..." : domain.locked ? "Locked" : "Unlocked"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleLock}
+                  disabled={lockLoading || domain.status === "suspended"}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    domain.locked ? "bg-emerald-600" : "bg-gray-300"
+                  } ${lockLoading || domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  <span className="sr-only">Toggle Transfer Lock</span>
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      domain.locked ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
-            <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
-              <span className="text-gray-500 block text-xs font-medium">Theft Protection</span>
-              <span className={`font-bold flex items-center gap-1.5 ${domain.theftProtection ? "text-emerald-600" : "text-gray-500"}`}>
-                <ShieldCheck className={`w-4 h-4 ${domain.theftProtection ? "text-emerald-600" : "text-gray-400"}`} />
-                {domain.theftProtection ? "Aktif" : "Non-Aktif"}
-              </span>
+
+            {/* Theft Protection Card */}
+            <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2.5 col-span-2 sm:col-span-1">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500 block text-xs font-medium">Theft Protection</span>
+                {domain.theftProtection ? (
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    ✓ Aktif
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-gray-500 bg-gray-200 border border-gray-300 px-2 py-0.5 rounded-full">
+                    Non-Aktif
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-gray-200 shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className={`w-4 h-4 ${domain.theftProtection ? "text-emerald-600" : "text-gray-400"}`} />
+                  <span className="text-xs font-semibold text-gray-800">
+                    {theftLoading ? "Memproses..." : domain.theftProtection ? "Proteksi Aktif" : "Proteksi Non-Aktif"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleTheft}
+                  disabled={theftLoading || domain.status === "suspended"}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    domain.theftProtection ? "bg-emerald-600" : "bg-gray-300"
+                  } ${theftLoading || domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  <span className="sr-only">Toggle Theft Protection</span>
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      domain.theftProtection ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
           </div>
 
