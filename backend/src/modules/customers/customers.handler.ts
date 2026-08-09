@@ -91,7 +91,9 @@ export async function listRemote(ctx: any) {
 export async function sync(ctx: any) {
   try {
     const userId = Number(ctx.store?.user?.sub);
+    console.log(`[customers.handler] 🚀 Starting customer sync for userId=${userId}...`);
     const result = await svc.syncCustomersFromLiquid(userId);
+    console.log(`[customers.handler] ✅ Customer sync completed:`, result);
     const message = `Berhasil sinkronisasi ${result.syncedCount} customer (${result.newAddedCount} baru) dari Resellercamp`;
     ctx.set.status = 200;
     return {
@@ -99,7 +101,7 @@ export async function sync(ctx: any) {
       data: { ...result, message },
     };
   } catch (err: any) {
-    console.warn("[customers.handler] sync error fallback:", err?.message || err);
+    console.error("[customers.handler] ❌ Sync error:", err?.message || err);
     ctx.set.status = err?.statusCode || 400;
     const message = err?.message || "Gagal sinkronisasi data customer dari Resellercamp";
     return {

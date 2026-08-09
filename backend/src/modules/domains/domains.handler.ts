@@ -237,14 +237,16 @@ export async function bulkAvailability(ctx: any) {
 export async function sync(ctx: any) {
   try {
     const user = await getUser(ctx);
+    console.log(`[domains.handler] 🚀 Starting domain sync for userId=${user?.id}...`);
     const result = await svc.syncDomainsFromLiquid(user);
+    console.log(`[domains.handler] ✅ Domain sync completed:`, result);
     const message = `Berhasil sinkronisasi ${result.syncedCount} domain (${result.newAddedCount} baru) dari Resellercamp`;
     return {
       message,
       data: { ...result, message },
     };
   } catch (err: any) {
-    console.warn("[domains.handler] sync error fallback:", err?.message || err);
+    console.error("[domains.handler] ❌ Sync error:", err?.message || err);
     ctx.set.status = err?.statusCode || 400;
     const message = err?.message || "Gagal sinkronisasi data domain dari Resellercamp";
     return {

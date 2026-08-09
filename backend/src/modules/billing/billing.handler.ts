@@ -69,10 +69,12 @@ export async function sync(ctx: any) {
   try {
     const user = await getUser(ctx);
     const creds = await getResellerCreds(ctx);
+    console.log(`[billing.handler] 🚀 Starting billing sync for userId=${user?.id}...`);
     const result = await svc.syncTransactions({ id: creds.id, role: creds.role, resellerId: creds.resellerId, apiKey: creds.apiKey });
+    console.log(`[billing.handler] ✅ Billing sync completed:`, result);
     return { data: result };
   } catch (err: any) {
-    console.warn("[billing.handler] sync error fallback:", err?.message || err);
+    console.error("[billing.handler] ❌ Sync error:", err?.message || err);
     ctx.set.status = err?.statusCode || 400;
     const message = err?.message || "Gagal sinkronisasi data billing dari Resellercamp";
     return {
