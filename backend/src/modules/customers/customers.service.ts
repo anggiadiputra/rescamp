@@ -197,6 +197,20 @@ export async function completeProfile(
   return cust!;
 }
 
+function parseLiquidCustomerList(raw: any): any[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "object") {
+    if (Array.isArray(raw.data)) return raw.data;
+    if (Array.isArray(raw.customers)) return raw.customers;
+    // Resellercamp / LogicBoxes API returns { "1": { customerid: "...", ... }, "2": { ... }, "rec_count": 2 }
+    return Object.entries(raw)
+      .filter(([k]) => k !== "rec_count" && !isNaN(Number(k)))
+      .map(([_, v]) => v);
+  }
+  return [];
+}
+
 // Proxy list directly from Resellercamp (no DB cache). Paginated; for customer role pass their liquidCustomerId.
 export async function listCustomersFromLiquid(
   creds: { resellerId: string; apiKey: string },
@@ -214,28 +228,32 @@ export async function listCustomersFromLiquid(
   };
   if (customerLiquidId) params.customer_id = String(customerLiquidId);
 
-  const raw = await liquid.listCustomers(params);
-  const list: any[] = Array.isArray(raw) ? raw : raw?.data || raw?.customers || [];
+  const raw = await liquid.listCustomers(params).catch(() => null);
+  const list = parseLiquidCustomerList(raw);
 
   const items = list
     .map((c: any) => {
-      const liquidId = String(c.customer_id || c.id || "");
+      const liquidId = String(
+        c.customer_id || c.customerid || c.id || c["customer.customerid"] || c["customerid"] || ""
+      ).trim();
       if (!liquidId) return null;
+      const email = String(
+        c.email || c.username || c.customer_email || c["customer.email"] || ""
+      ).trim().toLowerCase();
       return {
         // Use liquidCustomerId as numeric-ish `id` for FE compatibility with existing Customer type.
-        // Stored as string; backend endpoints that take `:id` will need to special-case this.
         id: liquidId as any,
         liquidCustomerId: liquidId,
-        name: c.name || c.customer_name || "",
-        email: c.email || c.customer_email || "",
-        company: c.company || "",
-        address: c.address_line_1 || c.address || "",
+        name: String(c.name || c.customer_name || c["customer.name"] || email.split("@")[0] || "Customer").trim(),
+        email,
+        company: c.company || c.company_name || "",
+        address: c.address_line_1 || c.address || c.address1 || "",
         city: c.city || "",
         state: c.state || "",
-        country: c.country_code || c.country || "ID",
+        country: String(c.country_code || c.country || "ID").slice(0, 2).toUpperCase(),
         zipcode: c.zipcode || c.zip || "",
-        phone: c.tel_no || c.phone || "",
-        phone_cc: c.tel_cc_no || c.phone_cc || "62",
+        phone: String(c.tel_no || c.phone || ""),
+        phone_cc: String(c.tel_cc_no || c.phone_cc || "62"),
         createdAt: c.creation_time || c.creation_date || c.created_at || "",
       };
     })
@@ -265,22 +283,26 @@ export async function syncCustomersFromLiquid(userId: number) {
 
   while (true) {
     const raw = await liquid.listCustomers({ limit: "100", page_no: String(pageNo) }).catch(() => null);
-    const list: any[] = Array.isArray(raw) ? raw : raw?.data || raw?.customers || [];
+    const list = parseLiquidCustomerList(raw);
     if (list.length === 0) break;
     totalRemote += list.length;
 
     for (const c of list) {
       try {
-        const liquidId = String(c.customer_id || c.id || "").trim();
-        const email = (c.email || c.customer_email || "").trim().toLowerCase();
+        const liquidId = String(
+          c.customer_id || c.customerid || c.id || c["customer.customerid"] || c["customerid"] || ""
+        ).trim();
+        const email = String(
+          c.email || c.username || c.customer_email || c["customer.email"] || ""
+        ).trim().toLowerCase();
         if (!email) continue;
 
-        const name = c.name || c.customer_name || email.split("@")[0] || "Customer";
-        const company = c.company || null;
-        const address = c.address_line_1 || c.address || null;
+        const name = String(c.name || c.customer_name || c["customer.name"] || email.split("@")[0] || "Customer").trim();
+        const company = c.company || c.company_name || null;
+        const address = c.address_line_1 || c.address || c.address1 || null;
         const city = c.city || null;
         const state = c.state || null;
-        const country = (c.country_code || c.country || "ID").slice(0, 2).toUpperCase();
+        const country = String(c.country_code || c.country || "ID").slice(0, 2).toUpperCase();
         const zipcode = c.zipcode || c.zip || null;
         const phone_cc = String(c.tel_cc_no || c.phone_cc || "62");
         const phone = String(c.tel_no || c.phone || "");
