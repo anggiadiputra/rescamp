@@ -459,49 +459,55 @@ export default function DomainDetailPage() {
                 {domain.autoRenew ? "✓ Auto-Renew" : "Manual"}
               </span>
             </div>
-            <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2 col-span-2 sm:col-span-1">
-              <span className="text-gray-500 block text-xs font-medium">WHOIS Privacy</span>
-              <span className={`font-bold block ${domain.privacyProtection ? "text-emerald-600" : "text-gray-500"}`}>
-                {domain.privacyProtection ? "✓ Aktif" : "Non-Aktif"}
-              </span>
-              {Boolean(domain.privacyProtection) && !isIdDomain && (
-                <button
-                  onClick={togglePrivacy}
-                  disabled={privacyToggling || domain.status === "suspended"}
-                  className={`mt-1 w-full text-xs font-bold rounded-lg py-1.5 px-2 transition-colors flex items-center justify-center gap-1.5 ${
-                    domain.status === "suspended"
-                      ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                      : "bg-gray-200 hover:bg-gray-300 text-gray-800 cursor-pointer"
-                  }`}
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  {privacyToggling ? "Memproses..." : "Matikan WHOIS Privacy"}
-                </button>
-              )}
-              {!domain.privacyProtection && !isIdDomain && (
-                <div className="space-y-1.5 mt-1">
-                  <button
-                    onClick={togglePrivacy}
-                    disabled={privacyToggling || domain.status === "suspended"}
-                    className={`w-full text-xs font-bold rounded-lg py-2 px-3 transition-colors flex items-center justify-center gap-1.5 ${
-                      domain.status === "suspended"
-                        ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                        : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
-                    }`}
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    {privacyToggling ? "Memproses..." : "Aktifkan WHOIS Privacy"}
-                  </button>
+            <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2.5 col-span-2 sm:col-span-1">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-500 block text-xs font-medium">WHOIS Privacy</span>
+                {Boolean(domain.privacyProtection) ? (
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    ✓ Aktif
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-gray-500 bg-gray-200 border border-gray-300 px-2 py-0.5 rounded-full">
+                    Non-Aktif
+                  </span>
+                )}
+              </div>
+
+              {!isIdDomain ? (
+                <div className="space-y-2 pt-0.5">
+                  <div className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-gray-200 shadow-2xs">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className={`w-4 h-4 ${domain.privacyProtection ? "text-emerald-600" : "text-gray-400"}`} />
+                      <span className="text-xs font-semibold text-gray-800">
+                        {privacyToggling ? "Memproses..." : domain.privacyProtection ? "Proteksi Aktif" : "Proteksi Non-Aktif"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={togglePrivacy}
+                      disabled={privacyToggling || domain.status === "suspended"}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        domain.privacyProtection ? "bg-emerald-600" : "bg-gray-300"
+                      } ${privacyToggling || domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                      <span className="sr-only">Toggle WHOIS Privacy</span>
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                          domain.privacyProtection ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+
                   <button
                     onClick={doBuyPrivacy}
                     disabled={privacyBuying || domain.status === "suspended"}
                     className="w-full text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline transition-colors text-center block pt-0.5"
                   >
-                    {privacyBuying ? "Memproses order..." : "Beli / Perpanjang WHOIS Protection"}
+                    {privacyBuying ? "Memproses order..." : "+ Beli / Perpanjang WHOIS Protection"}
                   </button>
                 </div>
-              )}
-              {isIdDomain && (
+              ) : (
                 <p className="text-[10px] text-gray-400 italic">Tidak tersedia untuk domain .id</p>
               )}
             </div>
