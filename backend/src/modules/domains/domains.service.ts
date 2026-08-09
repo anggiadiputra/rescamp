@@ -715,7 +715,7 @@ export async function deleteDomainRecord(user: { id: number; resellerId: string 
   await db.delete(domains).where(eq(domains.id, domain.id));
 }
 
-export async function bulkAvailability(user: { id?: number; resellerId: string; apiKey: string; role?: string }, keyword: string) {
+export async function bulkAvailability(user: { id?: number; resellerId: string | null; apiKey: string | null; role?: string }, keyword: string) {
   const liquid = await getLiquid(user);
 
   // Extract base keyword and requested TLD if user searched with extension (e.g. "nama.web.id")

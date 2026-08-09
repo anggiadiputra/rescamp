@@ -27,7 +27,7 @@ async function getResellerCreds(ctx: any) {
   const u = await getUser(ctx);
   const creds = await resolveResellerCreds(u.id);
   if (!creds.resellerId || !creds.apiKey) throw new AppError("Reseller not configured", 500);
-  return { id: u.id, resellerId: creds.resellerId, apiKey: creds.apiKey, role: u.role };
+  return { id: u.id, resellerId: creds.resellerId, apiKey: creds.apiKey, role: u.role || "customer" };
 }
 
 export async function checkAvailability(ctx: any) {
