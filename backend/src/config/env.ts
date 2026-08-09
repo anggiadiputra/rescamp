@@ -9,6 +9,7 @@ const envVars = {
   JWT_SECRET: process.env.JWT_SECRET as string,
   JWT_EXPIRY: process.env.JWT_EXPIRY || "24h",
   DEFAULT_RESELLER_ID: process.env.DEFAULT_RESELLER_ID || "",
+  RESELLER_API_KEY: process.env.RESELLER_API_KEY || process.env.LIQUID_API_KEY || "",
   SUMOPOD_API_KEY: process.env.SUMOPOD_API_KEY || "",
   SUMOPOD_PAYMENT_URL: process.env.SUMOPOD_PAYMENT_URL || "https://api-pay-sandbox.sumopod.com/api/v1",
   SUMOPOD_WEBHOOK_TOKEN: process.env.SUMOPOD_WEBHOOK_TOKEN || "",

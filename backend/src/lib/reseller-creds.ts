@@ -14,6 +14,7 @@ import { db } from "../db";
 import { users } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { decryptApiKey } from "./encryption";
+import { env } from "../config/env";
 
 export interface ResellerCreds {
   resellerId: string;
@@ -81,19 +82,25 @@ export async function resolveResellerCreds(userId: number): Promise<ResellerCred
   if (!resellerId || !apiKey) {
     const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
     if (defaultReseller) {
-      resellerId = defaultReseller.resellerId || "";
-      if (defaultReseller.apiKeyEncrypted) {
-        try {
-          apiKey = await decryptApiKey(defaultReseller.apiKeyEncrypted);
-        } catch (e) {
-          console.error("[resolveResellerCreds] decryptApiKey fallback failed:", e);
+      if (!resellerId) resellerId = defaultReseller.resellerId || "";
+      if (!apiKey) {
+        if (defaultReseller.apiKeyEncrypted) {
+          try {
+            apiKey = await decryptApiKey(defaultReseller.apiKeyEncrypted);
+          } catch (e) {
+            console.error("[resolveResellerCreds] decryptApiKey fallback failed:", e);
+            apiKey = defaultReseller.apiKey || "";
+          }
+        } else {
           apiKey = defaultReseller.apiKey || "";
         }
-      } else {
-        apiKey = defaultReseller.apiKey || "";
       }
     }
   }
+
+  // Fallback: process.env / .env variables
+  if (!resellerId) resellerId = env.DEFAULT_RESELLER_ID || "";
+  if (!apiKey) apiKey = env.RESELLER_API_KEY || "";
 
   const creds: ResellerCreds = { resellerId, apiKey };
 
@@ -161,18 +168,24 @@ export async function resolveCredsFromUser(user: {
   if (!resellerId || !apiKey) {
     const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
     if (defaultReseller) {
-      resellerId = defaultReseller.resellerId || "";
-      if (defaultReseller.apiKeyEncrypted) {
-        try {
-          apiKey = await decryptApiKey(defaultReseller.apiKeyEncrypted);
-        } catch (e) {
+      if (!resellerId) resellerId = defaultReseller.resellerId || "";
+      if (!apiKey) {
+        if (defaultReseller.apiKeyEncrypted) {
+          try {
+            apiKey = await decryptApiKey(defaultReseller.apiKeyEncrypted);
+          } catch (e) {
+            apiKey = defaultReseller.apiKey || "";
+          }
+        } else {
           apiKey = defaultReseller.apiKey || "";
         }
-      } else {
-        apiKey = defaultReseller.apiKey || "";
       }
     }
   }
+
+  // Fallback: process.env / .env variables
+  if (!resellerId) resellerId = env.DEFAULT_RESELLER_ID || "";
+  if (!apiKey) apiKey = env.RESELLER_API_KEY || "";
 
   const creds: ResellerCreds = { resellerId, apiKey };
 
