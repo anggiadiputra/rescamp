@@ -153,9 +153,17 @@ export default function SettingsPage() {
     setSyncError("");
     setSyncResult(null);
     try {
-      const res = await api.get<any>("/auth/reseller-data");
-      setSyncResult(res.data || res);
-      toast("Data reseller berhasil disinkronkan!");
+      const [resellerRes, custSyncRes] = await Promise.all([
+        api.get<any>("/auth/reseller-data").catch((e) => ({ error: e.message })),
+        api.post<any>("/customers/sync", {}).catch((e) => ({ error: e.message })),
+      ]);
+      const resData = resellerRes.data || resellerRes;
+      const custData = custSyncRes.data || custSyncRes;
+      setSyncResult({
+        ...resData,
+        customerSync: custData,
+      });
+      toast("Data reseller & customer berhasil disinkronkan ke database!");
     } catch (e: any) {
       setSyncError(e.message || "Gagal sinkronisasi data reseller");
     }
@@ -868,7 +876,7 @@ export default function SettingsPage() {
                   <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Reseller API Sync</h2>
                 </div>
                 <p className="text-xs text-gray-500">
-                  Sinkronkan data reseller Anda dari LIQUID API. Data yang diperoleh akan ditampilkan di halaman My Profile.
+                  Sinkronkan data akun reseller dan **seluruh data Customer** dari Resellercamp langsung ke database MySQL lokal server.
                 </p>
                 <div className="flex items-center gap-4 flex-wrap">
                   <Button
@@ -882,10 +890,11 @@ export default function SettingsPage() {
                   </Button>
                   {syncResult && (
                     <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 space-y-1">
-                      <p><strong>Status:</strong> {syncResult.synced ? "✅ Data profil berhasil disinkronkan" : "⚠️ Gagal mengambil data profil"}</p>
-                      <p><strong>Reseller ID:</strong> {syncResult.reseller_id}</p>
-                      {syncResult.account?.company && <p><strong>Perusahaan:</strong> {syncResult.account.company}</p>}
-                      {syncResult.account?.email && <p><strong>Email LIQUID:</strong> {syncResult.account.email}</p>}
+                      <p><strong>Status Reseller:</strong> {syncResult.synced ? "✅ Profil & Saldo berhasil disinkronkan" : "⚠️ Selesai"}</p>
+                      {syncResult.customerSync?.message && (
+                        <p><strong>Status Customer DB:</strong> ✅ {syncResult.customerSync.message}</p>
+                      )}
+                      {syncResult.reseller_id && <p><strong>Reseller ID:</strong> {syncResult.reseller_id}</p>}
                       <p><strong>Balance:</strong> {typeof syncResult.balance === "number" ? `Rp ${syncResult.balance.toLocaleString("id-ID")}` : syncResult.balance?.available || syncResult.balance?.balance || "—"}</p>
                     </div>
                   )}

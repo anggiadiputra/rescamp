@@ -34,7 +34,6 @@ export default function CustomersPage() {
   const [form, setForm] = useState(defaultForm);
   const [deleteId, setDeleteId] = useState(0);
   const [deleteName, setDeleteName] = useState("");
-  const [syncing, setSyncing] = useState(false);
 
   async function fetchCustomers() {
     setLoading(true);
@@ -50,19 +49,6 @@ export default function CustomersPage() {
       }
     }
     setLoading(false);
-  }
-
-  async function syncFromLiquid() {
-    if (syncing) return;
-    setSyncing(true);
-    try {
-      const res = await api.post<{ message: string }>("/customers/sync", {});
-      toast(res.message || "Berhasil sinkronisasi data customer ke database!");
-      await fetchCustomers();
-    } catch (err: any) {
-      toast(err?.message || "Gagal sinkronisasi customer ke database", "error");
-    }
-    setSyncing(false);
   }
 
   // Client-side filter for live Resellercamp data (server has no search param).
@@ -136,10 +122,6 @@ export default function CustomersPage() {
       <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
         <SearchBar value={search} onChange={setSearch} placeholder="Cari customer berdasarkan nama, email, perusahaan..." />
         <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
-          <Button variant="outline" onClick={() => syncFromLiquid()} disabled={syncing || loading} className="shadow-2xs text-xs sm:text-sm !py-2.5">
-            <RefreshCw className={`w-4 h-4 inline mr-1.5 ${syncing ? "animate-spin" : ""}`} />
-            {syncing ? "Syncing..." : "Sync ke DB"}
-          </Button>
           <Button variant="outline" onClick={() => fetchCustomers()} disabled={loading} className="shadow-2xs text-xs sm:text-sm !py-2.5">
             <RefreshCw className={`w-4 h-4 inline mr-1.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
