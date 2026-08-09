@@ -31,6 +31,8 @@ logs
 *.log
 coverage
 *.lcov
+test
+**/test
 
 # Databases & local sqlite
 *.db
