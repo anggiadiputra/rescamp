@@ -218,6 +218,22 @@ describe("LiquidClient", () => {
     await client.updateCatchAllEmailForwarding("99", "admin@domain.com");
     call = (fetch as any).mock.calls[12];
     expect(call[0]).toContain("/domains/99/email_forwarding/catch_all");
+
+    await client.getPrivacyProtection("99");
+    call = (fetch as any).mock.calls[13];
+    expect(call[0]).toContain("/domains/99/privacy_protection");
+
+    await client.enablePrivacyProtection("99");
+    call = (fetch as any).mock.calls[14];
+    expect(call[0]).toContain("/domains/99/privacy_protection");
+
+    await client.disablePrivacyProtection("99");
+    call = (fetch as any).mock.calls[15];
+    expect(call[0]).toContain("/domains/99/privacy_protection");
+
+    await client.buyPrivacyProtection("99");
+    call = (fetch as any).mock.calls[16];
+    expect(call[0]).toContain("/domains/99/privacy_protection/buy");
   });
 
   it("should format customer prices correctly regardless of object key or tld property format", () => {
