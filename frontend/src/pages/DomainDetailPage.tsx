@@ -416,9 +416,9 @@ export default function DomainDetailPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-4 text-sm">
-            {/* Status Verifikasi Email ICANN RAA Item */}
+            {/* Status Verifikasi Item */}
             <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2 col-span-2">
-              <span className="text-gray-500 block text-xs font-medium">Status Verifikasi Email ICANN RAA</span>
+              <span className="text-gray-500 block text-xs font-medium">Status Verifikasi</span>
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 {domain.raaVerification?.status === "pending" ? (
                   <span className="inline-flex items-center gap-1.5 font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-md text-xs border border-amber-200">
@@ -426,7 +426,7 @@ export default function DomainDetailPage() {
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 font-bold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-md text-xs border border-emerald-200">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" /> Terverifikasi (Verified)
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" /> Verified
                   </span>
                 )}
                 {domain.raaVerification?.status === "pending" && (
