@@ -50,7 +50,19 @@ export async function listTransactionsRemote(ctx: any) {
   const creds = await getResellerCreds(ctx);
   const page = Math.max(1, parseInt(String(ctx.query.page || "1"), 10) || 1);
   const perPage = Math.min(100, Math.max(1, parseInt(String(ctx.query.per_page || "50"), 10) || 50));
-  const result = await svc.listTransactionsFromLiquid(creds, page, perPage);
+  const queryOpts = {
+    page,
+    perPage,
+    transaction_type: ctx.query.transaction_type || ctx.query.type,
+    search: ctx.query.search,
+    status: ctx.query.status,
+    date_start: ctx.query.date_start,
+    date_end: ctx.query.date_end,
+    amount_range_start: ctx.query.amount_range_start,
+    amount_range_end: ctx.query.amount_range_end,
+    description: ctx.query.description,
+  };
+  const result = await svc.listTransactionsFromLiquid(creds, queryOpts);
   ctx.set.status = 200;
   return {
     data: result.items,
@@ -61,7 +73,7 @@ export async function listTransactionsRemote(ctx: any) {
 
 export async function transactionDetail(ctx: any) {
   const user = await getUser(ctx);
-  const txn = await svc.getTransaction(user, parseInt(ctx.params.id));
+  const txn = await svc.getTransaction(user, ctx.params.id);
   return { data: txn };
 }
 

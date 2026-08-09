@@ -609,12 +609,56 @@ export class LiquidClient {
     }
   }
 
-  getTransactions(params?: Record<string, string>) {
-    const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+  getTransactions(params?: Record<string, any>) {
+    const cleanParams: Record<string, string> = {};
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null && v !== "") {
+          cleanParams[k] = String(v);
+        }
+      }
+    }
+    const qs = Object.keys(cleanParams).length > 0 ? "?" + new URLSearchParams(cleanParams).toString() : "";
     return this.request<any>("GET", `/account/transactions${qs}`);
   }
-  getTransaction(transactionId: string) {
+  getTransaction(transactionId: string | number) {
     return this.request<any>("GET", `/account/transactions/${transactionId}`);
+  }
+
+  // --- Sub Reseller Transactions (luquid.md Section 2) ---
+  getResellerBalance(resellerId: string | number) {
+    return this.request<any>("GET", `/resellers/${resellerId}/balance`);
+  }
+  getResellerTransactions(resellerId: string | number, params?: Record<string, any>) {
+    const cleanParams: Record<string, string> = {};
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null && v !== "") {
+          cleanParams[k] = String(v);
+        }
+      }
+    }
+    const qs = Object.keys(cleanParams).length > 0 ? "?" + new URLSearchParams(cleanParams).toString() : "";
+    return this.request<any>("GET", `/resellers/${resellerId}/transactions${qs}`);
+  }
+  getResellerTransaction(resellerId: string | number, transactionId: string | number) {
+    return this.request<any>("GET", `/resellers/${resellerId}/transactions/${transactionId}`);
+  }
+  addResellerFund(resellerId: string | number, data: { amount: number | string; description: string }) {
+    return this.request<any>("POST", `/resellers/${resellerId}/transactions/fund`, {
+      amount: String(data.amount),
+      description: data.description,
+    });
+  }
+  addResellerDebitNote(resellerId: string | number, data: { amount: number | string; description: string; subtract_total_receipts?: number | string }) {
+    const payload: Record<string, string> = {
+      amount: String(data.amount),
+      description: data.description,
+    };
+    if (data.subtract_total_receipts !== undefined) {
+      payload.subtract_total_receipts = String(data.subtract_total_receipts);
+    }
+    return this.request<any>("POST", `/resellers/${resellerId}/transactions/debit_note`, payload);
   }
 }
 

@@ -71,4 +71,47 @@ describe("LiquidClient", () => {
     expect(postCall[1].headers["Content-Type"]).toBe("application/x-www-form-urlencoded");
     expect(postCall[1].method).toBe("POST");
   });
+
+  it("should call sub-reseller balance and transaction endpoints per luquid.md", async () => {
+    (globalThis as any).fetch = mock(() => ({
+      ok: true,
+      text: async () => JSON.stringify({ balance: "100000.00" }),
+    }));
+
+    await client.getResellerBalance("889");
+    let call = (fetch as any).mock.calls[0];
+    expect(call[0]).toContain("/resellers/889/balance");
+
+    (globalThis as any).fetch = mock(() => ({
+      ok: true,
+      text: async () => JSON.stringify({ "1": { transaction_id: "991" } }),
+    }));
+
+    await client.getResellerTransactions("889", { transaction_type: "domain", limit: 20 });
+    call = (fetch as any).mock.calls[0];
+    expect(call[0]).toContain("/resellers/889/transactions");
+    expect(call[0]).toContain("transaction_type=domain");
+    expect(call[0]).toContain("limit=20");
+
+    await client.getResellerTransaction("889", "991");
+    call = (fetch as any).mock.calls[1];
+    expect(call[0]).toContain("/resellers/889/transactions/991");
+  });
+
+  it("should call sub-reseller add fund and debit note endpoints", async () => {
+    (globalThis as any).fetch = mock(() => ({
+      ok: true,
+      text: async () => JSON.stringify({ status: "success" }),
+    }));
+
+    await client.addResellerFund("889", { amount: 50000, description: "Topup sub-reseller" });
+    let call = (fetch as any).mock.calls[0];
+    expect(call[0]).toContain("/resellers/889/transactions/fund");
+    expect(call[1].body).toContain("amount=50000");
+
+    await client.addResellerDebitNote("889", { amount: 10000, description: "Fee adjustment", subtract_total_receipts: 1 });
+    call = (fetch as any).mock.calls[1];
+    expect(call[0]).toContain("/resellers/889/transactions/debit_note");
+    expect(call[1].body).toContain("subtract_total_receipts=1");
+  });
 });

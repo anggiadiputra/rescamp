@@ -75,6 +75,20 @@ export async function getPrices(user: { id?: number; resellerId: string | null; 
   }
 }
 
+function resolveTransactionType(item: any): string {
+  const rawType = String(item.transaction_type || item.type || "").toLowerCase();
+  const desc = String(item.description || item.details || "").toLowerCase();
+
+  if (desc.includes("renew") || desc.includes("perpanjangan")) return "renew";
+  if (desc.includes("transfer")) return "transfer";
+  if (desc.includes("restore") || desc.includes("restoration")) return "restore";
+  if (desc.includes("privacy") || rawType === "privacy_protect") return "privacy";
+  if (rawType === "deposit" || rawType === "fund" || desc.includes("fund") || desc.includes("topup")) return "fund";
+  if (rawType === "note" || rawType === "debit" || desc.includes("debit")) return "debit";
+
+  return "register";
+}
+
 async function upsertLiquidTransaction(userId: number, item: any) {
   const liquidTxnId = String(item.transaction_id || item.id || "");
   if (!liquidTxnId) return;
@@ -88,11 +102,7 @@ async function upsertLiquidTransaction(userId: number, item: any) {
     failed: "failed", rejected: "failed",
   };
   const statusVal = statusMap[String(item.status || "").toLowerCase()] || "pending_payment";
-  const typeMap: Record<string, string> = {
-    domain: "register", deposit: "fund", fund: "fund",
-    note: "debit", privacy_protect: "privacy",
-  };
-  const typeVal = typeMap[String(item.transaction_type || item.type || "domain").toLowerCase()] || "register";
+  const typeVal = resolveTransactionType(item);
 
   // Resolve expires_at: prefer item.expiry_date, fallback created+1h, fallback now+1h
   const computeExpiresAt = () => {
@@ -327,20 +337,23 @@ export async function listTransactions(
     console.warn("[billing] auto-expire check failed:", e);
   }
 
-  // Auto-sync transactions from Resellercamp ONLY for reseller role (wholesale account transactions)
+  // Auto-expire retail pending_payment transactions whose expires_at has passed (excluding Resellercamp synced rows
+  // and rows with a Sumopod paymentId — those are reclaimed via /payments/status/:orderId proactive check).
+  // Use expiresAt column (truth source) — NOT createdAt — so a Sumopod payment arriving just after our TTL window
+  // but before Sumopod webhook still resolves to "completed" via the standard CAS path.
   try {
-    if (userRole === "reseller") {
-      const syncCreds = await resolveResellerCreds(userId);
-      if (syncCreds.resellerId && syncCreds.apiKey) {
-        const liquid = getLiquid(syncCreds);
-        const list = await fetchAllLiquidTransactions(liquid).catch(() => []);
-        for (const item of list) {
-          await upsertLiquidTransaction(userId, item);
-        }
-      }
-    }
+    const oneMinAgo = new Date(Date.now() - 60 * 1000);
+    await db.update(transactions)
+      .set({ status: "expired" })
+      .where(and(
+        inArray(transactions.userId, allowedUserIds),
+        eq(transactions.status, "pending_payment"),
+        sql`${transactions.expiresAt} IS NOT NULL AND ${transactions.expiresAt} < ${oneMinAgo}`,
+        sql`(${transactions.paymentId} IS NULL OR ${transactions.paymentId} = '')`,
+        sql`(${transactions.metadata} IS NULL OR ${transactions.metadata} NOT LIKE '%"syncedFromLiquid":true%')`
+      ));
   } catch (e) {
-    console.warn("[billing] sync from Liquid warning:", e);
+    console.warn("[billing] auto-expire check failed:", e);
   }
 
   let userCondition = inArray(transactions.userId, allowedUserIds);
@@ -384,17 +397,38 @@ export async function listTransactions(
 // Proxy list reseller account transactions directly from Resellercamp (no DB cache).
 export async function listTransactionsFromLiquid(
   creds: { resellerId: string; apiKey: string },
-  page: number,
-  perPage: number,
+  queryOpts?: {
+    page?: number | string;
+    perPage?: number | string;
+    transaction_type?: string;
+    search?: string;
+    status?: string;
+    date_start?: string;
+    date_end?: string;
+    amount_range_start?: number | string;
+    amount_range_end?: number | string;
+    description?: string;
+  },
 ) {
   if (!creds?.resellerId || !creds?.apiKey) {
     throw new AppError("Resellercamp credentials not configured", 400);
   }
-  const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
-  const raw = await liquid.getTransactions({
+  const page = Math.max(1, Number(queryOpts?.page) || 1);
+  const perPage = Math.min(100, Math.max(1, Number(queryOpts?.perPage) || 20));
+
+  const apiParams: Record<string, string> = {
     limit: String(perPage),
     page_no: String(page),
-  }).catch(() => null);
+  };
+  if (queryOpts?.transaction_type) apiParams.transaction_type = String(queryOpts.transaction_type);
+  if (queryOpts?.date_start) apiParams.date_start = String(queryOpts.date_start);
+  if (queryOpts?.date_end) apiParams.date_end = String(queryOpts.date_end);
+  if (queryOpts?.amount_range_start) apiParams.amount_range_start = String(queryOpts.amount_range_start);
+  if (queryOpts?.amount_range_end) apiParams.amount_range_end = String(queryOpts.amount_range_end);
+  if (queryOpts?.description) apiParams.description = String(queryOpts.description);
+
+  const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
+  const raw = await liquid.getTransactions(apiParams).catch(() => null);
   const list = parseLiquidTransactionList(raw);
 
   const statusMap: Record<string, string> = {
@@ -404,21 +438,14 @@ export async function listTransactionsFromLiquid(
     expired: "expired", timeout: "expired",
     failed: "failed", rejected: "failed",
   };
-  const typeMap: Record<string, string> = {
-    domain: "register",
-    deposit: "fund",
-    fund: "fund",
-    note: "debit",
-    privacy_protect: "privacy",
-  };
 
-  const items = list
+  let items = list
     .map((item: any) => {
       const txnId = String(item.transaction_id || item.transactionid || item.id || item.invoice_id || "").trim();
       if (!txnId) return null;
       const amountVal = Math.abs(Number(item.amount || item.net_amount || item.total || 0));
       const statusVal = statusMap[String(item.status || "").toLowerCase()] || "pending_payment";
-      const typeVal = typeMap[String(item.transaction_type || item.type || "domain").toLowerCase()] || "register";
+      const typeVal = resolveTransactionType(item);
 
       let expiresAt: Date | null = null;
       if (item.expiry_date) {
@@ -441,7 +468,6 @@ export async function listTransactionsFromLiquid(
         currency: item.currency || "IDR",
         description: item.description || item.details || `Resellercamp #${txnId}`,
         paymentId: null,
-        // Unified invoice prefix: INV-{txnId} for wholesale (same as retail INV-{TYPE}-{ms}-{uuid}).
         orderId: `INV-${txnId}`,
         domainId: null,
         customerId: null,
@@ -458,13 +484,30 @@ export async function listTransactionsFromLiquid(
     })
     .filter(Boolean);
 
+  if (queryOpts?.status && queryOpts.status.trim()) {
+    const st = queryOpts.status.trim().toLowerCase();
+    items = items.filter((it: any) => {
+      if (st === "pending" || st === "pending_payment") return it.status === "pending_payment";
+      return it.status === st;
+    });
+  }
+
+  if (queryOpts?.search && queryOpts.search.trim()) {
+    const q = queryOpts.search.trim().toLowerCase();
+    items = items.filter((it: any) =>
+      String(it.description || "").toLowerCase().includes(q) ||
+      String(it.orderId || "").toLowerCase().includes(q) ||
+      String(it.liquidTransactionId || "").toLowerCase().includes(q)
+    );
+  }
+
   const reachedEnd = list.length < perPage;
-  const total = reachedEnd ? (page - 1) * perPage + list.length : page * perPage + 1;
+  const total = reachedEnd ? (page - 1) * perPage + items.length : page * perPage + 1;
 
   return { items, total, reachedEnd };
 }
 
-export async function getTransaction(userParam: number | { id: number; role?: string | null }, txnId: number) {
+export async function getTransaction(userParam: number | { id: number; role?: string | null }, txnId: number | string) {
   const userId = typeof userParam === "object" ? userParam.id : userParam;
   const userRole = typeof userParam === "object" ? userParam.role : "reseller";
 
@@ -476,7 +519,69 @@ export async function getTransaction(userParam: number | { id: number; role?: st
     allowedUserIds = [userId, ...childUsers.map((c) => c.id)];
   }
 
-  const [txn] = await db.select().from(transactions).where(and(eq(transactions.id, txnId), inArray(transactions.userId, allowedUserIds)));
+  const strTxnId = String(txnId).trim();
+  const numTxnId = Number(strTxnId);
+
+  // 1. Try finding in local DB by integer id or liquidTransactionId
+  let [txn] = await db.select().from(transactions).where(
+    and(
+      or(
+        !isNaN(numTxnId) && numTxnId > 0 ? eq(transactions.id, numTxnId) : undefined,
+        eq(transactions.liquidTransactionId, strTxnId)
+      ),
+      inArray(transactions.userId, allowedUserIds)
+    )
+  );
+
+  // 2. If not found in DB and user is a reseller, try live fetch from Resellercamp API
+  if (!txn && userRole === "reseller") {
+    try {
+      const syncCreds = await resolveResellerCreds(userId);
+      if (syncCreds.resellerId && syncCreds.apiKey) {
+        const liquid = getLiquid(syncCreds);
+        const item = await liquid.getTransaction(strTxnId).catch(() => null);
+        if (item && (item.transaction_id || item.id)) {
+          const statusMap: Record<string, string> = {
+            paid: "completed", completed: "completed", success: "completed", done: "completed", approved: "completed",
+            pending: "pending_payment", unpaid: "pending_payment", processing: "pending_payment",
+            cancelled: "cancelled", cancel: "cancelled", refunded: "cancelled", refund: "cancelled",
+            expired: "expired", timeout: "expired",
+            failed: "failed", rejected: "failed",
+          };
+          const tId = String(item.transaction_id || item.id);
+          const statusVal = statusMap[String(item.status || "").toLowerCase()] || "pending_payment";
+          const typeVal = resolveTransactionType(item);
+          const amountVal = Math.abs(Number(item.amount || item.net_amount || item.total || 0));
+          const expiresAtIso = item.expiry_date || item.date_created || new Date().toISOString();
+
+          txn = {
+            id: tId as any,
+            userId,
+            customerId: null,
+            domainId: null,
+            type: typeVal as any,
+            amount: String(amountVal),
+            status: statusVal as any,
+            currency: item.currency || "IDR",
+            description: item.description || item.details || `Resellercamp #${tId}`,
+            paymentId: null,
+            liquidTransactionId: tId,
+            orderId: `INV-${tId}`,
+            expiresAt: new Date(expiresAtIso),
+            createdAt: item.date_created ? new Date(item.date_created) : new Date(),
+            updatedAt: new Date(),
+            metadata: JSON.stringify({
+              syncedFromLiquid: true,
+              transaction_type: item.transaction_type,
+              expiresAt: expiresAtIso,
+            }),
+          } as any;
+        }
+      }
+    } catch (e) {
+      console.warn("[billing] Live transaction fetch fallback failed:", e);
+    }
+  }
   if (!txn) throw new AppError("Transaction not found", 404);
 
   // 1. Resolve Customer Info

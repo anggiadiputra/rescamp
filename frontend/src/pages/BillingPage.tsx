@@ -197,7 +197,8 @@ export default function BillingPage() {
 
     let url: string;
     if (isWholesale) {
-      // /billing/transactions/remote has no server-side status/search/sort — keep them off the wire.
+      if (statusFilter) params.set("status", statusFilter);
+      if (search.trim()) params.set("search", search.trim());
       url = `/billing/transactions/remote?${params}`;
     } else {
       if (statusFilter) params.set("status", statusFilter);
@@ -257,11 +258,10 @@ export default function BillingPage() {
 
   async function openInvoice(txn: Transaction) {
     try {
-      const d = await api.get<Transaction>(`/billing/transactions/${txn.id}`);
+      const targetId = (txn as any).liquidTransactionId || txn.id;
+      const d = await api.get<Transaction>(`/billing/transactions/${targetId}`);
       setDetail(d);
     } catch {
-      // Live /billing/transactions/remote rows use a string Liquid id which /billing/transactions/:id cannot resolve.
-      // Fallback to the row we already fetched so the modal still has data.
       setDetail(txn);
     }
     setDetailOpen(true);
