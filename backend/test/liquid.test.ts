@@ -161,6 +161,37 @@ describe("LiquidClient", () => {
     expect(call[0]).toContain("/tlds/com");
   });
 
+  it("should call Contacts, Customer Management, and DNS endpoints per luquid.md lines 336-1073", async () => {
+    (globalThis as any).fetch = mock(() => ({
+      ok: true,
+      text: async () => JSON.stringify({ status: "success" }),
+    }));
+
+    await client.listCustomerContacts("12", { status: "Active" });
+    let call = (fetch as any).mock.calls[0];
+    expect(call[0]).toContain("/customers/12/contacts?status=Active");
+
+    await client.getDefaultCustomerContact("12", "com");
+    call = (fetch as any).mock.calls[1];
+    expect(call[0]).toContain("/customers/12/contacts/default?eligibility_criteria=com");
+
+    await client.getCustomerTempPassword("12");
+    call = (fetch as any).mock.calls[2];
+    expect(call[0]).toContain("/customers/temp_password?customer_id=12");
+
+    await client.getCustomerDefaultNs("12");
+    call = (fetch as any).mock.calls[3];
+    expect(call[0]).toContain("/customers/12/ns/default");
+
+    await client.getDnsRecords("99", "cname");
+    call = (fetch as any).mock.calls[4];
+    expect(call[0]).toContain("/domains/99/dns/cname");
+
+    await client.getDomainForwarding("99");
+    call = (fetch as any).mock.calls[5];
+    expect(call[0]).toContain("/domains/99/domain_forwarding");
+  });
+
   it("should format customer prices correctly regardless of object key or tld property format", () => {
     const { formatCustomerPrices } = require("../src/lib/liquid");
 

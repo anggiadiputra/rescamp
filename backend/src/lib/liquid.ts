@@ -233,6 +233,28 @@ export class LiquidClient {
     return this.request<any>("POST", `/customers/${customerId}/contacts`, payload);
   }
 
+  // --- Contacts Management (luquid.md Section 4: lines 359-497) ---
+  listCustomerContacts(customerId: string | number, params?: Record<string, string>) {
+    const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+    return this.request<any>("GET", `/customers/${customerId}/contacts${qs}`);
+  }
+  getDefaultCustomerContact(customerId: string | number, eligibilityCriteria?: string) {
+    const qs = eligibilityCriteria ? `?eligibility_criteria=${encodeURIComponent(eligibilityCriteria)}` : "";
+    return this.request<any>("GET", `/customers/${customerId}/contacts/default${qs}`);
+  }
+  updateCustomerContact(customerId: string | number, contactId: string | number, data: Record<string, any>) {
+    return this.request<any>("PUT", `/customers/${customerId}/contacts/${contactId}`, data);
+  }
+  deleteCustomerContact(customerId: string | number, contactId: string | number) {
+    return this.request<any>("DELETE", `/customers/${customerId}/contacts/${contactId}`);
+  }
+  updateCustomerContactExtra(customerId: string | number, contactId: string | number, data: Record<string, any>) {
+    return this.request<any>("PUT", `/customers/${customerId}/contacts/${contactId}/extra`, data);
+  }
+  getContactValidity(customerId: string | number, contactId: string | number, eligibilityCriteria: string) {
+    return this.request<any>("GET", `/customers/${customerId}/contacts/${contactId}/validity/${eligibilityCriteria}`);
+  }
+
   async registerDomain(data: Record<string, any>) {
     const customerId = String(data.customer_id || "");
     // Always resolve correct contact per TLD — never trust frontend-supplied contact ID
@@ -546,6 +568,15 @@ export class LiquidClient {
   }
   deleteCustomer(customerId: string) {
     return this.request<any>("DELETE", `/customers/${customerId}`);
+  }
+  getCustomerTempPassword(customerId: string | number) {
+    return this.request<any>("GET", `/customers/temp_password?customer_id=${customerId}`);
+  }
+  updateCustomerTotalReceipts(data: Record<string, any>) {
+    return this.request<any>("PUT", "/customers/totalreceipts", data);
+  }
+  getCustomerDefaultNs(customerId: string | number) {
+    return this.request<any>("GET", `/customers/${customerId}/ns/default`);
   }
 
   // --- Customer Transactions / Invoices (luquid.md Lines 80-213) ---
