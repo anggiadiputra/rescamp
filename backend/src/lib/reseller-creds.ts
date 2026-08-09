@@ -98,6 +98,13 @@ export async function resolveResellerCreds(userId: number): Promise<ResellerCred
     }
   }
 
+  // Fallback: app_settings table in database
+  if (!resellerId || !apiKey) {
+    const dbSettings = await resolveFromAppSettings();
+    if (!resellerId) resellerId = dbSettings.resellerId;
+    if (!apiKey) apiKey = dbSettings.apiKey;
+  }
+
   // Fallback: process.env / .env variables
   if (!resellerId) resellerId = env.DEFAULT_RESELLER_ID || "";
   if (!apiKey) apiKey = env.RESELLER_API_KEY || "";
@@ -183,6 +190,13 @@ export async function resolveCredsFromUser(user: {
     }
   }
 
+  // Fallback: app_settings table in database
+  if (!resellerId || !apiKey) {
+    const dbSettings = await resolveFromAppSettings();
+    if (!resellerId) resellerId = dbSettings.resellerId;
+    if (!apiKey) apiKey = dbSettings.apiKey;
+  }
+
   // Fallback: process.env / .env variables
   if (!resellerId) resellerId = env.DEFAULT_RESELLER_ID || "";
   if (!apiKey) apiKey = env.RESELLER_API_KEY || "";
@@ -194,6 +208,25 @@ export async function resolveCredsFromUser(user: {
   }
 
   return creds;
+}
+
+/**
+ * Helper to check app_settings table for reseller credentials
+ */
+async function resolveFromAppSettings(): Promise<{ resellerId: string; apiKey: string }> {
+  try {
+    const { appSettings } = await import("../db/schema");
+    const settingsRows = await db.select().from(appSettings);
+    const settingsMap: Record<string, string> = {};
+    for (const r of settingsRows) {
+      if (r.key && r.value) settingsMap[r.key] = r.value;
+    }
+    const resellerId = settingsMap["reseller_id"] || settingsMap["liquid_reseller_id"] || settingsMap["resellercamp_reseller_id"] || settingsMap["default_reseller_id"] || "";
+    const apiKey = settingsMap["api_key"] || settingsMap["liquid_api_key"] || settingsMap["resellercamp_api_key"] || settingsMap["reseller_api_key"] || "";
+    return { resellerId, apiKey };
+  } catch (e) {
+    return { resellerId: "", apiKey: "" };
+  }
 }
 
 /**
