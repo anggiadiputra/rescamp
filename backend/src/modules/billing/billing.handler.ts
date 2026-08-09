@@ -70,7 +70,7 @@ export async function sync(ctx: any) {
     const user = await getUser(ctx);
     const creds = await getResellerCreds(ctx);
     console.log(`[billing.handler] 🚀 Starting billing sync for userId=${user?.id}...`);
-    const result = await svc.syncTransactions({ id: creds.id, role: creds.role, resellerId: creds.resellerId, apiKey: creds.apiKey });
+    const result = await svc.syncTransactions({ id: creds.id, role: creds.role || null, resellerId: creds.resellerId, apiKey: creds.apiKey });
     console.log(`[billing.handler] ✅ Billing sync completed:`, result);
     return { data: result };
   } catch (err: any) {

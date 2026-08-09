@@ -1,4 +1,4 @@
-import { mysqlTable, int, varchar, timestamp, mysqlEnum } from "drizzle-orm/mysql-core";
+import { mysqlTable, int, varchar, text, timestamp, mysqlEnum } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -8,6 +8,7 @@ export const users = mysqlTable("users", {
   role: mysqlEnum("role", ["reseller", "customer"]).default("reseller"),
   resellerId: varchar("reseller_id", { length: 100 }),
   apiKey: varchar("api_key", { length: 255 }),
+  apiKeyEncrypted: text("api_key_encrypted"),
   parentResellerId: int("parent_reseller_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
