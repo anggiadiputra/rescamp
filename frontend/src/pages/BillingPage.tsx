@@ -181,7 +181,7 @@ export default function BillingPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [billingSyncing, setBillingSyncing] = useState(false);
-  const perPage = 20;
+  const perPage = 10;
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<Transaction | null>(null);

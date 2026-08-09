@@ -43,7 +43,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 transform transition-transform lg:translate-x-0 lg:static lg:z-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 transform transition-transform lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto lg:shrink-0 lg:z-20 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="h-14 flex items-center gap-2 px-5 border-b border-gray-100">
           <Globe className="w-5 h-5 text-gray-900" />
           <span className="text-sm font-bold text-gray-900">{settings.brand_name || "Ekstensi.id"}</span>

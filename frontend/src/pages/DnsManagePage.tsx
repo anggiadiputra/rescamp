@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Plus, RefreshCw, Filter, ArrowLeft, Edit2, Trash2, Globe, Info, Copy, Check } from "lucide-react";
-import { Card, Button, LoadingSpinner, Modal, toast } from "../components/ui";
+import { Card, Button, LoadingSpinner, Modal, Pagination, toast } from "../components/ui";
 import { api } from "../lib/api";
 
 const RECORD_TYPES = [
@@ -32,6 +32,8 @@ export default function DnsManagePage() {
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<string>("all");
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const perPage = 10;
 
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -163,6 +165,10 @@ export default function DnsManagePage() {
     ? records
     : records.filter((r) => r.type === filterType);
 
+  const total = filteredRecords.length;
+  const startIndex = (page - 1) * perPage;
+  const paginatedRecords = filteredRecords.slice(startIndex, startIndex + perPage);
+
   const selectedHelp = RECORD_TYPES.find((t) => t.value === form.type)?.help || "";
 
   return (
@@ -212,7 +218,7 @@ export default function DnsManagePage() {
             <span className="text-sm font-semibold text-gray-800">Filter Record Type:</span>
             <select
               value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
+              onChange={(e) => { setFilterType(e.target.value); setPage(1); }}
               className="px-3.5 py-2 border border-gray-200 rounded-lg text-sm bg-white font-semibold text-gray-900 shadow-2xs focus:outline-none focus:ring-2 focus:ring-black/10 focus:border-black"
             >
               <option value="all">All Types ({records.length})</option>
@@ -228,39 +234,39 @@ export default function DnsManagePage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs sm:text-sm font-medium bg-gray-100 text-gray-700 border border-gray-200/60">
-              Showing {filteredRecords.length} of {records.length} record(s)
+            <span className="text-xs font-semibold text-gray-500 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-2xs">
+              Total Records: <strong className="text-gray-900 font-bold">{filteredRecords.length}</strong>
             </span>
           </div>
         </div>
 
+        {/* Loading State */}
         {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center gap-3">
-            <LoadingSpinner size="md" />
-            <span className="text-sm text-gray-500 font-medium">Fetching DNS records...</span>
+          <div className="p-12 text-center">
+            <LoadingSpinner />
+            <p className="text-xs font-semibold text-gray-500 mt-3">Fetching DNS records...</p>
           </div>
         ) : filteredRecords.length === 0 ? (
-          <div className="text-center py-20 px-4 space-y-3">
-            <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto text-gray-400">
+          /* Empty State */
+          <div className="p-12 text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto text-gray-400">
               <Globe className="w-6 h-6" />
             </div>
-            <p className="text-base font-semibold text-gray-800">
-              {filterType === "all" ? "No DNS Records Found" : `No ${filterType.toUpperCase()} Records`}
-            </p>
-            <p className="text-sm text-gray-500 max-w-sm mx-auto">
-              {filterType === "all"
-                ? "This domain doesn't have any configured DNS records yet. Click 'Add Record' above to create one."
-                : `There are currently no ${filterType.toUpperCase()} records added. Select 'All Types' or add a new record.`}
+            <p className="text-sm font-bold text-gray-900">No DNS Records Found</p>
+            <p className="text-xs text-gray-500 max-w-sm mx-auto">
+              {filterType !== "all"
+                ? `No ${filterType.toUpperCase()} records exist for this domain.`
+                : "No DNS records are currently configured for this domain."}
             </p>
             <Button
-              variant="outline"
-              onClick={() => { setForm({ type: filterType === "all" ? "a" : filterType, hostname: "", value: "", ttl: 3600 }); setAddOpen(true); }}
-              className="mt-2 text-xs sm:text-sm"
+              onClick={() => { setForm({ type: filterType !== "all" ? filterType : "a", hostname: "", value: "", ttl: 3600 }); setAddOpen(true); }}
+              className="mt-2 text-xs !py-2 shadow-2xs"
             >
-              <Plus className="w-4 h-4 mr-1 inline" /> Add {filterType === "all" ? "DNS" : filterType.toUpperCase()} Record
+              <Plus className="w-3.5 h-3.5 inline mr-1" /> Add First Record
             </Button>
           </div>
         ) : (
+          /* Records Table */
           <>
             {/* Desktop Table View */}
             <div className="hidden md:block overflow-x-auto">
@@ -275,7 +281,7 @@ export default function DnsManagePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100/80 text-sm">
-                  {filteredRecords.map((r, i) => (
+                  {paginatedRecords.map((r, i) => (
                     <tr key={i} className="hover:bg-gray-50/70 transition-colors group">
                       {/* Type Badge */}
                       <td className="px-5 py-4 align-middle">
@@ -342,7 +348,7 @@ export default function DnsManagePage() {
 
             {/* Mobile Card List View */}
             <div className="md:hidden divide-y divide-gray-100 p-3 space-y-3">
-              {filteredRecords.map((r, i) => (
+              {paginatedRecords.map((r, i) => (
                 <div key={i} className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-2xs">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -384,6 +390,16 @@ export default function DnsManagePage() {
           </>
         )}
       </Card>
+
+      {total > perPage && (
+        <Pagination
+          page={page}
+          totalPages={Math.ceil(total / perPage)}
+          onPage={setPage}
+          totalItems={total}
+          perPage={perPage}
+        />
+      )}
 
       {/* Add Record Modal */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add New DNS Record">
