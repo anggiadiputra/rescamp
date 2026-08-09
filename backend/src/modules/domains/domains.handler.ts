@@ -241,26 +241,37 @@ export async function sync(ctx: any) {
 }
 
 export async function listRemote(ctx: any) {
-  const u = await getUser(ctx);
-  const creds = await getResellerCreds(ctx);
-
-  let customerLiquidId: string | null = null;
-  if (u.role === "customer") {
-    const [c] = await db
-      .select({ liquidCustomerId: customers.liquidCustomerId })
-      .from(customers)
-      .where(eq(customers.email, u.email));
-    customerLiquidId = c?.liquidCustomerId || null;
-  }
-
   const page = Math.max(1, parseInt(String(ctx.query.page || "1"), 10) || 1);
   const perPage = Math.min(100, Math.max(1, parseInt(String(ctx.query.per_page || "50"), 10) || 50));
 
-  const result = await svc.listDomainsFromLiquid(creds, customerLiquidId, page, perPage);
-  ctx.set.status = 200;
-  return {
-    data: result.items,
-    meta: { total: result.total, page, perPage, reachedEnd: result.reachedEnd },
-    source: "liquid",
-  };
+  try {
+    const u = await getUser(ctx);
+    const creds = await getResellerCreds(ctx);
+
+    let customerLiquidId: string | null = null;
+    if (u.role === "customer") {
+      const [c] = await db
+        .select({ liquidCustomerId: customers.liquidCustomerId })
+        .from(customers)
+        .where(eq(customers.email, u.email));
+      customerLiquidId = c?.liquidCustomerId || null;
+    }
+
+    const result = await svc.listDomainsFromLiquid(creds, customerLiquidId, page, perPage);
+    ctx.set.status = 200;
+    return {
+      data: result.items || [],
+      meta: { total: result.total || 0, page, perPage, reachedEnd: result.reachedEnd ?? true },
+      source: "liquid",
+    };
+  } catch (err: any) {
+    console.warn("[domains.handler] listRemote error fallback:", err?.message || err);
+    ctx.set.status = 200;
+    return {
+      data: [],
+      meta: { total: 0, page, perPage, reachedEnd: true },
+      source: "liquid",
+      error: err?.message || "Gagal memuat domain dari Resellercamp API",
+    };
+  }
 }

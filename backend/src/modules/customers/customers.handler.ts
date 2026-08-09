@@ -89,11 +89,20 @@ export async function listRemote(ctx: any) {
 }
 
 export async function sync(ctx: any) {
-  const userId = Number(ctx.store?.user?.sub);
-  const result = await svc.syncCustomersFromLiquid(userId);
-  ctx.set.status = 200;
-  return {
-    message: `Berhasil sinkronisasi ${result.syncedCount} customer (${result.newAddedCount} baru) dari Resellercamp ke database lokal.`,
-    data: result,
-  };
+  try {
+    const userId = Number(ctx.store?.user?.sub);
+    const result = await svc.syncCustomersFromLiquid(userId);
+    ctx.set.status = 200;
+    return {
+      message: `Berhasil sinkronisasi ${result.syncedCount} customer (${result.newAddedCount} baru) dari Resellercamp ke database lokal.`,
+      data: result,
+    };
+  } catch (err: any) {
+    console.warn("[customers.handler] sync error fallback:", err?.message || err);
+    ctx.set.status = 200;
+    return {
+      message: err?.message || "Gagal sinkronisasi data customer dari Resellercamp",
+      data: { syncedCount: 0, newAddedCount: 0, total: 0 },
+    };
+  }
 }

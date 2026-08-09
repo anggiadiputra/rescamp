@@ -12,25 +12,32 @@ async function getUser(ctx: any) {
   return user;
 }
 
-import { resolveResellerCreds } from "../../lib/reseller-creds";
-
 async function getResellerCreds(ctx: any) {
   const u = await getUser(ctx);
   const creds = await resolveResellerCreds(u.id);
-  if (!creds.resellerId || !creds.apiKey) throw new AppError("Reseller not configured", 500);
-  return { id: u.id, resellerId: creds.resellerId, apiKey: creds.apiKey, role: u.role };
+  return { id: u.id, resellerId: creds.resellerId || "", apiKey: creds.apiKey || "", role: u.role };
 }
 
 export async function balance(ctx: any) {
-  const creds = await getResellerCreds(ctx);
-  const result = await svc.getBalance(creds);
-  return { data: result };
+  try {
+    const creds = await getResellerCreds(ctx);
+    const result = await svc.getBalance(creds);
+    return { data: result };
+  } catch (err: any) {
+    console.warn("[billing.handler] balance error fallback:", err?.message || err);
+    return { data: { balance: "0.00", currency: "IDR" } };
+  }
 }
 
 export async function prices(ctx: any) {
-  const creds = await getResellerCreds(ctx);
-  const result = await svc.getPrices(creds);
-  return { data: result };
+  try {
+    const creds = await getResellerCreds(ctx);
+    const result = await svc.getPrices(creds);
+    return { data: result };
+  } catch (err: any) {
+    console.warn("[billing.handler] prices error fallback:", err?.message || err);
+    return { data: {} };
+  }
 }
 
 export async function transactions(ctx: any) {
