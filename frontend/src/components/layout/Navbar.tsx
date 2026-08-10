@@ -64,9 +64,9 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
               <span className="text-base font-black text-gray-900 tracking-tight leading-none group-hover:text-black transition-colors">
                 {brand}
               </span>
-              {user && (
+              {user && user.role === "reseller" && (
                 <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest leading-tight mt-0.5">
-                  {user.role === "reseller" ? "Reseller Portal" : "Customer Portal"}
+                  Reseller Portal
                 </span>
               )}
             </div>
@@ -164,7 +164,9 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                   </div>
                   <div className="hidden md:flex flex-col text-left leading-tight">
                     <span className="text-sm font-bold text-gray-900 truncate max-w-[160px]">{user.name || user.email}</span>
-                    <span className="text-xs font-semibold text-gray-500 capitalize">{user.role}</span>
+                    {user.role === "reseller" && (
+                      <span className="text-xs font-semibold text-gray-500 capitalize">Reseller</span>
+                    )}
                   </div>
                   <ChevronDown className={`w-4 h-4 text-gray-400 hidden md:block transition-transform duration-150 ${profileOpen ? "rotate-180" : ""}`} />
                 </button>

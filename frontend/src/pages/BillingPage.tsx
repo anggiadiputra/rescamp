@@ -573,7 +573,7 @@ export default function BillingPage() {
                 <h3 className="text-lg font-black text-gray-900 tracking-tight">
                   {(detail as any).isWholesale || (detail as any).invoiceType === "wholesale"
                     ? "RESELLER WHOLESALE BALANCE DEBIT NOTE"
-                    : "OFFICIAL CUSTOMER RETAIL INVOICE"}
+                    : `${(settings.brand_name || "Ekstensi ID").toUpperCase()} INVOICE`}
                 </h3>
                 <p className="text-xs font-mono font-bold text-blue-600">#{getInvoiceNumber(detail)}</p>
                 {((detail as any).paymentId || (detail as any).liquidTransactionId || (detail as any).liquidOrderId) && (
