@@ -60,16 +60,9 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
             <div className="w-9 h-9 rounded-xl bg-black text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform duration-200">
               <Globe className="w-5 h-5" />
             </div>
-            <div className="flex flex-col">
-              <span className="text-base font-black text-gray-900 tracking-tight leading-none group-hover:text-black transition-colors">
-                {brand}
-              </span>
-              {user && user.role === "reseller" && (
-                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest leading-tight mt-0.5">
-                  Reseller Portal
-                </span>
-              )}
-            </div>
+            <span className="text-base font-black text-gray-900 tracking-tight leading-none group-hover:text-black transition-colors">
+              {brand}
+            </span>
           </Link>
         </div>
 
@@ -162,11 +155,8 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                   <div className="w-9 h-9 rounded-xl bg-black text-white font-black flex items-center justify-center text-sm shadow-xs shrink-0">
                     {(user.name || user.email || "U").slice(0, 2).toUpperCase()}
                   </div>
-                  <div className="hidden md:flex flex-col text-left leading-tight">
+                  <div className="hidden md:flex text-left leading-tight">
                     <span className="text-sm font-bold text-gray-900 truncate max-w-[160px]">{user.name || user.email}</span>
-                    {user.role === "reseller" && (
-                      <span className="text-xs font-semibold text-gray-500 capitalize">Reseller</span>
-                    )}
                   </div>
                   <ChevronDown className={`w-4 h-4 text-gray-400 hidden md:block transition-transform duration-150 ${profileOpen ? "rotate-180" : ""}`} />
                 </button>
