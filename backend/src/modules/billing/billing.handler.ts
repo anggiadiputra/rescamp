@@ -32,7 +32,8 @@ export async function balance(ctx: any) {
 export async function prices(ctx: any) {
   try {
     const creds = await getResellerCreds(ctx);
-    const result = await svc.getPrices(creds);
+    const forceRefresh = ctx.query?.refresh === "true" || ctx.query?.refresh === "1";
+    const result = await svc.getPrices(creds, forceRefresh);
     return { data: result };
   } catch (err: any) {
     console.warn("[billing.handler] prices error fallback:", err?.message || err);

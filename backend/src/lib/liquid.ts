@@ -696,34 +696,40 @@ export class LiquidClient {
     }
   }
 
-  async getPrices() {
+  async getPrices(forceRefresh = false) {
     const cacheKey = `prices:${this.authHeader}`;
-    const cached = cacheStore.get(cacheKey);
-    if (cached && Date.now() < cached.expiresAt) {
-      return cached.data;
+    if (!forceRefresh) {
+      const cached = cacheStore.get(cacheKey);
+      if (cached && Date.now() < cached.expiresAt) {
+        return cached.data;
+      }
     }
     try {
       const data = await this.request<any>("GET", "/account/prices");
-      cacheStore.set(cacheKey, { data, expiresAt: Date.now() + 15 * 60_000 }); // 15 mins cache
+      cacheStore.set(cacheKey, { data, expiresAt: Date.now() + 5 * 60_000 }); // 5 mins cache
       return data;
     } catch (err) {
-      if (cached) return cached.data; // Return stale cache if Liquid API rate limited
+      const cached = cacheStore.get(cacheKey);
+      if (cached) return cached.data;
       throw err;
     }
   }
 
-  async getCustomerPrices() {
+  async getCustomerPrices(forceRefresh = false) {
     const cacheKey = `cust_prices:${this.authHeader}`;
-    const cached = cacheStore.get(cacheKey);
-    if (cached && Date.now() < cached.expiresAt) {
-      return cached.data;
+    if (!forceRefresh) {
+      const cached = cacheStore.get(cacheKey);
+      if (cached && Date.now() < cached.expiresAt) {
+        return cached.data;
+      }
     }
     try {
       const data = await this.request<any>("GET", "/customers/prices");
-      cacheStore.set(cacheKey, { data, expiresAt: Date.now() + 15 * 60_000 }); // 15 mins cache
+      cacheStore.set(cacheKey, { data, expiresAt: Date.now() + 5 * 60_000 }); // 5 mins cache
       return data;
     } catch (err) {
-      if (cached) return cached.data; // Return stale cache if Liquid API rate limited
+      const cached = cacheStore.get(cacheKey);
+      if (cached) return cached.data;
       throw err;
     }
   }

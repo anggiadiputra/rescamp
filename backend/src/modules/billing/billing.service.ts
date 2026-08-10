@@ -53,13 +53,13 @@ export async function getBalance(user: { id?: number; resellerId: string | null;
   }
 }
 
-export async function getPrices(user: { id?: number; resellerId: string | null; apiKey: string | null; role?: string }) {
+export async function getPrices(user: { id?: number; resellerId: string | null; apiKey: string | null; role?: string }, forceRefresh = false) {
   const creds = user.id ? await resolveResellerCreds(user.id) : { resellerId: user.resellerId || "", apiKey: user.apiKey || "" };
   const liquid = getLiquid(creds);
 
   // Try customer prices first (GET /customers/prices) — works for all roles
   try {
-    const raw = await liquid.getCustomerPrices();
+    const raw = await liquid.getCustomerPrices(forceRefresh);
     return formatCustomerPrices(raw);
   } catch (err: any) {
     console.warn("[billing.service] getCustomerPrices failed, trying account prices:", err?.message || err);
@@ -67,8 +67,8 @@ export async function getPrices(user: { id?: number; resellerId: string | null; 
 
   // Fallback: try reseller account prices (GET /account/prices)
   try {
-    const raw = await liquid.getPrices();
-    return raw;
+    const raw = await liquid.getPrices(forceRefresh);
+    return formatCustomerPrices(raw);
   } catch (err: any) {
     console.warn("[billing.service] getPrices fallback triggered:", err?.message || err);
     return {};
