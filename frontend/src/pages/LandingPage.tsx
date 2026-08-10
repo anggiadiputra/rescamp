@@ -195,44 +195,57 @@ export default function LandingPage() {
       {/* Top Navbar */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-black flex items-center justify-center text-white shadow-sm">
+          <Link to="/" className="flex items-center gap-2.5 group">
+            <div className="w-9 h-9 rounded-xl bg-black flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform duration-200">
               <Globe className="w-5 h-5" />
             </div>
-            <span className="text-base sm:text-lg font-black tracking-tight text-gray-900">
-              {brand}
-            </span>
+            <div className="flex flex-col">
+              <span className="text-base font-black text-gray-900 tracking-tight leading-none group-hover:text-black transition-colors">
+                {brand}
+              </span>
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest leading-tight mt-0.5">
+                Domain Platform
+              </span>
+            </div>
           </Link>
 
           <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-gray-600">
-            <a href="#why-us" className="hover:text-black transition-colors">Why Us</a>
-            <a href="#features" className="hover:text-black transition-colors">Features</a>
-            <Link to="/prices" className="hover:text-black transition-colors">Prices</Link>
+            <a href="#why-us" className="hover:text-black transition-colors">Mengapa Kami</a>
+            <a href="#features" className="hover:text-black transition-colors">Fitur Utama</a>
+            <Link to="/prices" className="hover:text-black transition-colors">Daftar Harga</Link>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              className="md:hidden p-2 rounded-xl text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
               aria-label="Toggle menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
-            <Link to="/login" className="text-xs sm:text-sm font-semibold text-gray-700 hover:text-black px-3 py-2 transition-colors">
-              Sign In
+            <Link to="/login" className="text-xs sm:text-sm font-bold text-gray-700 hover:text-black px-3 py-2 transition-colors">
+              Masuk
             </Link>
-            <Link to="/register" className="px-4 py-2 bg-black hover:bg-gray-800 text-white text-xs sm:text-sm font-bold rounded-xl transition-all shadow-sm">
-              Get Started
+            <Link to="/register" className="px-4 py-2 bg-black hover:bg-gray-800 text-white text-xs sm:text-sm font-bold rounded-xl transition-all shadow-xs">
+              Daftar
             </Link>
           </div>
         </div>
 
         {/* Mobile nav dropdown */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-100 bg-white px-4 py-3 space-y-2">
-            <a href="#why-us" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 rounded-lg">Why Us</a>
-            <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 rounded-lg">Features</a>
-            <Link to="/prices" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 rounded-lg">Prices</Link>
+          <div className="md:hidden border-t border-gray-100 bg-white px-4 py-3 space-y-2.5 shadow-md animate-in fade-in slide-in-from-top-1 duration-150">
+            <a href="#why-us" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-50 rounded-xl">Mengapa Kami</a>
+            <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-50 rounded-lg">Fitur Utama</a>
+            <Link to="/prices" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-50 rounded-lg">Daftar Harga</Link>
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
+              <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2 text-center text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl">
+                Masuk
+              </Link>
+              <Link to="/register" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2 text-center text-xs font-bold text-white bg-black hover:bg-gray-800 rounded-xl">
+                Daftar
+              </Link>
+            </div>
           </div>
         )}
       </header>

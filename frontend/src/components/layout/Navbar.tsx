@@ -15,6 +15,7 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const nav = useNavigate();
 
   const [profileOpen, setProfileOpen] = useState(false);
+  const [guestMenuOpen, setGuestMenuOpen] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
 
   const brand = settings.brand_name || "Ekstensi.id";
@@ -27,12 +28,17 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
     }
   }, [user, location.pathname]);
 
+  // Reset mobile guest menu on route change
+  useEffect(() => {
+    setGuestMenuOpen(false);
+  }, [location.pathname]);
+
   return (
-    <header className="bg-white/90 backdrop-blur-md border-b border-gray-200/80 sticky top-0 z-30 h-16 flex items-center transition-all">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 w-full flex items-center justify-between gap-4">
-        {/* Left Side: Brand & Mobile Sidebar Toggle */}
+    <header className="bg-white/90 backdrop-blur-md border-b border-gray-200/80 sticky top-0 z-30 flex flex-col transition-all">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 w-full h-16 flex items-center justify-between gap-4">
+        {/* Left Side: Brand & Mobile Menu Toggle */}
         <div className="flex items-center gap-3">
-          {user && onToggleSidebar && (
+          {user && onToggleSidebar ? (
             <button
               onClick={onToggleSidebar}
               className="lg:hidden p-2 rounded-xl text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
@@ -40,7 +46,15 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
             >
               <Menu className="w-5 h-5" />
             </button>
-          )}
+          ) : !user ? (
+            <button
+              onClick={() => setGuestMenuOpen(!guestMenuOpen)}
+              className="md:hidden p-2 rounded-xl text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
+              aria-label="Toggle mobile menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          ) : null}
 
           <Link to={user ? "/dashboard" : "/"} className="flex items-center gap-2.5 group">
             <div className="w-9 h-9 rounded-xl bg-black text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform duration-200">
@@ -60,10 +74,10 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
         {/* Center / Desktop Links (Public Guest Mode) */}
         {!user && (
           <nav className="hidden md:flex items-center gap-6">
-            <Link to="/prices" className={`text-xs font-bold uppercase tracking-wider transition-colors ${location.pathname === "/prices" ? "text-black" : "text-gray-500 hover:text-black"}`}>
+            <Link to="/prices" className={`text-xs font-bold uppercase tracking-wider transition-colors ${location.pathname === "/prices" ? "text-black border-b-2 border-black py-1" : "text-gray-500 hover:text-black"}`}>
               Daftar Harga
             </Link>
-            <Link to="/domains/register" className={`text-xs font-bold uppercase tracking-wider transition-colors ${location.pathname === "/domains/register" ? "text-black" : "text-gray-500 hover:text-black"}`}>
+            <Link to="/domains/register" className={`text-xs font-bold uppercase tracking-wider transition-colors ${location.pathname === "/domains/register" ? "text-black border-b-2 border-black py-1" : "text-gray-500 hover:text-black"}`}>
               Cek Domain
             </Link>
           </nav>
@@ -74,13 +88,21 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           {!user ? (
             <div className="flex items-center gap-2">
               <Link to="/login">
-                <Button variant="ghost" size="sm">
+                <Button
+                  variant={location.pathname === "/login" ? "secondary" : "ghost"}
+                  size="sm"
+                  className={location.pathname === "/login" ? "bg-gray-100 font-extrabold text-black border border-gray-300 shadow-2xs" : ""}
+                >
                   <LogIn className="w-3.5 h-3.5 mr-1 inline" />
                   Masuk
                 </Button>
               </Link>
               <Link to="/register">
-                <Button variant="primary" size="sm">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className={location.pathname === "/register" ? "ring-2 ring-black ring-offset-2" : ""}
+                >
                   <UserPlus className="w-3.5 h-3.5 mr-1 inline" />
                   Daftar
                 </Button>
@@ -145,6 +167,54 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           )}
         </div>
       </div>
+
+      {/* Guest Mobile Drawer Dropdown */}
+      {!user && guestMenuOpen && (
+        <div className="md:hidden border-t border-gray-200/80 bg-white/95 backdrop-blur-md px-4 py-3 space-y-3 shadow-md animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="space-y-1 pb-2 border-b border-gray-100">
+            <Link
+              to="/prices"
+              onClick={() => setGuestMenuOpen(false)}
+              className={`block px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors ${
+                location.pathname === "/prices" ? "bg-gray-100 text-black font-black" : "text-gray-600 hover:bg-gray-50 hover:text-black"
+              }`}
+            >
+              Daftar Harga
+            </Link>
+            <Link
+              to="/domains/register"
+              onClick={() => setGuestMenuOpen(false)}
+              className={`block px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors ${
+                location.pathname === "/domains/register" ? "bg-gray-100 text-black font-black" : "text-gray-600 hover:bg-gray-50 hover:text-black"
+              }`}
+            >
+              Cek Domain
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <Link to="/login" onClick={() => setGuestMenuOpen(false)} className="w-full">
+              <Button
+                variant={location.pathname === "/login" ? "secondary" : "ghost"}
+                size="sm"
+                className={`w-full justify-center ${location.pathname === "/login" ? "bg-gray-100 font-extrabold text-black border border-gray-300 shadow-2xs" : ""}`}
+              >
+                <LogIn className="w-3.5 h-3.5 mr-1 inline" />
+                Masuk
+              </Button>
+            </Link>
+            <Link to="/register" onClick={() => setGuestMenuOpen(false)} className="w-full">
+              <Button
+                variant="primary"
+                size="sm"
+                className={`w-full justify-center ${location.pathname === "/register" ? "ring-2 ring-black ring-offset-1" : ""}`}
+              >
+                <UserPlus className="w-3.5 h-3.5 mr-1 inline" />
+                Daftar
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
