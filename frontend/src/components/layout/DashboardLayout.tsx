@@ -57,24 +57,15 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         } ${collapsed ? "lg:w-20" : "lg:w-64"} w-64`}
       >
-        <div className={`h-14 flex items-center justify-between border-b border-gray-100 px-4 ${collapsed ? "lg:px-3 lg:justify-center" : ""}`}>
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center shrink-0 shadow-2xs">
-              <Globe className="w-4 h-4" />
-            </div>
-            {(!collapsed || sidebarOpen) && (
-              <span className="text-sm font-bold text-gray-900 truncate">
-                {settings.brand_name || "Ekstensi.id"}
-              </span>
-            )}
+        <div className={`h-14 flex items-center gap-2.5 px-4 border-b border-gray-100 ${collapsed ? "lg:justify-center" : ""}`}>
+          <div className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center shrink-0 shadow-2xs">
+            <Globe className="w-4 h-4" />
           </div>
-          <button
-            onClick={toggleCollapsed}
-            title={collapsed ? "Expand sidebar" : "Collapse to icon-only"}
-            className="hidden lg:flex items-center justify-center p-1.5 rounded-lg text-gray-500 hover:text-black hover:bg-gray-100 transition-colors shrink-0"
-          >
-            {collapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
-          </button>
+          {(!collapsed || sidebarOpen) && (
+            <span className="text-sm font-bold text-gray-900 truncate">
+              {settings.brand_name || "Ekstensi.id"}
+            </span>
+          )}
         </div>
 
         <nav className="p-3 space-y-1">
