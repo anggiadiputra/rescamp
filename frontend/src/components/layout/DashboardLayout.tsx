@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSettings } from "../../contexts/SettingsContext";
 import {
-  LayoutDashboard, Globe, Users, Receipt, Tag, Settings, Menu, X, LogOut, PlusCircle, User, FileText, ChevronDown, ChevronLeft, ChevronRight,
+  LayoutDashboard, Globe, Users, Receipt, Tag, Settings, Menu, X, LogOut, PlusCircle, User, FileText, ChevronDown, PanelLeftOpen, PanelLeftClose,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -71,9 +71,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           <button
             onClick={toggleCollapsed}
             title={collapsed ? "Expand sidebar" : "Collapse to icon-only"}
-            className="hidden lg:flex items-center justify-center p-1.5 rounded-lg text-gray-400 hover:text-black hover:bg-gray-100 transition-colors shrink-0"
+            className="hidden lg:flex items-center justify-center p-1.5 rounded-lg text-gray-500 hover:text-black hover:bg-gray-100 transition-colors shrink-0"
           >
-            {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            {collapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
           </button>
         </div>
 
@@ -117,9 +117,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             <button
               onClick={toggleCollapsed}
               title={collapsed ? "Expand Sidebar" : "Collapse Sidebar (Icon Only)"}
-              className="hidden lg:flex items-center gap-1.5 p-2 hover:bg-gray-100 text-gray-600 hover:text-black rounded-lg transition-colors text-xs font-semibold"
+              className="hidden lg:flex items-center gap-1.5 p-2 hover:bg-gray-100 text-gray-600 hover:text-black rounded-lg transition-colors"
             >
-              {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+              {collapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
             </button>
           </div>
 
