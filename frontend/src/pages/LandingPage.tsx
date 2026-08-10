@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Globe, Search, ShieldCheck, Zap, Server, Lock, HelpCircle, ArrowRight, CheckCircle2,
-  Sliders, FileText, Check, ChevronRight, Award, BarChart3, RefreshCw, Menu, X
+  Sliders, FileText, Check, ChevronRight, Award, BarChart3, RefreshCw
 } from "lucide-react";
 import { api } from "../lib/api";
 import { Modal } from "../components/ui";
 import { useSettings } from "../contexts/SettingsContext";
+import { Navbar } from "../components/layout/Navbar";
 
 const POPULAR_DOMAINS = [
   { tld: ".COM", price: "Rp 180.000", renew: "Rp 209.000", badge: "Populer", privacy: true },
@@ -83,7 +84,6 @@ export default function LandingPage() {
   const [searchResult, setSearchResult] = useState<any[] | null>(null);
   const [popularDomains, setPopularDomains] = useState<any[]>(POPULAR_DOMAINS);
   const [authModal, setAuthModal] = useState<{ domain: string; transferPrice: string } | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -193,67 +193,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white text-gray-900 font-sans selection:bg-black selection:text-white">
       {/* Top Navbar */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-black flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform duration-200">
-              <Globe className="w-5 h-5" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-base font-black text-gray-900 tracking-tight leading-none group-hover:text-black transition-colors">
-                {brand}
-              </span>
-              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest leading-tight mt-0.5">
-                Domain Platform
-              </span>
-            </div>
-          </Link>
-
-          <nav className="hidden md:flex items-center gap-8 text-sm font-semibold text-gray-600">
-            <a href="#why-us" className="hover:text-black transition-colors">Mengapa Kami</a>
-            <a href="#features" className="hover:text-black transition-colors">Fitur Utama</a>
-            <Link to="/prices" className="hover:text-black transition-colors">Daftar Harga</Link>
-          </nav>
-
-          <div className="flex items-center gap-2.5">
-            {/* Desktop Auth Buttons */}
-            <div className="hidden md:flex items-center gap-2">
-              <Link to="/login" className="text-xs sm:text-sm font-bold text-gray-700 hover:text-black px-3 py-2 transition-colors">
-                Masuk
-              </Link>
-              <Link to="/register" className="px-4 py-2 bg-black hover:bg-gray-800 text-white text-xs sm:text-sm font-bold rounded-xl transition-all shadow-xs">
-                Daftar
-              </Link>
-            </div>
-
-            {/* Mobile Menu Toggle Button (Far Right) */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-xl text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
-              aria-label="Toggle menu"
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile nav dropdown */}
-        {mobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-100 bg-white px-4 py-3 space-y-2.5 shadow-md animate-in fade-in slide-in-from-top-1 duration-150">
-            <a href="#why-us" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-50 rounded-xl">Mengapa Kami</a>
-            <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-50 rounded-lg">Fitur Utama</a>
-            <Link to="/prices" onClick={() => setMobileMenuOpen(false)} className="block px-3 py-2 text-xs font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-50 rounded-lg">Daftar Harga</Link>
-            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
-              <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2 text-center text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl">
-                Masuk
-              </Link>
-              <Link to="/register" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2 text-center text-xs font-bold text-white bg-black hover:bg-gray-800 rounded-xl">
-                Daftar
-              </Link>
-            </div>
-          </div>
-        )}
-      </header>
+      <Navbar />
 
       {/* Hero Section */}
       <section className="relative pt-12 pb-20 sm:pt-20 sm:pb-28 overflow-hidden bg-gradient-to-b from-gray-50 via-white to-white">

@@ -56,9 +56,11 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
               <span className="text-base font-black text-gray-900 tracking-tight leading-none group-hover:text-black transition-colors">
                 {brand}
               </span>
-              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest leading-tight mt-0.5">
-                {user ? (user.role === "reseller" ? "Reseller Portal" : "Customer Portal") : "Domain Platform"}
-              </span>
+              {user && (
+                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest leading-tight mt-0.5">
+                  {user.role === "reseller" ? "Reseller Portal" : "Customer Portal"}
+                </span>
+              )}
             </div>
           </Link>
         </div>
