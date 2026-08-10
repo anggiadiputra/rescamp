@@ -40,7 +40,7 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
 
   return (
     <header className="bg-white/90 backdrop-blur-md border-b border-gray-200/80 sticky top-0 z-30 flex flex-col transition-all">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full h-16 flex items-center justify-between gap-4">
+      <div className={`${user ? "px-4 sm:px-6 md:px-8 w-full" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full"} h-16 flex items-center justify-between gap-4`}>
         {/* Left Side: Brand & Mobile Sidebar Toggle */}
         <div className="flex items-center gap-3">
           {user && onToggleSidebar && (
@@ -126,8 +126,10 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
             <div className="flex items-center gap-3">
               {/* Balance Badge */}
               {typeof balance === "number" && (
-                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100/80 border border-gray-200 text-xs font-bold text-gray-900 shadow-2xs">
-                  <Wallet className="w-3.5 h-3.5 text-gray-500" />
+                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-50 border border-gray-200 text-xs font-bold text-gray-800 shadow-2xs">
+                  <div className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <Wallet className="w-3 h-3" />
+                  </div>
                   <span>Rp {balance.toLocaleString("id-ID")}</span>
                 </div>
               )}
@@ -136,16 +138,16 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
               <div className="relative">
                 <button
                   onClick={() => setProfileOpen(!profileOpen)}
-                  className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200 cursor-pointer"
+                  className="flex items-center gap-2.5 p-1.5 pr-2.5 rounded-xl hover:bg-gray-100 transition-all border border-transparent hover:border-gray-200 cursor-pointer"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-black text-white font-bold flex items-center justify-center text-xs shadow-2xs">
+                  <div className="w-8 h-8 rounded-xl bg-black text-white font-bold flex items-center justify-center text-xs shadow-xs shrink-0">
                     {(user.name || user.email || "U").slice(0, 2).toUpperCase()}
                   </div>
-                  <div className="hidden md:flex flex-col text-left leading-none">
-                    <span className="text-xs font-bold text-gray-900 truncate max-w-[120px]">{user.name || user.email}</span>
-                    <span className="text-[10px] text-gray-400 capitalize mt-0.5">{user.role}</span>
+                  <div className="hidden md:flex flex-col text-left leading-tight">
+                    <span className="text-xs font-bold text-gray-900 truncate max-w-[140px]">{user.name || user.email}</span>
+                    <span className="text-[10px] font-medium text-gray-400 capitalize">{user.role}</span>
                   </div>
-                  <ChevronDown className="w-3.5 h-3.5 text-gray-400 hidden md:block" />
+                  <ChevronDown className={`w-3.5 h-3.5 text-gray-400 hidden md:block transition-transform duration-150 ${profileOpen ? "rotate-180" : ""}`} />
                 </button>
 
                 {profileOpen && (
