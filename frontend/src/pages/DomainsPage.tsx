@@ -111,6 +111,7 @@ export default function DomainsPage() {
               <thead>
                 <tr className="bg-gray-50/70 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
                   <th className="px-4 py-3.5 whitespace-nowrap">Domain</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">Tanggal Registrasi</th>
                   <th className="px-4 py-3.5 whitespace-nowrap">Expiry</th>
                   <th className="px-4 py-3.5 text-center whitespace-nowrap">Status</th>
                 </tr>
@@ -132,6 +133,7 @@ export default function DomainsPage() {
                         </p>
                       )}
                     </td>
+                    <td className="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">{d.registrationDate || "-"}</td>
                     <td className="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">{d.expiryDate || "-"}</td>
                     <td className="px-4 py-3.5 text-center whitespace-nowrap"><Badge status={d.status} /></td>
                   </tr>
@@ -145,7 +147,8 @@ export default function DomainsPage() {
                 <div className="flex justify-between items-start gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-gray-900">{d.domainName}</p>
-                    <p className="text-xs text-gray-500 mt-1">Expires: {d.expiryDate || "-"}</p>
+                    <p className="text-xs text-gray-500 mt-1">Registrasi: {d.registrationDate || "-"}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Expires: {d.expiryDate || "-"}</p>
                     {d.status === "suspended" && d.suspendReason && (
                       <p className="text-[11px] text-rose-700 mt-1">Alasan: {d.suspendReason}</p>
                     )}
