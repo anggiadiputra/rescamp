@@ -22,9 +22,14 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
 
   useEffect(() => {
     if (user) {
-      api.get<{ balance: number }>("/billing/balance")
-        .then((res) => setBalance(res.balance))
+      api.get<any>("/billing/balance")
+        .then((res) => {
+          const raw = typeof res?.balance === "number" ? res.balance : (typeof res === "number" ? res : null);
+          setBalance(typeof raw === "number" ? raw : null);
+        })
         .catch(() => setBalance(null));
+    } else {
+      setBalance(null);
     }
   }, [user, location.pathname]);
 
@@ -120,7 +125,7 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           ) : (
             <div className="flex items-center gap-3">
               {/* Balance Badge */}
-              {balance !== null && (
+              {typeof balance === "number" && (
                 <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100/80 border border-gray-200 text-xs font-bold text-gray-900 shadow-2xs">
                   <Wallet className="w-3.5 h-3.5 text-gray-500" />
                   <span>Rp {balance.toLocaleString("id-ID")}</span>
