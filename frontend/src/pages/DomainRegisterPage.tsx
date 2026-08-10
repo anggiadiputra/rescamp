@@ -313,7 +313,7 @@ export default function DomainRegisterPage() {
               className="h-11 px-5 bg-black hover:bg-gray-800 active:bg-gray-900 text-white font-bold text-sm rounded-xl transition-colors shadow-xs disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed shrink-0"
             >
               {bulkLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              <span>Cari Domain</span>
+              <span>Cari</span>
             </button>
           </div>
         </div>
@@ -567,11 +567,11 @@ export default function DomainRegisterPage() {
               >
                 {submitting ? (
                   <>
-                    <LoadingSpinner size="sm" /> Memproses Pembayaran...
+                    <LoadingSpinner size="sm" /> Memproses...
                   </>
                 ) : (
                   <>
-                    Lanjut Bayar - {selectedDomain.domain} <ArrowRight className="w-4 h-4 ml-1" />
+                    Bayar <ArrowRight className="w-4 h-4 ml-1" />
                   </>
                 )}
               </Button>
@@ -669,11 +669,11 @@ export default function DomainRegisterPage() {
             >
               {transferSubmitting ? (
                 <>
-                  <LoadingSpinner size="sm" /> Memproses Transfer Domain...
+                  <LoadingSpinner size="sm" /> Memproses...
                 </>
               ) : (
                 <>
-                  Mulai Transfer Domain <ArrowRight className="w-4 h-4 ml-1" />
+                  Transfer <ArrowRight className="w-4 h-4 ml-1" />
                 </>
               )}
             </Button>

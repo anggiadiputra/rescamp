@@ -127,7 +127,7 @@ export default function CustomersPage() {
             Refresh
           </Button>
           <Button onClick={openCreate} className="bg-black hover:bg-gray-800 text-white text-xs sm:text-sm !py-2.5 shadow-sm">
-            <Plus className="w-4 h-4 inline mr-1.5" /> Tambah Customer
+            <Plus className="w-4 h-4 inline mr-1.5" /> Tambah
           </Button>
         </div>
       </div>
@@ -349,8 +349,8 @@ export default function CustomersPage() {
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving}>{saving ? "Saving..." : (editMode ? "Update Contact" : "Save Contact")}</Button>
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>Batal</Button>
+            <Button onClick={save} disabled={saving}>{saving ? "Menyimpan..." : (editMode ? "Update" : "Simpan")}</Button>
           </div>
         </div>
       </Modal>

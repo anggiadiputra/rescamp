@@ -53,10 +53,10 @@ export default function DomainsPage() {
             Refresh
           </Button>
           <Link to="/domains/register?tab=transfer">
-            <Button><ArrowRightLeft className="w-3.5 h-3.5 mr-1 inline" /> Transfer Domain</Button>
+            <Button><ArrowRightLeft className="w-3.5 h-3.5 mr-1 inline" /> Transfer</Button>
           </Link>
           <Link to="/domains/register">
-            <Button><Plus className="w-3.5 h-3.5 mr-1 inline" /> Register Domain</Button>
+            <Button><Plus className="w-3.5 h-3.5 mr-1 inline" /> Register</Button>
           </Link>
         </div>
       </div>

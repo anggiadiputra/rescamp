@@ -203,7 +203,7 @@ export default function SettingsPage() {
           className="px-4 sm:px-6 py-2.5 bg-black hover:bg-gray-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-2"
         >
           <Save className="w-4 h-4" />
-          {saving ? "Saving..." : "Simpan Semua Konfigurasi"}
+          {saving ? "Menyimpan..." : "Simpan"}
         </Button>
       </div>
 
@@ -971,7 +971,7 @@ export default function SettingsPage() {
             className="px-5 sm:px-8 py-3 bg-black hover:bg-gray-800 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center gap-2"
           >
             <Save className="w-4 h-4" />
-            {saving ? "Saving Configuration..." : "Simpan Semua Konfigurasi"}
+            {saving ? "Menyimpan..." : "Simpan"}
           </Button>
         </div>
       </form>

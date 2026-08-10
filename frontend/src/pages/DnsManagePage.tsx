@@ -202,7 +202,7 @@ export default function DnsManagePage() {
             onClick={() => { setForm({ type: "a", hostname: "", value: "", ttl: 3600 }); setAddOpen(true); }}
             className="shadow-sm bg-black hover:bg-gray-800 text-white text-xs sm:text-sm !py-2.5"
           >
-            <Plus className="w-4 h-4 inline mr-1.5" /> Add Record
+            <Plus className="w-4 h-4 inline mr-1.5" /> Tambah
           </Button>
         </div>
       </div>
@@ -462,9 +462,9 @@ export default function DnsManagePage() {
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
-            <Button variant="secondary" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button variant="secondary" onClick={() => setAddOpen(false)}>Batal</Button>
             <Button onClick={addRecord} disabled={submitting} className="bg-black hover:bg-gray-800 text-white">
-              {submitting ? "Saving..." : "Save Record"}
+              {submitting ? "Menyimpan..." : "Simpan"}
             </Button>
           </div>
         </div>
@@ -520,9 +520,9 @@ export default function DnsManagePage() {
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
-            <Button variant="secondary" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button variant="secondary" onClick={() => setEditOpen(false)}>Batal</Button>
             <Button onClick={updateRecord} disabled={submitting} className="bg-black hover:bg-gray-800 text-white">
-              {submitting ? "Updating..." : "Save Changes"}
+              {submitting ? "Menyimpan..." : "Simpan"}
             </Button>
           </div>
         </div>
