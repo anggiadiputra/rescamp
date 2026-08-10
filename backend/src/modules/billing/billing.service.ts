@@ -550,20 +550,33 @@ export async function getTransaction(userParam: number | { id: number; role?: st
   let allowedUserIds = [userId];
   if (userRole === "reseller") {
     const childUsers = await db.select({ id: users.id }).from(users).where(eq(users.parentResellerId, userId));
-    allowedUserIds = [userId, ...childUsers.map((c) => c.id)];
+    const allCustomerUserIds = await db.select({ userId: customers.userId }).from(customers);
+    allowedUserIds = [
+      userId,
+      ...childUsers.map((c) => c.id),
+      ...allCustomerUserIds.map((c) => c.userId).filter((id): id is number => typeof id === "number"),
+    ];
   }
 
   const strTxnId = String(txnId).trim();
   const numTxnId = Number(strTxnId);
 
   // 1. Try finding in local DB by integer id or liquidTransactionId
+  let accessCondition: any = inArray(transactions.userId, allowedUserIds);
+  if (userRole === "reseller") {
+    accessCondition = or(
+      inArray(transactions.userId, allowedUserIds),
+      isNotNull(transactions.customerId)
+    );
+  }
+
   let [txn] = await db.select().from(transactions).where(
     and(
       or(
         !isNaN(numTxnId) && numTxnId > 0 ? eq(transactions.id, numTxnId) : undefined,
         eq(transactions.liquidTransactionId, strTxnId)
       ),
-      inArray(transactions.userId, allowedUserIds)
+      accessCondition
     )
   );
 
