@@ -673,26 +673,26 @@ export default function BillingPage() {
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Billed To Customer</p>
                     <p className="font-bold text-gray-900 text-sm mt-0.5">
-                      {(detail as any).customer?.name || (isCustomer ? user?.name : "-")}
+                      {(detail as any).customer?.name || (detail as any).metadata?.customerName || (detail as any).metadata?.name || (isCustomer ? user?.name : "Pelanggan")}
                     </p>
-                    {(detail as any).customer?.company && (
+                    {((detail as any).customer?.company || (detail as any).metadata?.customerCompany) && (
                       <p className="text-gray-600 text-xs font-semibold mt-0.5">
-                        {(detail as any).customer.company}
+                        {(detail as any).customer?.company || (detail as any).metadata?.customerCompany}
                       </p>
                     )}
-                    {((detail as any).customer?.formattedAddress || (detail as any).customer?.address) && (
+                    {((detail as any).customer?.formattedAddress || (detail as any).customer?.address || (detail as any).metadata?.customerAddress) && (
                       <p className="text-gray-500 text-[11px] mt-0.5 leading-relaxed">
-                        {(detail as any).customer.formattedAddress || (detail as any).customer.address}
+                        {(detail as any).customer?.formattedAddress || (detail as any).customer?.address || (detail as any).metadata?.customerAddress}
                       </p>
                     )}
-                    {((detail as any).customer?.email || (isCustomer ? user?.email : null)) && (
+                    {((detail as any).customer?.email || (detail as any).metadata?.customerEmail || (detail as any).metadata?.email || (isCustomer ? user?.email : null)) && (
                       <p className="text-gray-500 text-[11px] font-mono mt-0.5">
-                        {(detail as any).customer?.email || (isCustomer ? user?.email : "")}
+                        {(detail as any).customer?.email || (detail as any).metadata?.customerEmail || (detail as any).metadata?.email || (isCustomer ? user?.email : "")}
                       </p>
                     )}
-                    {(detail as any).customer?.phone && (
+                    {((detail as any).customer?.phone || (detail as any).metadata?.customerPhone) && (
                       <p className="text-gray-400 text-[10px] font-mono mt-0.5">
-                        Telp: {(detail as any).customer.phone}
+                        Telp: {(detail as any).customer?.phone || (detail as any).metadata?.customerPhone}
                       </p>
                     )}
                   </div>

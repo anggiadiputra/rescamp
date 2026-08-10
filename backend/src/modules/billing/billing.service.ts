@@ -649,17 +649,23 @@ export async function getTransaction(userParam: number | { id: number; role?: st
       if (!customer) {
         const [u] = await db.select().from(users).where(eq(users.id, dom.userId));
         if (u && u.role === "customer") {
-          customer = { name: u.name, email: u.email };
+          const [cByEmail] = await db.select().from(customers).where(eq(customers.email, u.email));
+          customer = cByEmail || { name: u.name, email: u.email };
         }
       }
     }
   }
   if (!customer && (meta?.customerName || meta?.customerEmail)) {
     customer = {
-      name: meta.customerName || null,
-      email: meta.customerEmail || null,
-      company: meta.customerCompany || null,
-      address: meta.customerAddress || null,
+      name: meta.customerName || meta.name || null,
+      email: meta.customerEmail || meta.email || null,
+      company: meta.customerCompany || meta.company || null,
+      address: meta.customerAddress || meta.address || null,
+      city: meta.customerCity || meta.city || null,
+      state: meta.customerState || meta.state || null,
+      zipcode: meta.customerZipcode || meta.zipcode || null,
+      country: meta.customerCountry || meta.country || null,
+      phone: meta.customerPhone || meta.phone || null,
     };
   }
   if (!customer && txn.userId) {
@@ -669,11 +675,16 @@ export async function getTransaction(userParam: number | { id: number; role?: st
   if (!customer && txn.userId) {
     const [u] = await db.select().from(users).where(eq(users.id, txn.userId));
     if (u && u.role === "customer") {
-      customer = { name: u.name, email: u.email };
+      const [cByEmail] = await db.select().from(customers).where(eq(customers.email, u.email));
+      customer = cByEmail || { name: u.name, email: u.email };
     }
   }
 
   if (customer) {
+    if (customer.phone_cc && customer.phone && !customer.phone.startsWith("+")) {
+      const cc = String(customer.phone_cc).replace("+", "");
+      customer.phone = `+${cc}${customer.phone}`;
+    }
     const addrParts = [
       customer.address,
       customer.city,
