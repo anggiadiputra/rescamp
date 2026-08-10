@@ -4,7 +4,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useSettings } from "../../contexts/SettingsContext";
 import { api } from "../../lib/api";
 import {
-  Globe, LogIn, UserPlus, LogOut, User, Menu, ChevronDown, Wallet,
+  Globe, LogIn, UserPlus, LogOut, User, Menu, ChevronDown, Wallet, X,
 } from "lucide-react";
 import { Button } from "../ui";
 
@@ -36,9 +36,9 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   return (
     <header className="bg-white/90 backdrop-blur-md border-b border-gray-200/80 sticky top-0 z-30 flex flex-col transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 w-full h-16 flex items-center justify-between gap-4">
-        {/* Left Side: Brand & Mobile Menu Toggle */}
+        {/* Left Side: Brand & Mobile Sidebar Toggle */}
         <div className="flex items-center gap-3">
-          {user && onToggleSidebar ? (
+          {user && onToggleSidebar && (
             <button
               onClick={onToggleSidebar}
               className="lg:hidden p-2 rounded-xl text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
@@ -46,15 +46,7 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
             >
               <Menu className="w-5 h-5" />
             </button>
-          ) : !user ? (
-            <button
-              onClick={() => setGuestMenuOpen(!guestMenuOpen)}
-              className="md:hidden p-2 rounded-xl text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
-              aria-label="Toggle mobile menu"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-          ) : null}
+          )}
 
           <Link to={user ? "/dashboard" : "/"} className="flex items-center gap-2.5 group">
             <div className="w-9 h-9 rounded-xl bg-black text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform duration-200">
@@ -86,28 +78,40 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
         {/* Right Side Actions */}
         <div className="flex items-center gap-2.5">
           {!user ? (
-            <div className="flex items-center gap-2">
-              <Link to="/login">
-                <Button
-                  variant={location.pathname === "/login" ? "secondary" : "ghost"}
-                  size="sm"
-                  className={location.pathname === "/login" ? "bg-gray-100 font-extrabold text-black border border-gray-300 shadow-2xs" : ""}
-                >
-                  <LogIn className="w-3.5 h-3.5 mr-1 inline" />
-                  Masuk
-                </Button>
-              </Link>
-              <Link to="/register">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className={location.pathname === "/register" ? "ring-2 ring-black ring-offset-2" : ""}
-                >
-                  <UserPlus className="w-3.5 h-3.5 mr-1 inline" />
-                  Daftar
-                </Button>
-              </Link>
-            </div>
+            <>
+              {/* Desktop Auth Buttons */}
+              <div className="hidden md:flex items-center gap-2">
+                <Link to="/login">
+                  <Button
+                    variant={location.pathname === "/login" ? "secondary" : "ghost"}
+                    size="sm"
+                    className={location.pathname === "/login" ? "bg-gray-100 font-extrabold text-black border border-gray-300 shadow-2xs" : ""}
+                  >
+                    <LogIn className="w-3.5 h-3.5 mr-1 inline" />
+                    Masuk
+                  </Button>
+                </Link>
+                <Link to="/register">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className={location.pathname === "/register" ? "ring-2 ring-black ring-offset-2" : ""}
+                  >
+                    <UserPlus className="w-3.5 h-3.5 mr-1 inline" />
+                    Daftar
+                  </Button>
+                </Link>
+              </div>
+
+              {/* Mobile Guest Toggle Button (Far Right) */}
+              <button
+                onClick={() => setGuestMenuOpen(!guestMenuOpen)}
+                className="md:hidden p-2 rounded-xl text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
+                aria-label="Toggle mobile menu"
+              >
+                {guestMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
+            </>
           ) : (
             <div className="flex items-center gap-3">
               {/* Balance Badge */}
