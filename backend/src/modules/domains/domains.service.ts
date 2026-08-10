@@ -797,15 +797,15 @@ export async function getDomain(userParam: any, lookup: string | number) {
   }
 
   const defaultRemoteOwner = {
-    name: liquidItem.customer_name || cust?.name || reseller?.name || (userParam as any)?.name || (userParam as any)?.email?.split("@")[0] || undefined,
-    company: cust?.company || liquidItem.company_name || undefined,
-    email: liquidItem.customer_email || cust?.email || reseller?.email || (userParam as any)?.email || undefined,
-    address: cust?.address || liquidItem.address || undefined,
-    city: cust?.city || liquidItem.city || undefined,
-    state: cust?.state || liquidItem.state || undefined,
-    country: cust?.country || liquidItem.country || "ID",
-    zipcode: cust?.zipcode || liquidItem.zipcode || undefined,
-    phone: cust?.phone || liquidItem.phone || undefined,
+    name: liquidItem.customer_name || (userParam as any)?.name || (userParam as any)?.email?.split("@")[0] || undefined,
+    company: liquidItem.company_name || undefined,
+    email: liquidItem.customer_email || (userParam as any)?.email || undefined,
+    address: liquidItem.address || undefined,
+    city: liquidItem.city || undefined,
+    state: liquidItem.state || undefined,
+    country: liquidItem.country || "ID",
+    zipcode: liquidItem.zipcode || undefined,
+    phone: liquidItem.phone || undefined,
   };
 
   const registrantContact = parseDomainContact(liquidItem.registrant_contact ?? liquidItem.registrant ?? liquidItem.registrant_contact_details ?? liquidItem.registrantcontact ?? liquidItem.contacts?.registrant) || defaultRemoteOwner;
