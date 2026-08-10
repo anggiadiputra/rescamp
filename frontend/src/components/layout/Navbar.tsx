@@ -66,8 +66,8 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           </Link>
         </div>
 
-        {/* Center / Desktop Links (Public Guest Mode) */}
-        {!user && (
+        {/* Center / Desktop Links (Public Pages Mode) */}
+        {!onToggleSidebar && (
           <nav className="hidden md:flex items-center gap-6">
             <a href="/#why-us" className="text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-black transition-colors">
               Mengapa Kami
@@ -78,6 +78,11 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
             <Link to="/prices" className={`text-xs font-bold uppercase tracking-wider transition-colors ${location.pathname === "/prices" ? "text-black border-b-2 border-black py-1" : "text-gray-500 hover:text-black"}`}>
               Daftar Harga
             </Link>
+            {user && (
+              <Link to="/dashboard" className={`text-xs font-bold uppercase tracking-wider transition-colors ${location.pathname.startsWith("/dashboard") ? "text-black border-b-2 border-black py-1" : "text-gray-500 hover:text-black"}`}>
+                Dashboard
+              </Link>
+            )}
           </nav>
         )}
 
@@ -120,8 +125,19 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
             </>
           ) : (
             <div className="flex items-center gap-3">
-              {/* Balance Badge (Reseller Only) */}
-              {user?.role === "reseller" && typeof balance === "number" && (
+              {/* Mobile Public Menu Toggle Button for Logged-In Users */}
+              {!onToggleSidebar && (
+                <button
+                  onClick={() => setGuestMenuOpen(!guestMenuOpen)}
+                  className="md:hidden p-2 rounded-xl text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
+                  aria-label="Toggle mobile menu"
+                >
+                  {guestMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                </button>
+              )}
+
+              {/* Balance Badge (Reseller Only - Dashboard Layout Only) */}
+              {user?.role === "reseller" && onToggleSidebar && typeof balance === "number" && (
                 <div className="hidden sm:flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl bg-gray-50 border border-gray-200/80 text-sm font-extrabold text-gray-900 shadow-2xs">
                   <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
                     <Wallet className="w-3.5 h-3.5" />
@@ -195,8 +211,8 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
         </div>
       </div>
 
-      {/* Guest Mobile Drawer Dropdown */}
-      {!user && guestMenuOpen && (
+      {/* Mobile Navigation Drawer Dropdown for Public Pages */}
+      {!onToggleSidebar && guestMenuOpen && (
         <div className="md:hidden border-t border-gray-200/80 bg-white/95 backdrop-blur-md px-4 py-3 space-y-3 shadow-md animate-in fade-in slide-in-from-top-1 duration-150">
           <div className="space-y-1 pb-2 border-b border-gray-100">
             <a
@@ -222,29 +238,42 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
             >
               Daftar Harga
             </Link>
-          </div>
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <Link to="/login" onClick={() => setGuestMenuOpen(false)} className="w-full">
-              <Button
-                variant={location.pathname === "/login" ? "secondary" : "ghost"}
-                size="md"
-                className={`w-full justify-center ${location.pathname === "/login" ? "bg-gray-100 font-extrabold text-black" : ""}`}
+            {user && (
+              <Link
+                to="/dashboard"
+                onClick={() => setGuestMenuOpen(false)}
+                className={`block px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors ${
+                  location.pathname.startsWith("/dashboard") ? "bg-gray-100 text-black font-black" : "text-gray-600 hover:bg-gray-50 hover:text-black"
+                }`}
               >
-                <LogIn className="w-4 h-4 mr-1.5 inline" />
-                Masuk
-              </Button>
-            </Link>
-            <Link to="/register" onClick={() => setGuestMenuOpen(false)} className="w-full">
-              <Button
-                variant="primary"
-                size="md"
-                className="w-full justify-center"
-              >
-                <UserPlus className="w-4 h-4 mr-1.5 inline" />
-                Daftar
-              </Button>
-            </Link>
+                Dashboard
+              </Link>
+            )}
           </div>
+          {!user && (
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <Link to="/login" onClick={() => setGuestMenuOpen(false)} className="w-full">
+                <Button
+                  variant={location.pathname === "/login" ? "secondary" : "ghost"}
+                  size="md"
+                  className={`w-full justify-center ${location.pathname === "/login" ? "bg-gray-100 font-extrabold text-black" : ""}`}
+                >
+                  <LogIn className="w-4 h-4 mr-1.5 inline" />
+                  Masuk
+                </Button>
+              </Link>
+              <Link to="/register" onClick={() => setGuestMenuOpen(false)} className="w-full">
+                <Button
+                  variant="primary"
+                  size="md"
+                  className="w-full justify-center"
+                >
+                  <UserPlus className="w-4 h-4 mr-1.5 inline" />
+                  Daftar
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </header>
