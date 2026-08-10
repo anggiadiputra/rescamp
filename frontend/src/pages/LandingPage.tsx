@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Globe, Search, ShieldCheck, Zap, Server, Lock, HelpCircle, ArrowRight, CheckCircle2,
-  Sliders, FileText, Check, ChevronRight, Award, BarChart3, RefreshCw
+  Sliders, FileText, ChevronRight, Award, BarChart3, RefreshCw
 } from "lucide-react";
 import { api } from "../lib/api";
 import { Modal } from "../components/ui";
@@ -388,33 +388,16 @@ export default function LandingPage() {
                   <th className="p-4">Ekstensi</th>
                   <th className="p-4">Harga Registrasi</th>
                   <th className="p-4">Harga Renewal</th>
-                  <th className="p-4">WHOIS Protection</th>
-                  <th className="p-4 text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800">
-                {POPULAR_DOMAINS.map((item) => (
+                {popularDomains.map((item) => (
                   <tr key={item.tld} className="hover:bg-gray-800/80 transition-colors">
                     <td className="p-4 font-mono font-bold text-white text-base">
                       {item.tld} <span className="ml-2 text-[10px] px-2 py-0.5 rounded bg-gray-700 text-gray-300 font-sans">{item.badge}</span>
                     </td>
                     <td className="p-4 font-mono font-bold text-emerald-400">{item.price}/thn</td>
                     <td className="p-4 font-mono text-gray-300">{item.renew}/thn</td>
-                    <td className="p-4">
-                      {item.privacy ? (
-                        <span className="text-emerald-400 font-semibold flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Termasuk</span>
-                      ) : (
-                        <span className="text-gray-500 font-semibold">Tidak Berlaku (.ID)</span>
-                      )}
-                    </td>
-                    <td className="p-4 text-right">
-                      <button
-                        onClick={() => handleRegisterClick(`brandku${item.tld.toLowerCase()}`)}
-                        className="px-3.5 py-1.5 bg-white hover:bg-gray-200 text-black font-bold text-xs rounded-lg transition-colors"
-                      >
-                        Cari Domain
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -423,7 +406,7 @@ export default function LandingPage() {
 
           {/* Mobile card fallback */}
           <div className="md:hidden space-y-3">
-            {POPULAR_DOMAINS.map((item) => (
+            {popularDomains.map((item) => (
               <div key={item.tld} className="rounded-xl border border-gray-700 bg-gray-800/60 p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-mono font-bold text-white text-lg">{item.tld}</span>
@@ -438,21 +421,6 @@ export default function LandingPage() {
                     <span className="text-gray-400">Renewal</span>
                     <p className="font-mono text-gray-300">{item.renew}/thn</p>
                   </div>
-                </div>
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-xs">
-                    {item.privacy ? (
-                      <span className="text-emerald-400 font-semibold flex items-center gap-1"><Check className="w-3 h-3" /> WHOIS Protection</span>
-                    ) : (
-                      <span className="text-gray-500 text-[11px]">Tanpa WHOIS Protection</span>
-                    )}
-                  </span>
-                  <button
-                    onClick={() => handleRegisterClick(`brandku${item.tld.toLowerCase()}`)}
-                    className="px-3.5 py-1.5 bg-white hover:bg-gray-200 text-black font-bold text-xs rounded-lg transition-colors"
-                  >
-                    Cari Domain
-                  </button>
                 </div>
               </div>
             ))}
