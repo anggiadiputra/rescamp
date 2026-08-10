@@ -43,7 +43,7 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
 
   return (
     <header className="bg-white/90 backdrop-blur-md border-b border-gray-200/80 sticky top-0 z-30 flex flex-col transition-all">
-      <div className={`${user ? "px-4 sm:px-6 md:px-8 w-full" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full"} h-16 flex items-center justify-between gap-4`}>
+      <div className={`${onToggleSidebar ? "px-4 sm:px-6 md:px-8 w-full" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full"} h-16 flex items-center justify-between gap-4`}>
         {/* Left Side: Brand & Mobile Sidebar Toggle */}
         <div className="flex items-center gap-3">
           {user && onToggleSidebar && (

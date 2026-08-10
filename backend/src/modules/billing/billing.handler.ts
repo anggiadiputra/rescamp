@@ -31,7 +31,8 @@ export async function balance(ctx: any) {
 
 export async function prices(ctx: any) {
   try {
-    const creds = await getResellerCreds(ctx);
+    const userId = Number(ctx.store?.user?.sub || 0);
+    const creds = userId ? await getResellerCreds(ctx) : await resolveResellerCreds(0);
     const forceRefresh = ctx.query?.refresh === "true" || ctx.query?.refresh === "1";
     const result = await svc.getPrices(creds, forceRefresh);
     return { data: result };
