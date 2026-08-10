@@ -9,12 +9,21 @@ import { api } from "../lib/api";
 import type { Domain } from "../lib/types";
 import { useAuth } from "../contexts/AuthContext";
 
+function fmtPrice(amount: any): string {
+  if (!amount) return "";
+  const num = Number(amount);
+  if (isNaN(num)) return "";
+  const actual = num < 1000 ? num * 1000 : num;
+  return `Rp ${Math.round(actual).toLocaleString("id-ID")}`;
+}
+
 export default function DomainDetailPage() {
   const nav = useNavigate();
   const { id } = useParams();
   const { user } = useAuth();
   const isReseller = user?.role === "reseller";
   const [domain, setDomain] = useState<Domain | null>(null);
+  const isIdDomain = (domain?.tld || "").toLowerCase().endsWith("id");
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [copiedNs, setCopiedNs] = useState(false);
@@ -22,7 +31,14 @@ export default function DomainDetailPage() {
   // Modal states
   const [renewOpen, setRenewOpen] = useState(false);
   const [renewYears, setRenewYears] = useState(1);
+  const [renewWithPrivacy, setRenewWithPrivacy] = useState(false);
   const [renewLoading, setRenewLoading] = useState(false);
+  const [buyPrivacyOpen, setBuyPrivacyOpen] = useState(false);
+  const [priceList, setPriceList] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    api.get<any>("/billing/prices").then((data) => setPriceList(data || {})).catch(() => {});
+  }, []);
 
   // Payment modal state
   const [paymentData, setPaymentData] = useState<{
@@ -123,7 +139,10 @@ export default function DomainDetailPage() {
     setRenewLoading(true);
     setMsg("");
     try {
-      const res: any = await api.post(`/domains/${id}/renew`, { years: renewYears });
+      const res: any = await api.post(`/domains/${id}/renew`, {
+        years: renewYears,
+        purchase_privacy_protection: isIdDomain ? false : renewWithPrivacy,
+      });
       setRenewOpen(false);
       const paymentInfo = res?.data || res;
       const paymentLinkUrl = paymentInfo?.paymentLinkUrl || paymentInfo?.payment_link_url;
@@ -317,6 +336,7 @@ export default function DomainDetailPage() {
     setPrivacyBuying(true);
     try {
       const res: any = await api.post(`/domains/${id}/privacy/buy`, {});
+      setBuyPrivacyOpen(false);
       const paymentInfo = res?.data || res;
       const orderId = paymentInfo?.orderId || paymentInfo?.order_id;
       const paymentLinkUrl = paymentInfo?.paymentLinkUrl || paymentInfo?.payment_link_url;
@@ -357,8 +377,7 @@ export default function DomainDetailPage() {
 
 
 
-  const activeNs = domain.nameservers?.length ? domain.nameservers : ["ns1.liquid.net", "ns2.liquid.net"];
-  const isIdDomain = (domain.tld || "").toLowerCase().endsWith("id");
+  const activeNs = domain?.nameservers?.length ? domain.nameservers : ["ns1.liquid.net", "ns2.liquid.net"];
 
   return (
     <div className="space-y-6">
@@ -502,11 +521,11 @@ export default function DomainDetailPage() {
 
                   {!domain.privacyProtection && (
                     <button
-                      onClick={doBuyPrivacy}
+                      onClick={() => setBuyPrivacyOpen(true)}
                       disabled={privacyBuying || domain.status === "suspended"}
-                      className="w-full text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline transition-colors text-center block pt-0.5"
+                      className="w-full text-xs font-bold text-gray-900 hover:text-black hover:underline transition-colors text-center block pt-1 cursor-pointer"
                     >
-                      {privacyBuying ? "Memproses order..." : "+ Beli WHOIS Protection"}
+                      + Beli WHOIS Protection
                     </button>
                   )}
                 </div>
@@ -852,34 +871,139 @@ export default function DomainDetailPage() {
       </div>
 
       {/* Renew Modal */}
-      <Modal open={renewOpen} onClose={() => setRenewOpen(false)} title="Perpanjang Masa Berlaku Domain">
-        <div className="space-y-4 text-left">
-          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Nama Domain</span>
-            <p className="text-sm font-black text-emerald-950 font-mono">{domain.domainName}</p>
-          </div>
+      {domain && (
+        <Modal open={renewOpen} onClose={() => setRenewOpen(false)} title="Perpanjang Masa Berlaku Domain">
+          <div className="space-y-4 text-left">
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Nama Domain</span>
+              <p className="text-sm font-black text-emerald-950 font-mono">{domain.domainName}</p>
+            </div>
 
-          <div>
-            <label className="text-xs font-bold text-gray-600 uppercase tracking-wider block mb-1">Pilih Durasi Perpanjangan (Tahun)</label>
-            <select
-              value={renewYears}
-              onChange={(e) => setRenewYears(Number(e.target.value))}
-              className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black font-semibold"
-            >
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(y => (
-                <option key={y} value={y}>{y} Tahun</option>
-              ))}
-            </select>
-          </div>
+            <div>
+              <label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-1">Pilih Durasi Perpanjangan</label>
+              <select
+                value={renewYears}
+                onChange={(e) => setRenewYears(Number(e.target.value))}
+                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black font-semibold"
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(y => (
+                  <option key={y} value={y}>{y} Tahun</option>
+                ))}
+              </select>
+            </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setRenewOpen(false)}>Batal</Button>
-            <Button onClick={doRenew} disabled={renewLoading}>
-              {renewLoading ? "Memproses..." : "Lanjutkan Pembayaran"}
-            </Button>
+            {/* WHOIS Protection Option */}
+            {!isIdDomain && (
+              <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl space-y-2">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={renewWithPrivacy}
+                    onChange={(e) => setRenewWithPrivacy(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded text-black focus:ring-black border-gray-300 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-gray-900 block">Sertakan / Perpanjang WHOIS Protection</span>
+                    <span className="text-[11px] text-gray-500 block">
+                      Proteksi privasi identitas WHOIS (+ {fmtPrice((priceList[domain.tld?.toLowerCase()]?.privacy_protect) || 70000)} / tahun)
+                    </span>
+                  </div>
+                </label>
+              </div>
+            )}
+
+            {/* Itemized Cost Breakdown */}
+            {(() => {
+              const domainTld = domain.tld?.toLowerCase() || "";
+              const pInfo = priceList[domainTld] || {};
+              const rawRenewPrice = pInfo.price_renew || 150000;
+              const renewUnitPrice = Number(rawRenewPrice) < 1000 ? Number(rawRenewPrice) * 1000 : Number(rawRenewPrice);
+
+              const rawPrivacyPrice = pInfo.privacy_protect || 70000;
+              const privacyUnitPrice = Number(rawPrivacyPrice) < 1000 ? Number(rawPrivacyPrice) * 1000 : Number(rawPrivacyPrice);
+
+              const domainTotalCost = renewUnitPrice * renewYears;
+              const privacyTotalCost = (!isIdDomain && renewWithPrivacy) ? privacyUnitPrice * renewYears : 0;
+              const grandTotalCost = domainTotalCost + privacyTotalCost;
+
+              return (
+                <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200/80 space-y-2 text-xs">
+                  <div className="flex justify-between text-gray-600">
+                    <span>Perpanjangan Domain ({renewYears} Tahun)</span>
+                    <span className="font-mono font-semibold">{fmtPrice(domainTotalCost)}</span>
+                  </div>
+                  {!isIdDomain && renewWithPrivacy && (
+                    <div className="flex justify-between text-gray-600">
+                      <span>WHOIS Protection ({renewYears} Tahun)</span>
+                      <span className="font-mono font-semibold">{fmtPrice(privacyTotalCost)}</span>
+                    </div>
+                  )}
+                  <div className="pt-2 border-t border-gray-200 flex justify-between font-bold text-gray-900 text-sm">
+                    <span>Total Tagihan Pembayaran</span>
+                    <span className="font-mono font-black text-black">{fmtPrice(grandTotalCost)}</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+              <Button variant="secondary" onClick={() => setRenewOpen(false)}>Batal</Button>
+              <Button onClick={doRenew} disabled={renewLoading} className="bg-black hover:bg-gray-800 text-white rounded-xl">
+                {renewLoading ? "Memproses..." : "Lanjutkan Pembayaran"}
+              </Button>
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
+
+      {/* Standalone WHOIS Privacy Buy Modal */}
+      {domain && (
+        <Modal open={buyPrivacyOpen} onClose={() => setBuyPrivacyOpen(false)} title="Beli WHOIS Privacy Protection">
+          <div className="space-y-4 text-left">
+            <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Nama Domain</span>
+              <p className="text-sm font-black text-gray-900 font-mono">{domain.domainName}</p>
+            </div>
+
+            <div className="p-3.5 bg-gray-50/80 border border-gray-200 rounded-xl space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-gray-900">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" /> Proteksi Identitas WHOIS Publik:
+              </div>
+              <ul className="text-xs text-gray-600 space-y-1.5 list-disc list-inside">
+                <li>Sembunyikan nama, email, nomor telepon, dan alamat rumah/kantor Anda dari publik.</li>
+                <li>Mencegah spam email marketing, penipuan telemarketing, dan scraping kontak domain.</li>
+                <li>Status proteksi privasi dapat diaktifkan atau dinonaktifkan sewaktu-waktu.</li>
+              </ul>
+            </div>
+
+            {(() => {
+              const domainTld = domain.tld?.toLowerCase() || "";
+              const pInfo = priceList[domainTld] || {};
+              const rawPrivacyPrice = pInfo.privacy_protect || 70000;
+              const privacyUnitPrice = Number(rawPrivacyPrice) < 1000 ? Number(rawPrivacyPrice) * 1000 : Number(rawPrivacyPrice);
+
+              return (
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-emerald-950 block">Biaya WHOIS Protection</span>
+                    <span className="text-[11px] text-emerald-700">Masa berlaku mengikuti sisa durasi domain</span>
+                  </div>
+                  <span className="text-base font-black text-emerald-950 font-mono">
+                    {fmtPrice(privacyUnitPrice)}
+                  </span>
+                </div>
+              );
+            })()}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+              <Button variant="secondary" onClick={() => setBuyPrivacyOpen(false)}>Batal</Button>
+              <Button onClick={doBuyPrivacy} disabled={privacyBuying} className="bg-black hover:bg-gray-800 text-white rounded-xl">
+                {privacyBuying ? "Memproses..." : "Lanjutkan Pembayaran"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Nameserver Edit Modal */}
       <Modal open={nsOpen} onClose={() => setNsOpen(false)} title="Ubah Nameservers Domain">

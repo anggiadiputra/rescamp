@@ -24,6 +24,8 @@ export const domainRegisterSchema = t.Object({
 
 export const domainRenewSchema = t.Object({
   years: t.Numeric({ minimum: 1, maximum: 10, default: 1 }),
+  purchase_privacy_protection: t.Optional(t.Boolean()),
+  privacy_protection: t.Optional(t.Boolean()),
 });
 
 export const transferSchema = t.Object({

@@ -88,8 +88,9 @@ export async function detail(ctx: any) {
 export async function renew(ctx: any) {
   const user = await getUser(ctx);
   const creds = user.role === "customer" ? await getResellerCreds(ctx) : user;
-  const { years } = ctx.body;
-  const result = await svc.orderRenewDomain(creds as any, user, ctx.params.id, years);
+  const years = Number(ctx.body?.years || 1);
+  const purchasePrivacyProtection = Boolean(ctx.body?.purchase_privacy_protection ?? ctx.body?.privacy_protection);
+  const result = await svc.orderRenewDomain(creds as any, user, ctx.params.id, years, { purchasePrivacyProtection });
   return { data: result };
 }
 

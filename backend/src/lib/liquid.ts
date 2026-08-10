@@ -317,7 +317,7 @@ export class LiquidClient {
     const qs = params ? "?" + new URLSearchParams(params).toString() : "";
     return this.request<any>("GET", `/domains${qs}`);
   }
-  async renewDomain(domainId: string, years: number, invoiceOption: string = "keep_invoice", expiryDate?: string | null) {
+  async renewDomain(domainId: string, years: number, invoiceOption: string = "keep_invoice", expiryDate?: string | null, purchasePrivacyProtection?: boolean) {
     // Always fetch the authoritative expiry_date from Resellercamp API
     // (format: "Y-m-d H:i:s" e.g. "2027-07-30 12:52:14")
     let currentDate = "";
@@ -341,12 +341,16 @@ export class LiquidClient {
       throw new Error("Unable to determine current expiry date for domain renewal");
     }
 
-    console.log(`[renewDomain] Sending renew domainId=${domainId}, years=${years}, current_date="${currentDate}"`);
-    return this.request<any>("POST", `/domains/${domainId}/renew`, {
+    console.log(`[renewDomain] Sending renew domainId=${domainId}, years=${years}, current_date="${currentDate}", purchase_privacy_protection=${!!purchasePrivacyProtection}`);
+    const body: Record<string, any> = {
       years: String(years),
       current_date: currentDate,
       invoice_option: invoiceOption,
-    });
+    };
+    if (purchasePrivacyProtection) {
+      body.purchase_privacy_protection = "true";
+    }
+    return this.request<any>("POST", `/domains/${domainId}/renew`, body);
   }
   transferDomain(data: Record<string, any>) {
     return this.request<any>("POST", "/domains/transfer", {

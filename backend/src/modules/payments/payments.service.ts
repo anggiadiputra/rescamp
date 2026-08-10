@@ -501,7 +501,11 @@ export async function processWebhookPayload(payload: any) {
         const [targetDomain] = await db.select().from(domains).where(eq(domains.id, domainId));
         if (targetDomain) {
           const liquidRes = await liquid.renewDomain(
-            String(targetDomain.liquidOrderId || targetDomain.domainName), meta.years || 1, "no_invoice", targetDomain.expiryDate
+            String(targetDomain.liquidOrderId || targetDomain.domainName),
+            meta.years || 1,
+            "no_invoice",
+            targetDomain.expiryDate,
+            Boolean(meta.privacyProtection)
           );
           liquidOrderId = typeof liquidRes === "string" ? liquidRes : liquidRes?.order_id || liquidRes?.id || null;
 
@@ -511,8 +515,24 @@ export async function processWebhookPayload(payload: any) {
             await db.update(transactions)
               .set({ metadata: JSON.stringify(meta) })
               .where(and(eq(transactions.id, tx.id), sql`JSON_EXTRACT(${transactions.metadata}, '$.yearsRenewed') IS NULL`));
+
+            const domainUpdate: Record<string, any> = {
+              years: sql`${domains.years} + ${yearsToAdd}`,
+              status: "active",
+            };
+            if (meta.privacyProtection) {
+              domainUpdate.privacyProtection = 1;
+            }
+
+            try {
+              const updatedInfo: any = await liquid.getDomain(targetDomain.liquidOrderId || targetDomain.domainName);
+              if (updatedInfo?.expiry_date) {
+                domainUpdate.expiryDate = String(updatedInfo.expiry_date).split(" ")[0];
+              }
+            } catch {}
+
             await db.update(domains)
-              .set({ years: sql`${domains.years} + ${yearsToAdd}` })
+              .set(domainUpdate)
               .where(eq(domains.id, domainId));
           }
         }
@@ -579,8 +599,17 @@ export async function processWebhookPayload(payload: any) {
             await db.update(transactions)
               .set({ metadata: JSON.stringify(meta) })
               .where(and(eq(transactions.id, tx.id), sql`JSON_EXTRACT(${transactions.metadata}, '$.yearsRenewed') IS NULL`));
+
+            const domainUpdate: Record<string, any> = {
+              years: sql`${domains.years} + ${yearsToAdd}`,
+              status: "active",
+            };
+            if (meta.privacyProtection) {
+              domainUpdate.privacyProtection = 1;
+            }
+
             await db.update(domains)
-              .set({ years: sql`${domains.years} + ${yearsToAdd}` })
+              .set(domainUpdate)
               .where(eq(domains.id, domainId));
           }
         }

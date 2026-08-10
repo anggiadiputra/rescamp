@@ -345,23 +345,33 @@ export async function orderRenewDomain(
   user: { id: number; resellerId: string | null; apiKey: string | null },
   userParam: any,
   domainId: string | number,
-  years: number
+  years: number,
+  options?: { purchasePrivacyProtection?: boolean }
 ) {
   const domain = await getDomain(userParam, domainId);
   const liquid = await getLiquid(user);
+  const tldKey = domain.tld.toLowerCase();
+  const includePrivacy = Boolean(options?.purchasePrivacyProtection) && !tldKey.endsWith("id");
 
   let unitPrice = 150000;
+  let privacyPrice = 70000;
   try {
     const rawCustPrices = await liquid.getCustomerPrices();
     const prices = formatCustomerPrices(rawCustPrices);
-    const pInfo = prices[domain.tld.toLowerCase()];
+    const pInfo = prices[tldKey];
     if (pInfo && pInfo.price_renew) {
       const p = Number(pInfo.price_renew);
       unitPrice = p < 1000 ? p * 1000 : p;
     }
+    if (pInfo && pInfo.privacy_protect) {
+      const pp = Number(pInfo.privacy_protect);
+      privacyPrice = pp < 1000 ? pp * 1000 : pp;
+    }
   } catch (e) {}
 
-  const totalAmount = unitPrice * (years || 1);
+  const domainTotal = unitPrice * (years || 1);
+  const privacyTotal = includePrivacy ? privacyPrice * (years || 1) : 0;
+  const totalAmount = domainTotal + privacyTotal;
 
   return createDomainOrderPayment({
     userId: typeof userParam === "object" ? userParam.id : Number(userParam),
@@ -371,6 +381,7 @@ export async function orderRenewDomain(
     years: years || 1,
     domainId: domain.id,
     customerId: domain.customerId || undefined,
+    privacyProtection: includePrivacy,
     amount: totalAmount,
   });
 }
