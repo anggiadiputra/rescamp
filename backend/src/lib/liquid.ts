@@ -17,7 +17,6 @@ export class LiquidClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000); // 30s timeout
     const url = `${this.baseURL}${path}`;
-    console.log(`[Resellercamp API Request] ${method} ${url}`, body ? JSON.stringify(body) : "");
 
     try {
       const res = await fetch(url, {
@@ -33,9 +32,8 @@ export class LiquidClient {
       let data: any;
       try { data = JSON.parse(text); } catch { data = { message: text }; }
 
-      console.log(`[Resellercamp API Response] ${method} ${path} [HTTP ${res.status}]:`, typeof data === "object" ? JSON.stringify(data) : data);
-
       if (!res.ok) {
+        console.error(`[Resellercamp API Error] ${method} ${path} [HTTP ${res.status}]:`, typeof data === "object" ? JSON.stringify(data) : data);
         const status = res.status === 401 || res.status === 403 ? 502 : res.status;
         const errMsg = data.message || data.error || data.error_message || data.description || text || "LIQUID API error";
         throw new AppError(errMsg, status);
@@ -139,7 +137,6 @@ export class LiquidClient {
       if (matched) {
         const contactId = String(matched.contact_id || matched.id || "");
         if (contactId) {
-          console.log(`[resolveContact] Found contact ${contactId} matching eligibility=${eligibility || "default(none)"} for ${domainName}`);
           return contactId;
         }
       }
@@ -155,7 +152,6 @@ export class LiquidClient {
       const def = await this.request<any>("GET", url);
       const cid = def?.registrant_contact?.contact_id || def?.registrant_contact?.id || def?.contact_id || def?.id;
       if (cid) {
-        console.log(`[resolveContact] Using default contact ${cid} (eligibility=${eligibility || "default(none)"}) for ${domainName}`);
         return String(cid);
       }
     } catch (e: any) {
@@ -164,7 +160,6 @@ export class LiquidClient {
 
     // Step 3: Auto-create a new contact with the correct eligibility type
     try {
-      console.log(`[resolveContact] Auto-creating contact (eligibility=${eligibility || "default(none)"}) for customer ${customerId}...`);
       custInfo = await this.getCustomer(customerId).catch(() => null);
       const contactPayload: any = {
         name: custInfo?.name || "Registrant",
@@ -182,7 +177,6 @@ export class LiquidClient {
       const newContact = await this.createCustomerContact(customerId, contactPayload);
       const newId = String(newContact?.contact_id || newContact?.id || "");
       if (newId) {
-        console.log(`[resolveContact] Created new contact ${newId} (eligibility=${eligibility || "default(none)"}) for ${domainName}`);
         return newId;
       }
     } catch (e: any) {

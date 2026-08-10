@@ -34,7 +34,6 @@ async function getSumopodConfig(): Promise<{ apiKey: string; baseUrl: string; we
   }
   if (!baseUrl) baseUrl = env.SUMOPOD_PAYMENT_URL;
 
-  console.log(`[sumopod config] apiKey source=${apiKeySource} length=${apiKey.length} prefix=${apiKey.slice(0, 8)}…`);
 
   return {
     apiKey,

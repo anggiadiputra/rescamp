@@ -152,7 +152,6 @@ export default function SettingsPage() {
     setSyncing(true);
     setSyncError("");
     setSyncResult(null);
-    console.log("[SettingsPage] 🔄 Starting reseller sync (auth, customers, domains, billing)...");
     try {
       const [resellerRes, custSyncRes, domainSyncRes, billingSyncRes] = await Promise.all([
         api.get<any>("/auth/reseller-data").catch((e) => ({ error: e.message || "Gagal memuat data reseller" })),
@@ -165,9 +164,6 @@ export default function SettingsPage() {
       const custData = custSyncRes?.data || custSyncRes;
       const domainData = domainSyncRes?.data || domainSyncRes;
       const billingData = billingSyncRes?.data || billingSyncRes;
-
-      console.log("[SettingsPage] 📊 Reseller Sync Raw Responses:", { resellerRes, custSyncRes, domainSyncRes, billingSyncRes });
-      console.log("[SettingsPage] 📊 Parsed Sync Data:", { resData, custData, domainData, billingData });
 
       if (resData.error && custData.error && domainData.error && billingData.error) {
         throw new Error(resData.error || custData.error || domainData.error || billingData.error);
