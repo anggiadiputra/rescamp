@@ -1,0 +1,150 @@
+import { useState, useEffect } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
+import { useSettings } from "../../contexts/SettingsContext";
+import { api } from "../../lib/api";
+import {
+  Globe, LogIn, UserPlus, LogOut, User, Menu, ChevronDown, Wallet,
+} from "lucide-react";
+import { Button } from "../ui";
+
+export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
+  const { user, logout } = useAuth();
+  const { settings } = useSettings();
+  const location = useLocation();
+  const nav = useNavigate();
+
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [balance, setBalance] = useState<number | null>(null);
+
+  const brand = settings.brand_name || "Ekstensi.id";
+
+  useEffect(() => {
+    if (user) {
+      api.get<{ balance: number }>("/billing/balance")
+        .then((res) => setBalance(res.balance))
+        .catch(() => setBalance(null));
+    }
+  }, [user, location.pathname]);
+
+  return (
+    <header className="bg-white/90 backdrop-blur-md border-b border-gray-200/80 sticky top-0 z-30 h-16 flex items-center transition-all">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 w-full flex items-center justify-between gap-4">
+        {/* Left Side: Brand & Mobile Sidebar Toggle */}
+        <div className="flex items-center gap-3">
+          {user && onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className="lg:hidden p-2 rounded-xl text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors cursor-pointer"
+              aria-label="Toggle navigation"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
+
+          <Link to={user ? "/dashboard" : "/"} className="flex items-center gap-2.5 group">
+            <div className="w-9 h-9 rounded-xl bg-black text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform duration-200">
+              <Globe className="w-5 h-5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-base font-black text-gray-900 tracking-tight leading-none group-hover:text-black transition-colors">
+                {brand}
+              </span>
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest leading-tight mt-0.5">
+                {user ? (user.role === "reseller" ? "Reseller Portal" : "Customer Portal") : "Domain Platform"}
+              </span>
+            </div>
+          </Link>
+        </div>
+
+        {/* Center / Desktop Links (Public Guest Mode) */}
+        {!user && (
+          <nav className="hidden md:flex items-center gap-6">
+            <Link to="/prices" className={`text-xs font-bold uppercase tracking-wider transition-colors ${location.pathname === "/prices" ? "text-black" : "text-gray-500 hover:text-black"}`}>
+              Daftar Harga
+            </Link>
+            <Link to="/domains/register" className={`text-xs font-bold uppercase tracking-wider transition-colors ${location.pathname === "/domains/register" ? "text-black" : "text-gray-500 hover:text-black"}`}>
+              Cek Domain
+            </Link>
+          </nav>
+        )}
+
+        {/* Right Side Actions */}
+        <div className="flex items-center gap-2.5">
+          {!user ? (
+            <div className="flex items-center gap-2">
+              <Link to="/login">
+                <Button variant="ghost" size="sm">
+                  <LogIn className="w-3.5 h-3.5 mr-1 inline" />
+                  Masuk
+                </Button>
+              </Link>
+              <Link to="/register">
+                <Button variant="primary" size="sm">
+                  <UserPlus className="w-3.5 h-3.5 mr-1 inline" />
+                  Daftar
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              {/* Balance Badge */}
+              {balance !== null && (
+                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100/80 border border-gray-200 text-xs font-bold text-gray-900 shadow-2xs">
+                  <Wallet className="w-3.5 h-3.5 text-gray-500" />
+                  <span>Rp {balance.toLocaleString("id-ID")}</span>
+                </div>
+              )}
+
+              {/* Profile Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setProfileOpen(!profileOpen)}
+                  className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200 cursor-pointer"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-black text-white font-bold flex items-center justify-center text-xs shadow-2xs">
+                    {(user.name || user.email || "U").slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="hidden md:flex flex-col text-left leading-none">
+                    <span className="text-xs font-bold text-gray-900 truncate max-w-[120px]">{user.name || user.email}</span>
+                    <span className="text-[10px] text-gray-400 capitalize mt-0.5">{user.role}</span>
+                  </div>
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400 hidden md:block" />
+                </button>
+
+                {profileOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 p-2 space-y-1 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <div className="px-3 py-2 border-b border-gray-100">
+                        <p className="text-xs font-bold text-gray-900 truncate">{user.name || "Pengguna"}</p>
+                        <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
+                      </div>
+                      <Link
+                        to="/profile"
+                        onClick={() => setProfileOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        <User className="w-4 h-4 text-gray-400" /> Profil Akun
+                      </Link>
+                      <button
+                        onClick={() => {
+                          setProfileOpen(false);
+                          logout();
+                          nav("/login");
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                      >
+                        <LogOut className="w-4 h-4 text-rose-500" /> Keluar
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+}

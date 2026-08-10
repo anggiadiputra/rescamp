@@ -110,16 +110,53 @@ export function StatCard({ label, value, icon: Icon }: { label: string; value: s
 }
 
 export function Button({
-  children, variant = "primary", onClick, disabled, className = "", type = "button",
-}: { children: ReactNode; variant?: "primary" | "secondary" | "danger" | "icon" | "outline"; onClick?: () => void; disabled?: boolean; className?: string; type?: "button" | "submit" }) {
-  const base = {
-    primary: "px-4 py-2 bg-black text-white text-xs sm:text-sm font-semibold rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50",
-    secondary: "px-4 py-2 border border-gray-200 hover:bg-gray-50 text-xs sm:text-sm font-semibold rounded-lg text-gray-700 transition-colors",
-    outline: "px-4 py-2 border border-gray-200 hover:bg-gray-50 text-xs sm:text-sm font-semibold rounded-lg text-gray-700 transition-colors",
-    danger: "px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 text-xs sm:text-sm font-semibold rounded-lg transition-colors",
-    icon: "p-1.5 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg transition-colors",
+  children,
+  variant = "primary",
+  size = "md",
+  onClick,
+  disabled,
+  loading = false,
+  className = "",
+  type = "button",
+}: {
+  children: ReactNode;
+  variant?: "primary" | "secondary" | "danger" | "icon" | "outline" | "ghost";
+  size?: "sm" | "md" | "lg";
+  onClick?: (e?: any) => void;
+  disabled?: boolean;
+  loading?: boolean;
+  className?: string;
+  type?: "button" | "submit" | "reset";
+}) {
+  const sizeStyles = {
+    sm: "px-3 py-1.5 text-xs rounded-lg gap-1.5",
+    md: "px-4 py-2.5 text-xs sm:text-sm rounded-xl gap-2",
+    lg: "px-5 py-3 text-sm sm:text-base rounded-xl gap-2.5",
   };
-  return <button type={type} onClick={onClick} disabled={disabled} className={`${base[variant]} ${className}`}>{children}</button>;
+
+  const baseStyles = {
+    primary: "bg-black text-white font-bold shadow-xs hover:bg-gray-800 active:scale-[0.99] transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none disabled:transform-none",
+    secondary: "bg-gray-100 text-gray-800 font-semibold border border-gray-200/80 hover:bg-gray-200 hover:border-gray-300 active:scale-[0.99] transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none",
+    outline: "bg-white text-gray-800 font-semibold border border-gray-200 hover:bg-gray-50 hover:border-gray-300 shadow-2xs active:scale-[0.99] transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none",
+    danger: "bg-rose-50 text-rose-600 font-semibold border border-rose-200 hover:bg-rose-100 hover:border-rose-300 active:scale-[0.99] transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none",
+    ghost: "text-gray-600 font-semibold hover:text-black hover:bg-gray-100 active:scale-[0.99] transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none",
+    icon: "p-2 text-gray-500 hover:text-black hover:bg-gray-100 rounded-xl transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none",
+  };
+
+  const isIconOnly = variant === "icon";
+  const appliedSize = isIconOnly ? "" : sizeStyles[size];
+
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled || loading}
+      className={`inline-flex items-center justify-center font-medium cursor-pointer select-none ${baseStyles[variant]} ${appliedSize} ${className}`}
+    >
+      {loading && <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />}
+      {children}
+    </button>
+  );
 }
 
 export function Badge({ status }: { status: string }) {
