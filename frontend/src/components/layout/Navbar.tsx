@@ -66,11 +66,14 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
         {/* Center / Desktop Links (Public Guest Mode) */}
         {!user && (
           <nav className="hidden md:flex items-center gap-6">
+            <a href="/#why-us" className="text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-black transition-colors">
+              Mengapa Kami
+            </a>
+            <a href="/#features" className="text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-black transition-colors">
+              Fitur Utama
+            </a>
             <Link to="/prices" className={`text-xs font-bold uppercase tracking-wider transition-colors ${location.pathname === "/prices" ? "text-black border-b-2 border-black py-1" : "text-gray-500 hover:text-black"}`}>
               Daftar Harga
-            </Link>
-            <Link to="/domains/register" className={`text-xs font-bold uppercase tracking-wider transition-colors ${location.pathname === "/domains/register" ? "text-black border-b-2 border-black py-1" : "text-gray-500 hover:text-black"}`}>
-              Cek Domain
             </Link>
           </nav>
         )}
@@ -176,6 +179,20 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
       {!user && guestMenuOpen && (
         <div className="md:hidden border-t border-gray-200/80 bg-white/95 backdrop-blur-md px-4 py-3 space-y-3 shadow-md animate-in fade-in slide-in-from-top-1 duration-150">
           <div className="space-y-1 pb-2 border-b border-gray-100">
+            <a
+              href="/#why-us"
+              onClick={() => setGuestMenuOpen(false)}
+              className="block px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-50 hover:text-black transition-colors"
+            >
+              Mengapa Kami
+            </a>
+            <a
+              href="/#features"
+              onClick={() => setGuestMenuOpen(false)}
+              className="block px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-50 hover:text-black transition-colors"
+            >
+              Fitur Utama
+            </a>
             <Link
               to="/prices"
               onClick={() => setGuestMenuOpen(false)}
@@ -184,15 +201,6 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
               }`}
             >
               Daftar Harga
-            </Link>
-            <Link
-              to="/domains/register"
-              onClick={() => setGuestMenuOpen(false)}
-              className={`block px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors ${
-                location.pathname === "/domains/register" ? "bg-gray-100 text-black font-black" : "text-gray-600 hover:bg-gray-50 hover:text-black"
-              }`}
-            >
-              Cek Domain
             </Link>
           </div>
           <div className="grid grid-cols-2 gap-2 pt-1">
