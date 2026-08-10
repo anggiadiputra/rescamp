@@ -87,32 +87,34 @@ export default function LandingPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    api.get<any>("/domains/bulk-availability?keyword=domain", { signal: controller.signal })
-      .then((res) => {
-        const list = Array.isArray(res) ? res : res?.data || [];
-        if (list.length > 0) {
-          const mapped = list.map((item: any) => {
-            const tldUpper = `.${(item.tld || item.domain?.split(".")?.slice(1)?.join(".") || "").toUpperCase()}`;
-            const priceNum = Number(item.price || 0);
-            const actualPrice = priceNum < 1000 ? priceNum * 1000 : priceNum;
-            const formattedPrice = `Rp ${Math.round(actualPrice).toLocaleString("id-ID")}`;
+    api.get<any>("/billing/prices", { signal: controller.signal })
+      .then((data) => {
+        if (data && typeof data === "object" && Object.keys(data).length > 0) {
+          const featuredTlds = [".COM", ".ID", ".MY.ID", ".WEB.ID", ".BIZ.ID", ".XYZ", ".CO.ID"];
+          const updated = featuredTlds.map((tld) => {
+            const key = tld.replace(/^\./, "").toLowerCase();
+            const info = data[key];
+            if (info) {
+              const priceNum = Number(info.price_new || info.price_register || 0);
+              const actualPrice = priceNum < 1000 ? priceNum * 1000 : priceNum;
+              const formattedPrice = `Rp ${Math.round(actualPrice).toLocaleString("id-ID")}`;
 
-            const renewNum = Number(item.renew_price || item.price || 0);
-            const actualRenewPrice = renewNum < 1000 ? renewNum * 1000 : renewNum;
-            const formattedRenew = `Rp ${Math.round(actualRenewPrice).toLocaleString("id-ID")}`;
+              const renewNum = Number(info.price_renew || priceNum);
+              const actualRenewPrice = renewNum < 1000 ? renewNum * 1000 : renewNum;
+              const formattedRenew = `Rp ${Math.round(actualRenewPrice).toLocaleString("id-ID")}`;
 
-            const foundDefault = POPULAR_DOMAINS.find(d => d.tld.toLowerCase() === tldUpper.toLowerCase());
-            const badge = foundDefault?.badge || (tldUpper === ".COM" ? "Populer" : tldUpper.includes(".ID") ? "Indonesia" : "Aktif");
-
-            return {
-              tld: tldUpper,
-              price: formattedPrice,
-              renew: formattedRenew,
-              badge,
-            };
+              const defaultItem = POPULAR_DOMAINS.find(d => d.tld === tld);
+              return {
+                tld,
+                price: formattedPrice,
+                renew: formattedRenew,
+                badge: defaultItem?.badge || "Populer",
+                privacy: defaultItem?.privacy ?? true,
+              };
+            }
+            return POPULAR_DOMAINS.find(d => d.tld === tld) || { tld, price: "-", renew: "-", badge: "Populer", privacy: true };
           });
-          // Show top 7 popular domains
-          setPopularDomains(mapped.slice(0, 7));
+          setPopularDomains(updated);
         }
       })
       .catch(() => {});
