@@ -33,9 +33,11 @@ export class LiquidClient {
       try { data = JSON.parse(text); } catch { data = { message: text }; }
 
       if (!res.ok) {
-        console.error(`[Resellercamp API Error] ${method} ${path} [HTTP ${res.status}]:`, typeof data === "object" ? JSON.stringify(data) : data);
-        const status = res.status === 401 || res.status === 403 ? 502 : res.status;
         const errMsg = data.message || data.error || data.error_message || data.description || text || "LIQUID API error";
+        if (!errMsg.toLowerCase().includes("privacy protect not available")) {
+          console.error(`[Resellercamp API Error] ${method} ${path} [HTTP ${res.status}]:`, typeof data === "object" ? JSON.stringify(data) : data);
+        }
+        const status = res.status === 401 || res.status === 403 ? 502 : res.status;
         throw new AppError(errMsg, status);
       }
 

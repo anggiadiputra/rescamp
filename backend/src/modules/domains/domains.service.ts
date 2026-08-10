@@ -581,19 +581,15 @@ export async function getDomain(userParam: any, lookup: string | number) {
           } catch {}
         }
         const domainRef = String(domain.liquidOrderId || domain.domainName);
-        const live: any = await liquid.getPrivacyProtection(domainRef);
-        let liveFlag = parsePrivacyProtectionStatus(live);
-        const dbFlag = domain.privacyProtection === 1;
-
-        if (!liveFlag && dbFlag) {
+        const isDotId = domain.domainName.toLowerCase().endsWith(".id");
+        let liveFlag = false;
+        if (!isDotId) {
           try {
-            await liquid.enablePrivacyProtection(domainRef);
-            const recheck: any = await liquid.getPrivacyProtection(domainRef);
-            if (parsePrivacyProtectionStatus(recheck)) {
-              liveFlag = true;
-            }
+            const live: any = await liquid.getPrivacyProtection(domainRef);
+            liveFlag = parsePrivacyProtectionStatus(live);
           } catch {}
         }
+        const dbFlag = domain.privacyProtection === 1;
 
         if (liveFlag !== dbFlag) {
           await db.update(domains).set({ privacyProtection: liveFlag ? 1 : 0 }).where(eq(domains.id, domain.id));
@@ -769,21 +765,14 @@ export async function getDomain(userParam: any, lookup: string | number) {
     }
   }
 
+  const isDotIdDomain = domainName.toLowerCase().endsWith(".id");
   let livePrivacyFlag = parsePrivacyProtectionStatus(liquidItem);
-  if (liquidDomainId) {
+  if (liquidDomainId && !isDotIdDomain) {
     try {
       const livePriv = await liquid.getPrivacyProtection(liquidDomainId);
       const privFlag = parsePrivacyProtectionStatus(livePriv);
       if (privFlag) {
         livePrivacyFlag = true;
-      } else if (!livePrivacyFlag) {
-        try {
-          await liquid.enablePrivacyProtection(liquidDomainId);
-          const recheck = await liquid.getPrivacyProtection(liquidDomainId);
-          if (parsePrivacyProtectionStatus(recheck)) {
-            livePrivacyFlag = true;
-          }
-        } catch {}
       }
     } catch {}
   }
