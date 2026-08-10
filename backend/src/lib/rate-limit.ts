@@ -80,14 +80,39 @@ export const otpRateLimiter = createRateLimiter({
   windowMs: 60 * 1000, // 5 requests per minute (stricter for OTP)
 });
 
+export const domainCheckRateLimiter = createRateLimiter({
+  maxRequests: 30,
+  windowMs: 60 * 1000, // 30 requests per minute for domain availability/WHOIS check
+});
+
+export const paymentStatusRateLimiter = createRateLimiter({
+  maxRequests: 60,
+  windowMs: 60 * 1000, // 60 requests per minute for status polling
+});
+
+export const webhookRateLimiter = createRateLimiter({
+  maxRequests: 100,
+  windowMs: 60 * 1000, // 100 requests per minute for webhooks
+});
+
 /**
- * Get client IP from request
+ * Get client IP from request with reverse proxy header support
  */
 export function getClientIP(request: Request): string {
+  const cfIp = request.headers.get("cf-connecting-ip");
+  if (cfIp) return cfIp.trim();
+
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp) return realIp.trim();
+
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
     const first = forwarded.split(",")[0];
-    return (first || "").trim();
+    if (first && first.trim()) {
+      return first.trim();
+    }
   }
-  return request.headers.get("x-real-ip") || "unknown";
+
+  return "127.0.0.1";
 }
+

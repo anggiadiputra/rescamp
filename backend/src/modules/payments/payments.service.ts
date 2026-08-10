@@ -24,9 +24,43 @@ export interface CreateDomainOrderPayload {
 export async function createDomainOrderPayment(payload: CreateDomainOrderPayload) {
   const years = payload.years || 1;
   const tld = payload.tld || payload.domainName.split(".").slice(1).join(".") || "com";
-  const fullDomain = payload.domainName.includes(".") 
+  const fullDomain = (payload.domainName.includes(".") 
     ? payload.domainName 
-    : `${payload.domainName}.${tld}`;
+    : `${payload.domainName}.${tld}`).toLowerCase().trim();
+
+  // Deduplication & Concurrent Double-Submit Lock:
+  // If user submits exact same domain order within 10s and has active pending_payment transaction, return existing payment link.
+  const tenSecondsAgo = new Date(Date.now() - 10 * 1000);
+  const [recentPendingTx] = await db
+    .select()
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.userId, payload.userId),
+        eq(transactions.type, payload.type),
+        eq(transactions.status, "pending_payment"),
+        sql`JSON_UNQUOTE(JSON_EXTRACT(${transactions.metadata}, '$.domainName')) = ${fullDomain}`,
+        sql`${transactions.createdAt} >= ${tenSecondsAgo}`
+      )
+    )
+    .limit(1);
+
+  if (recentPendingTx && recentPendingTx.paymentLinkUrl) {
+    return {
+      transaction_id: recentPendingTx.id,
+      transactionId: recentPendingTx.id,
+      order_id: recentPendingTx.orderId || "",
+      orderId: recentPendingTx.orderId || "",
+      payment_id: recentPendingTx.paymentId || "",
+      paymentId: recentPendingTx.paymentId || "",
+      payment_link_url: recentPendingTx.paymentLinkUrl,
+      paymentLinkUrl: recentPendingTx.paymentLinkUrl,
+      amount: Number(recentPendingTx.amount),
+      status: recentPendingTx.status,
+      expires_at: recentPendingTx.expiresAt ? new Date(recentPendingTx.expiresAt).toISOString() : "",
+      expiresAt: recentPendingTx.expiresAt ? new Date(recentPendingTx.expiresAt).toISOString() : "",
+    };
+  }
 
   // --- Step 1: Resolve Liquid credentials & customer ---
   const [user] = await db.select().from(users).where(eq(users.id, payload.userId));

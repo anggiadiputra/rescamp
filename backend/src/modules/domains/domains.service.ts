@@ -4,6 +4,7 @@ import { eq, and, like, inArray, or, sql } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { resolveResellerCreds } from "../../lib/reseller-creds";
+import { sanitizeDomain, sanitizeNameserver } from "../../lib/sanitize";
 
 // ponytail: helper used by mutators below. Single source of truth for the
 // "domain-suspended → reject any user config" rule. upgrade path: when we add

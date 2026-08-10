@@ -12,6 +12,7 @@ import { settingsRoutes } from "./modules/settings/settings.route";
 import { sweepExpiredTransactions, sweepActionRequiredRetries } from "./modules/billing/billing.service";
 import { ensureDatabaseSchema } from "./db";
 import { AppError } from "./lib/error";
+import { securityHeaders } from "./lib/security-headers";
 
 // Ensure MySQL database schema (ENUMS) match codebase
 ensureDatabaseSchema().catch((e) => console.warn("[db] ensureDatabaseSchema failed:", e));
@@ -22,6 +23,7 @@ const allowedOrigins = (env.CORS_ORIGIN || "*")
   .filter(Boolean);
 
 const app = new Elysia()
+  .use(securityHeaders)
   .use(
     cors({
       origin: true,

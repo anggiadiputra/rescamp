@@ -5,6 +5,17 @@ import { db } from "../../db";
 import { transactions, domains } from "../../db/schema";
 import { eq, and, or, like } from "drizzle-orm";
 import { authGuard } from "../../middleware/auth";
+import { webhookRateLimiter, paymentStatusRateLimiter, getClientIP } from "../../lib/rate-limit";
+import { AppError } from "../../lib/error";
+
+function rateLimit(limiter: ReturnType<typeof import("../../lib/rate-limit").createRateLimiter>, message: string = "Terlalu banyak permintaan. Silakan coba lagi nanti.") {
+  return ({ request }: { request: Request }) => {
+    const ip = getClientIP(request);
+    if (!limiter.isAllowed(ip)) {
+      throw new AppError(message, 429);
+    }
+  };
+}
 
 export const paymentRoutes = new Elysia({ prefix: "/payments" })
   // Webhook Receiver (Public - called by Sumopod Payment Gateway)
@@ -49,6 +60,7 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
       return { received: true, result };
     },
     {
+      beforeHandle: rateLimit(webhookRateLimiter, "Terlalu banyak request webhook."),
       detail: { tags: ["Payments"], summary: "Sumopod payment gateway webhook callback listener" },
     }
   )
@@ -219,6 +231,7 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
         };
       },
       {
+        beforeHandle: rateLimit(paymentStatusRateLimiter, "Terlalu banyak permintaan status payment."),
         detail: { tags: ["Payments"], summary: "Get order & payment status by order ID" },
       }
     )
