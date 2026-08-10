@@ -4,7 +4,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useSettings } from "../../contexts/SettingsContext";
 import { api } from "../../lib/api";
 import {
-  Globe, LogIn, UserPlus, LogOut, User, Menu, ChevronDown, Wallet, X,
+  Globe, LogIn, UserPlus, LogOut, User, Menu, ChevronDown, Wallet, X, Eye, EyeOff,
 } from "lucide-react";
 import { Button } from "../ui";
 
@@ -17,6 +17,9 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [guestMenuOpen, setGuestMenuOpen] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
+  const [showBalance, setShowBalance] = useState(() => {
+    return localStorage.getItem("show_balance") !== "false";
+  });
 
   const brand = settings.brand_name || "Ekstensi.id";
 
@@ -126,11 +129,27 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
             <div className="flex items-center gap-3">
               {/* Balance Badge */}
               {typeof balance === "number" && (
-                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-50 border border-gray-200 text-xs font-bold text-gray-800 shadow-2xs">
-                  <div className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                    <Wallet className="w-3 h-3" />
+                <div className="hidden sm:flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl bg-gray-50 border border-gray-200/80 text-sm font-extrabold text-gray-900 shadow-2xs">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <Wallet className="w-3.5 h-3.5" />
                   </div>
-                  <span>Rp {balance.toLocaleString("id-ID")}</span>
+                  <span className="font-mono text-sm tracking-tight">
+                    {showBalance ? `Rp ${balance.toLocaleString("id-ID")}` : "Rp ••••••••"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowBalance((prev) => {
+                        const next = !prev;
+                        localStorage.setItem("show_balance", String(next));
+                        return next;
+                      });
+                    }}
+                    title={showBalance ? "Sembunyikan Saldo" : "Tampilkan Saldo"}
+                    className="p-1 text-gray-400 hover:text-gray-900 hover:bg-gray-200/70 rounded-lg transition-colors cursor-pointer ml-0.5"
+                  >
+                    {showBalance ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
                 </div>
               )}
 
@@ -140,14 +159,14 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                   onClick={() => setProfileOpen(!profileOpen)}
                   className="flex items-center gap-2.5 p-1.5 pr-2.5 rounded-xl hover:bg-gray-100 transition-all border border-transparent hover:border-gray-200 cursor-pointer"
                 >
-                  <div className="w-8 h-8 rounded-xl bg-black text-white font-bold flex items-center justify-center text-xs shadow-xs shrink-0">
+                  <div className="w-9 h-9 rounded-xl bg-black text-white font-black flex items-center justify-center text-sm shadow-xs shrink-0">
                     {(user.name || user.email || "U").slice(0, 2).toUpperCase()}
                   </div>
                   <div className="hidden md:flex flex-col text-left leading-tight">
-                    <span className="text-xs font-bold text-gray-900 truncate max-w-[140px]">{user.name || user.email}</span>
-                    <span className="text-[10px] font-medium text-gray-400 capitalize">{user.role}</span>
+                    <span className="text-sm font-bold text-gray-900 truncate max-w-[160px]">{user.name || user.email}</span>
+                    <span className="text-xs font-semibold text-gray-500 capitalize">{user.role}</span>
                   </div>
-                  <ChevronDown className={`w-3.5 h-3.5 text-gray-400 hidden md:block transition-transform duration-150 ${profileOpen ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`w-4 h-4 text-gray-400 hidden md:block transition-transform duration-150 ${profileOpen ? "rotate-180" : ""}`} />
                 </button>
 
                 {profileOpen && (
