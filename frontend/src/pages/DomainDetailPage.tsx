@@ -795,20 +795,26 @@ export default function DomainDetailPage() {
         </div>
 
         {(() => {
-          const contact =
+          const reg = domain.registrantContact || {};
+          const activeContact =
             (activeContactTab === "registrant"
               ? domain.registrantContact
               : activeContactTab === "admin"
               ? domain.adminContact
               : activeContactTab === "tech"
               ? domain.techContact
-              : domain.billingContact) || {
-              name: domain.customerName || domain.customerEmail || undefined,
-              email: domain.customerEmail || undefined,
-            };
+              : domain.billingContact) || reg;
 
-          const displayName = contact.name || domain.customerName || domain.customerEmail || "-";
-          const displayEmail = contact.email || domain.customerEmail || "-";
+          const displayName = activeContact.name || reg.name || domain.customerName || domain.customerEmail || "-";
+          const displayCompany = activeContact.company || reg.company || "-";
+          const displayEmail = activeContact.email || reg.email || domain.customerEmail || "-";
+          const displayAddress = activeContact.address || reg.address || "-";
+          const displayCity = activeContact.city || reg.city;
+          const displayState = activeContact.state || reg.state;
+          const displayCountry = activeContact.country || reg.country;
+          const displayLoc = [displayCity, displayState, displayCountry].filter(Boolean).join(", ") || "-";
+          const displayZip = activeContact.zipcode || reg.zipcode || "-";
+          const displayPhone = activeContact.phone || reg.phone || "-";
 
           return (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
@@ -818,7 +824,7 @@ export default function DomainDetailPage() {
               </div>
               <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
                 <span className="text-gray-500 block text-xs font-medium">Perusahaan / Organisasi</span>
-                <span className="font-semibold text-gray-900 block">{contact.company || "-"}</span>
+                <span className="font-semibold text-gray-900 block">{displayCompany}</span>
               </div>
               <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
                 <span className="text-gray-500 block text-xs font-medium">Email</span>
@@ -826,21 +832,19 @@ export default function DomainDetailPage() {
               </div>
               <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1 sm:col-span-2">
                 <span className="text-gray-500 block text-xs font-medium">Alamat</span>
-                <span className="font-semibold text-gray-900 block">{contact.address || "-"}</span>
+                <span className="font-semibold text-gray-900 block">{displayAddress}</span>
               </div>
               <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
                 <span className="text-gray-500 block text-xs font-medium">Kota / Provinsi / Negara</span>
-                <span className="font-semibold text-gray-900 block">
-                  {[contact.city, contact.state, contact.country].filter(Boolean).join(", ") || "-"}
-                </span>
+                <span className="font-semibold text-gray-900 block">{displayLoc}</span>
               </div>
               <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
                 <span className="text-gray-500 block text-xs font-medium">Kode Pos</span>
-                <span className="font-semibold text-gray-900 block">{contact.zipcode || "-"}</span>
+                <span className="font-semibold text-gray-900 block">{displayZip}</span>
               </div>
               <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
                 <span className="text-gray-500 block text-xs font-medium">No. Telepon</span>
-                <span className="font-semibold text-gray-900 block">{contact.phone || "-"}</span>
+                <span className="font-semibold text-gray-900 block">{displayPhone}</span>
               </div>
             </div>
           );

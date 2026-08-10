@@ -119,22 +119,24 @@ export function parseDomainContact(raw: any): {
   zipcode?: string;
   phone?: string;
 } | null {
-  if (!raw || typeof raw !== "object") return null;
-  const c = raw.data ?? raw;
-  const name = c.name || c.contact_name || c.fullname || c.name_1 || "";
-  const email = c.email || c.email_address || c.contact_email || "";
-  if (!name && !email && !c.company) return null;
+  if (!raw) return null;
+  if (typeof raw !== "object") return null;
+  const c = raw.data ?? raw.contact ?? raw.details ?? raw;
+  const name = c.name || c.contact_name || c.fullname || c.name_1 || c.registrant_name || c.admin_name || c.tech_name || c.billing_name || c.customer_name || "";
+  const email = c.email || c.email_address || c.contact_email || c.registrant_email || c.admin_email || c.tech_email || c.billing_email || c.customer_email || "";
+  const company = c.company || c.company_name || c.organization || c.org || undefined;
+  if (!name && !email && !company) return null;
   return {
-    contactId: c.contact_id || c.id || undefined,
+    contactId: c.contact_id || c.id || c.registrant_contact_id || c.admin_contact_id || c.tech_contact_id || c.billing_contact_id || undefined,
     name: name || undefined,
-    company: c.company || c.company_name || undefined,
+    company: company,
     email: email || undefined,
-    address: c.address_line_1 || c.address1 || c.address || undefined,
+    address: c.address_line_1 || c.address1 || c.address || c.street || c.addr1 || undefined,
     city: c.city || undefined,
-    state: c.state || undefined,
+    state: c.state || c.province || undefined,
     country: c.country_code || c.country || undefined,
-    zipcode: c.zipcode || c.zip || undefined,
-    phone: c.tel_no || c.phone || c.telephone || undefined,
+    zipcode: c.zipcode || c.zip || c.postal_code || undefined,
+    phone: c.tel_no || c.phone || c.telephone || c.mobile || c.tel || undefined,
   };
 }
 
@@ -631,10 +633,10 @@ export async function getDomain(userParam: any, lookup: string | number) {
           phone: cust?.phone || undefined,
         };
 
-        const registrantContact = parseDomainContact(ext.registrant_contact ?? ext.registrant) || ownerContact;
-        const adminContact = parseDomainContact(ext.admin_contact ?? ext.admin) || registrantContact;
-        const techContact = parseDomainContact(ext.tech_contact ?? ext.tech) || registrantContact;
-        const billingContact = parseDomainContact(ext.billing_contact ?? ext.billing) || registrantContact;
+        const registrantContact = parseDomainContact(ext.registrant_contact ?? ext.registrant ?? ext.registrant_contact_details ?? ext.registrantcontact ?? ext.contacts?.registrant) || ownerContact;
+        const adminContact = parseDomainContact(ext.admin_contact ?? ext.admin ?? ext.admin_contact_details ?? ext.admincontact ?? ext.contacts?.admin) || registrantContact;
+        const techContact = parseDomainContact(ext.tech_contact ?? ext.tech ?? ext.technical_contact ?? ext.tech_contact_details ?? ext.techcontact ?? ext.contacts?.tech) || registrantContact;
+        const billingContact = parseDomainContact(ext.billing_contact ?? ext.billing ?? ext.billing_contact_details ?? ext.billingcontact ?? ext.contacts?.billing) || registrantContact;
         const raaVerification = parseRaaVerification(ext.raa_verification ?? ext.raa_status ?? ext.raa_verification_status);
 
         const nsFormatted = parseNameservers(domain.nameservers);
@@ -794,10 +796,22 @@ export async function getDomain(userParam: any, lookup: string | number) {
     } catch {}
   }
 
-  const registrantContact = parseDomainContact(liquidItem.registrant_contact ?? liquidItem.registrant);
-  const adminContact = parseDomainContact(liquidItem.admin_contact ?? liquidItem.admin);
-  const techContact = parseDomainContact(liquidItem.tech_contact ?? liquidItem.tech);
-  const billingContact = parseDomainContact(liquidItem.billing_contact ?? liquidItem.billing);
+  const defaultRemoteOwner = {
+    name: liquidItem.customer_name || cust?.name || reseller?.name || (userParam as any)?.name || (userParam as any)?.email?.split("@")[0] || undefined,
+    company: cust?.company || liquidItem.company_name || undefined,
+    email: liquidItem.customer_email || cust?.email || reseller?.email || (userParam as any)?.email || undefined,
+    address: cust?.address || liquidItem.address || undefined,
+    city: cust?.city || liquidItem.city || undefined,
+    state: cust?.state || liquidItem.state || undefined,
+    country: cust?.country || liquidItem.country || "ID",
+    zipcode: cust?.zipcode || liquidItem.zipcode || undefined,
+    phone: cust?.phone || liquidItem.phone || undefined,
+  };
+
+  const registrantContact = parseDomainContact(liquidItem.registrant_contact ?? liquidItem.registrant ?? liquidItem.registrant_contact_details ?? liquidItem.registrantcontact ?? liquidItem.contacts?.registrant) || defaultRemoteOwner;
+  const adminContact = parseDomainContact(liquidItem.admin_contact ?? liquidItem.admin ?? liquidItem.admin_contact_details ?? liquidItem.admincontact ?? liquidItem.contacts?.admin) || registrantContact;
+  const techContact = parseDomainContact(liquidItem.tech_contact ?? liquidItem.tech ?? liquidItem.technical_contact ?? liquidItem.tech_contact_details ?? liquidItem.techcontact ?? liquidItem.contacts?.tech) || registrantContact;
+  const billingContact = parseDomainContact(liquidItem.billing_contact ?? liquidItem.billing ?? liquidItem.billing_contact_details ?? liquidItem.billingcontact ?? liquidItem.contacts?.billing) || registrantContact;
   const raaVerification = parseRaaVerification(liquidItem.raa_verification ?? liquidItem.raa_status ?? liquidItem.raa_verification_status);
 
   return {
