@@ -24,7 +24,7 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const brand = settings.brand_name || "Ekstensi.id";
 
   useEffect(() => {
-    if (user) {
+    if (user && user.role === "reseller") {
       api.get<any>("/billing/balance")
         .then((res) => {
           const raw = typeof res?.balance === "number" ? res.balance : (typeof res === "number" ? res : null);
@@ -127,8 +127,8 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
             </>
           ) : (
             <div className="flex items-center gap-3">
-              {/* Balance Badge */}
-              {typeof balance === "number" && (
+              {/* Balance Badge (Reseller Only) */}
+              {user?.role === "reseller" && typeof balance === "number" && (
                 <div className="hidden sm:flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl bg-gray-50 border border-gray-200/80 text-sm font-extrabold text-gray-900 shadow-2xs">
                   <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
                     <Wallet className="w-3.5 h-3.5" />
