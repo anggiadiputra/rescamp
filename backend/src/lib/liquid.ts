@@ -696,7 +696,7 @@ export class LiquidClient {
     }
   }
 
-  async getPrices(forceRefresh = false) {
+  async getPrices(forceRefresh = true) {
     const cacheKey = `prices:${this.authHeader}`;
     if (!forceRefresh) {
       const cached = cacheStore.get(cacheKey);
@@ -715,7 +715,7 @@ export class LiquidClient {
     }
   }
 
-  async getCustomerPrices(forceRefresh = false) {
+  async getCustomerPrices(forceRefresh = true) {
     const cacheKey = `cust_prices:${this.authHeader}`;
     if (!forceRefresh) {
       const cached = cacheStore.get(cacheKey);

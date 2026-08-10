@@ -53,24 +53,24 @@ export async function getBalance(user: { id?: number; resellerId: string | null;
   }
 }
 
-export async function getPrices(user: { id?: number; resellerId: string | null; apiKey: string | null; role?: string }, forceRefresh = false) {
+export async function getPrices(user: { id?: number; resellerId: string | null; apiKey: string | null; role?: string }, forceRefresh = true) {
   const creds = user.id ? await resolveResellerCreds(user.id) : { resellerId: user.resellerId || "", apiKey: user.apiKey || "" };
   const liquid = getLiquid(creds);
 
-  // Try customer prices first (GET /customers/prices) — works for all roles
+  // Always fetch 100% LIVE directly from Resellercamp (GET /customers/prices)
   try {
     const raw = await liquid.getCustomerPrices(forceRefresh);
     return formatCustomerPrices(raw);
   } catch (err: any) {
-    console.warn("[billing.service] getCustomerPrices failed, trying account prices:", err?.message || err);
+    console.warn("[billing.service] getCustomerPrices live failed, trying account prices:", err?.message || err);
   }
 
-  // Fallback: try reseller account prices (GET /account/prices)
+  // Fallback: try reseller account prices live (GET /account/prices)
   try {
     const raw = await liquid.getPrices(forceRefresh);
     return formatCustomerPrices(raw);
   } catch (err: any) {
-    console.warn("[billing.service] getPrices fallback triggered:", err?.message || err);
+    console.warn("[billing.service] getPrices live fallback triggered:", err?.message || err);
     return {};
   }
 }
