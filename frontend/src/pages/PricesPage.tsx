@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Card, LoadingSpinner, Pagination, Button, SearchBar, toast } from "../components/ui";
-import { RefreshCw, Tag } from "lucide-react";
+import { Card, LoadingSpinner, Pagination, SearchBar } from "../components/ui";
+import { Tag } from "lucide-react";
 import { api } from "../lib/api";
 
 function fmtPrice(amount: any, currency: string = "IDR"): string {
@@ -14,33 +14,16 @@ function fmtPrice(amount: any, currency: string = "IDR"): string {
 export default function PricesPage() {
   const [prices, setPrices] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const perPage = 10;
 
-  const fetchPrices = (force = false) => {
-    if (force) setRefreshing(true);
-    else setLoading(true);
-
-    const url = force ? "/billing/prices?refresh=true" : "/billing/prices";
-    api.get<any>(url)
-      .then((data) => {
-        setPrices(data || {});
-        if (force) toast("Harga domain berhasil diperbarui secara live dari Resellercamp", "success");
-      })
-      .catch((err) => {
-        console.error(err);
-        toast("Gagal memuat daftar harga", "error");
-      })
-      .finally(() => {
-        setLoading(false);
-        setRefreshing(false);
-      });
-  };
-
   useEffect(() => {
-    fetchPrices(false);
+    setLoading(true);
+    api.get<any>("/billing/prices")
+      .then((data) => setPrices(data || {}))
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <LoadingSpinner />;
@@ -55,18 +38,12 @@ export default function PricesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-            <Tag className="w-6 h-6 text-gray-800" />
-            Daftar Harga Domain
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">Daftar harga resmi registrasi, perpanjangan, dan transfer domain.</p>
-        </div>
-        <Button variant="outline" onClick={() => fetchPrices(true)} disabled={refreshing || loading} className="shadow-2xs text-xs sm:text-sm !py-2.5 shrink-0">
-          <RefreshCw className={`w-4 h-4 inline mr-1.5 ${refreshing ? "animate-spin" : ""}`} />
-          {refreshing ? "Memperbarui..." : "Refresh Harga Live"}
-        </Button>
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
+          <Tag className="w-6 h-6 text-gray-800" />
+          Daftar Harga Domain
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">Daftar harga resmi registrasi, perpanjangan, dan transfer domain.</p>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4 flex flex-col sm:flex-row items-center gap-3">
