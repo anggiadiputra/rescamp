@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, RefreshCw, ArrowRightLeft, Plus, Settings, AlertTriangle } from "lucide-react";
+import { Search, RefreshCw, ArrowRightLeft, Plus, AlertTriangle } from "lucide-react";
 import { Card, Button, Badge, LoadingSpinner, EmptyState, SearchBar, Pagination, toast } from "../components/ui";
 import { api } from "../lib/api";
 import type { Domain, PaginatedResponse } from "../lib/types";
@@ -105,21 +105,26 @@ export default function DomainsPage() {
               </div>
             </div>
           )}
-          <Card className="p-0">
+          <Card className="p-0 overflow-hidden bg-white border border-gray-200 rounded-xl shadow-xs">
           <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Domain</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Expiry</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                <tr className="bg-gray-50/70 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3.5 whitespace-nowrap">Domain</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap">Expiry</th>
+                  <th className="px-4 py-3.5 text-center whitespace-nowrap">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-100 bg-white text-sm">
                 {visibleDomains.map((d) => (
-                  <tr key={d.liquidOrderId || d.id} className={`hover:bg-gray-50/50 transition-colors ${d.status === "suspended" ? "bg-rose-50/40" : ""}`}>
-                    <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
+                  <tr
+                    key={d.liquidOrderId || d.id}
+                    onClick={() => nav(`/domains/${d.liquidOrderId || d.id}`)}
+                    className={`hover:bg-gray-50/70 transition-colors cursor-pointer group ${
+                      d.status === "suspended" ? "bg-rose-50/40" : ""
+                    }`}
+                  >
+                    <td className="px-4 py-3.5 text-sm font-bold text-gray-900 group-hover:text-black whitespace-nowrap">
                       {d.domainName}
                       {d.status === "suspended" && d.suspendReason && (
                         <p className="text-[11px] text-rose-700 font-normal mt-0.5 truncate max-w-xs" title={d.suspendReason}>
@@ -127,13 +132,8 @@ export default function DomainsPage() {
                         </p>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{d.expiryDate || "-"}</td>
-                    <td className="px-4 py-3"><Badge status={d.status} /></td>
-                    <td className="px-4 py-3 text-right">
-                    <Link to={`/domains/${d.liquidOrderId || d.id}`}>
-                      <Button variant="icon"><Settings className="w-3.5 h-3.5" /></Button>
-                    </Link>
-                    </td>
+                    <td className="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">{d.expiryDate || "-"}</td>
+                    <td className="px-4 py-3.5 text-center whitespace-nowrap"><Badge status={d.status} /></td>
                   </tr>
                 ))}
               </tbody>
