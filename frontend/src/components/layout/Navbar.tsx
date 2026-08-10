@@ -35,7 +35,7 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
 
   return (
     <header className="bg-white/90 backdrop-blur-md border-b border-gray-200/80 sticky top-0 z-30 flex flex-col transition-all">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 w-full h-16 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full h-16 flex items-center justify-between gap-4">
         {/* Left Side: Brand & Mobile Sidebar Toggle */}
         <div className="flex items-center gap-3">
           {user && onToggleSidebar && (
@@ -89,20 +89,20 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                 <Link to="/login">
                   <Button
                     variant={location.pathname === "/login" ? "secondary" : "ghost"}
-                    size="sm"
-                    className={location.pathname === "/login" ? "bg-gray-100 font-extrabold text-black border border-gray-300 shadow-2xs" : ""}
+                    size="md"
+                    className={location.pathname === "/login" ? "bg-gray-100 font-bold text-black" : ""}
                   >
-                    <LogIn className="w-3.5 h-3.5 mr-1 inline" />
+                    <LogIn className="w-4 h-4 mr-1.5 inline" />
                     Masuk
                   </Button>
                 </Link>
                 <Link to="/register">
                   <Button
                     variant="primary"
-                    size="sm"
-                    className={location.pathname === "/register" ? "ring-2 ring-black ring-offset-2" : ""}
+                    size="md"
+                    className={location.pathname === "/register" ? "bg-black text-white ring-2 ring-black/20" : ""}
                   >
-                    <UserPlus className="w-3.5 h-3.5 mr-1 inline" />
+                    <UserPlus className="w-4 h-4 mr-1.5 inline" />
                     Daftar
                   </Button>
                 </Link>
@@ -209,20 +209,20 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
             <Link to="/login" onClick={() => setGuestMenuOpen(false)} className="w-full">
               <Button
                 variant={location.pathname === "/login" ? "secondary" : "ghost"}
-                size="sm"
-                className={`w-full justify-center ${location.pathname === "/login" ? "bg-gray-100 font-extrabold text-black border border-gray-300 shadow-2xs" : ""}`}
+                size="md"
+                className={`w-full justify-center ${location.pathname === "/login" ? "bg-gray-100 font-extrabold text-black" : ""}`}
               >
-                <LogIn className="w-3.5 h-3.5 mr-1 inline" />
+                <LogIn className="w-4 h-4 mr-1.5 inline" />
                 Masuk
               </Button>
             </Link>
             <Link to="/register" onClick={() => setGuestMenuOpen(false)} className="w-full">
               <Button
                 variant="primary"
-                size="sm"
-                className={`w-full justify-center ${location.pathname === "/register" ? "ring-2 ring-black ring-offset-1" : ""}`}
+                size="md"
+                className="w-full justify-center"
               >
-                <UserPlus className="w-3.5 h-3.5 mr-1 inline" />
+                <UserPlus className="w-4 h-4 mr-1.5 inline" />
                 Daftar
               </Button>
             </Link>
