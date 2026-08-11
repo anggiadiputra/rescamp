@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Card, Button, InfoBanner, TurnstileWidget, PasswordInput } from "../components/ui";
 import { api, setToken } from "../lib/api";
+import { useSettings } from "../contexts/SettingsContext";
 import { Mail, Lock, KeyRound } from "lucide-react";
 
 export default function LoginPage() {
+  const { settings } = useSettings();
   const [searchParams] = useSearchParams();
   const redirect = searchParams.get("redirect") || "/domains";
 
@@ -61,7 +63,7 @@ export default function LoginPage() {
       <div className="max-w-md mx-auto mt-16 px-4">
         <Card>
           <div className="text-center mb-4">
-            <div className="w-12 h-12 rounded-full bg-black flex items-center justify-center mx-auto mb-3">
+            <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 text-white" style={{ backgroundColor: settings.primary_color || "#000000" }}>
               <KeyRound className="w-6 h-6 text-white" />
             </div>
             <h1 className="text-xl font-bold text-gray-900">Verifikasi OTP</h1>

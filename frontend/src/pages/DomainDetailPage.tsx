@@ -8,6 +8,7 @@ import { Button, LoadingSpinner, Modal, InfoBanner, ConfirmDialog, toast, Paymen
 import { api } from "../lib/api";
 import type { Domain } from "../lib/types";
 import { useAuth } from "../contexts/AuthContext";
+import { useSettings } from "../contexts/SettingsContext";
 
 function fmtPrice(amount: any): string {
   if (!amount) return "";
@@ -19,6 +20,7 @@ function fmtPrice(amount: any): string {
 
 export default function DomainDetailPage() {
   const nav = useNavigate();
+  const { settings } = useSettings();
   const { id } = useParams();
   const { user } = useAuth();
   const isReseller = user?.role === "reseller";
@@ -388,7 +390,7 @@ export default function DomainDetailPage() {
         <Link to="/domains" className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
           <ArrowLeft className="w-4 h-4" />
         </Link>
-        <div className="p-2.5 rounded-xl bg-black text-white shadow-sm">
+        <div className="p-2.5 rounded-xl text-white shadow-sm flex items-center justify-center shrink-0" style={{ backgroundColor: settings.primary_color || "#000000" }}>
           <Globe className="w-6 h-6" />
         </div>
         <div>
@@ -725,7 +727,7 @@ export default function DomainDetailPage() {
             }`}
           >
             <div className="flex items-center justify-between">
-              <div className="p-2.5 bg-black text-white rounded-xl group-hover:scale-105 transition-transform">
+              <div className="p-2.5 text-white rounded-xl group-hover:scale-105 transition-transform shrink-0" style={{ backgroundColor: settings.primary_color || "#000000" }}>
                 <Key className="w-5 h-5" />
               </div>
               <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-gray-100 text-gray-800 border border-gray-200">

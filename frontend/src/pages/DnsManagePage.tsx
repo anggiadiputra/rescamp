@@ -200,7 +200,7 @@ export default function DnsManagePage() {
           </Button>
           <Button
             onClick={() => { setForm({ type: "a", hostname: "", value: "", ttl: 3600 }); setAddOpen(true); }}
-            className="shadow-sm bg-black hover:bg-gray-800 text-white text-xs sm:text-sm !py-2.5"
+            className="shadow-sm text-xs sm:text-sm !py-2.5"
           >
             <Plus className="w-4 h-4 inline mr-1.5" /> Tambah
           </Button>
@@ -463,7 +463,7 @@ export default function DnsManagePage() {
 
           <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
             <Button variant="secondary" onClick={() => setAddOpen(false)}>Batal</Button>
-            <Button onClick={addRecord} disabled={submitting} className="bg-black hover:bg-gray-800 text-white">
+            <Button onClick={addRecord} disabled={submitting}>
               {submitting ? "Menyimpan..." : "Simpan"}
             </Button>
           </div>
@@ -521,7 +521,7 @@ export default function DnsManagePage() {
 
           <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
             <Button variant="secondary" onClick={() => setEditOpen(false)}>Batal</Button>
-            <Button onClick={updateRecord} disabled={submitting} className="bg-black hover:bg-gray-800 text-white">
+            <Button onClick={updateRecord} disabled={submitting}>
               {submitting ? "Menyimpan..." : "Simpan"}
             </Button>
           </div>

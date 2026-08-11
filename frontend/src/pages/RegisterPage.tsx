@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useSettings } from "../contexts/SettingsContext";
 import { Card, Button, InfoBanner, TurnstileWidget, WaBadge, toast, PasswordInput } from "../components/ui";
 import { api } from "../lib/api";
 import { KeyRound, ArrowLeft } from "lucide-react";
@@ -18,6 +19,7 @@ const COUNTRIES = [
 
 export default function RegisterPage() {
   const { register } = useAuth();
+  const { settings } = useSettings();
   const nav = useNavigate();
   const [searchParams] = useSearchParams();
   const redirect = searchParams.get("redirect") || "/domains";
@@ -75,7 +77,7 @@ export default function RegisterPage() {
       <div className="max-w-md mx-auto mt-12 px-4 mb-12">
         <Card>
           <div className="text-center mb-6">
-            <div className="w-12 h-12 rounded-full bg-black flex items-center justify-center mx-auto mb-3 text-white">
+            <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 text-white" style={{ backgroundColor: settings.primary_color || "#000000" }}>
               <KeyRound className="w-6 h-6" />
             </div>
             <h1 className="text-xl font-bold text-gray-900">Verifikasi Email OTP</h1>

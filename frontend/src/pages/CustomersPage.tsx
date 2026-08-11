@@ -4,6 +4,7 @@ import { Plus, RefreshCw, User, Pencil, Trash2, Mail, Phone, Building2, MapPin, 
 import { Card, Button, LoadingSpinner, EmptyState, Modal, ConfirmDialog, SearchBar, Pagination, toast } from "../components/ui";
 import { api } from "../lib/api";
 import type { Customer, PaginatedResponse } from "../lib/types";
+import { useSettings } from "../contexts/SettingsContext";
 
 const defaultForm = {
   name: "",
@@ -18,6 +19,7 @@ const defaultForm = {
 };
 
 export default function CustomersPage() {
+  const { settings } = useSettings();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -126,7 +128,7 @@ export default function CustomersPage() {
             <RefreshCw className={`w-4 h-4 inline mr-1.5 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-          <Button onClick={openCreate} className="bg-black hover:bg-gray-800 text-white text-xs sm:text-sm !py-2.5 shadow-sm">
+          <Button onClick={openCreate} className="text-xs sm:text-sm !py-2.5 shadow-sm">
             <Plus className="w-4 h-4 inline mr-1.5" /> Tambah
           </Button>
         </div>
@@ -220,7 +222,7 @@ export default function CustomersPage() {
           <div className="space-y-5">
             {/* Identity */}
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center shrink-0">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-white" style={{ backgroundColor: settings.primary_color || "#000000" }}>
                 <User className="w-5.5 h-5.5 text-white" />
               </div>
               <div>

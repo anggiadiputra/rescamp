@@ -354,8 +354,9 @@ export default function BillingPage() {
         <div className="flex gap-1.5 flex-wrap">
           {["", "pending_payment", "completed", "expired", "cancelled", "failed"].map((s) => (
             <button key={s} onClick={() => { setStatusFilter(s); setPage(1); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors ${
-                statusFilter === s ? "bg-black text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              style={statusFilter === s ? { backgroundColor: settings.primary_color || "#000000", color: "#ffffff" } : undefined}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors cursor-pointer ${
+                statusFilter === s ? "shadow-2xs text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}>
               {s === "" ? "all" : s === "pending_payment" ? "pending" : s}
             </button>
@@ -487,7 +488,8 @@ export default function BillingPage() {
                           {isPending(t) ? (
                             <button
                               onClick={() => handleInvoiceClick(t)}
-                              className="px-3.5 py-2 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-lg transition-all shadow-2xs inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                              style={{ backgroundColor: settings.primary_color || "#000000" }}
+                              className="px-3.5 py-2 hover:opacity-90 text-white text-xs font-bold rounded-lg transition-all shadow-2xs inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                             >
                               <CreditCard className="w-3.5 h-3.5" /> Bayar Sekarang
                             </button>
@@ -531,7 +533,8 @@ export default function BillingPage() {
                           {isPending(t) && (
                             <button
                               onClick={() => handleInvoiceClick(t)}
-                              className="px-2.5 py-1 font-bold text-white bg-black hover:bg-gray-800 rounded-lg cursor-pointer transition-colors"
+                              style={{ backgroundColor: settings.primary_color || "#000000" }}
+                      className="px-2.5 py-1 font-bold text-white hover:opacity-90 rounded-lg cursor-pointer transition-colors"
                             >
                               Bayar
                             </button>
@@ -767,7 +770,8 @@ export default function BillingPage() {
                     setDetailOpen(false);
                     handleInvoiceClick(detail);
                   }}
-                  className="px-4 py-2 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-md"
+                  style={{ backgroundColor: settings.primary_color || "#000000" }}
+                  className="px-4 py-2 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-md hover:opacity-90 cursor-pointer"
                 >
                   <span>🔐</span> Bayar ➔
                 </button>

@@ -1,6 +1,7 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode, type CSSProperties } from "react";
 import { Search, X, ChevronLeft, ChevronRight, Eye, EyeOff, CheckCircle2, Loader2, Clock, AlertCircle, Copy, Lock, ArrowRight, ShieldCheck, Ban, XCircle, AlertTriangle, ArrowRightLeft } from "lucide-react";
 import { api } from "../../lib/api";
+import { useSettings } from "../../contexts/SettingsContext";
 
 export function SecretInput({
   value,
@@ -96,9 +97,10 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
 }
 
 export function StatCard({ label, value, icon: Icon }: { label: string; value: string | number; icon: any }) {
+  const { settings } = useSettings();
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
-      <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center shrink-0">
+      <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-white" style={{ backgroundColor: settings?.primary_color || "#000000" }}>
         <Icon className="w-5.5 h-5.5 text-white" />
       </div>
       <div>
@@ -118,6 +120,7 @@ export function Button({
   loading = false,
   className = "",
   type = "button",
+  style,
 }: {
   children: ReactNode;
   variant?: "primary" | "secondary" | "danger" | "icon" | "outline" | "ghost";
@@ -127,7 +130,9 @@ export function Button({
   loading?: boolean;
   className?: string;
   type?: "button" | "submit" | "reset";
+  style?: CSSProperties;
 }) {
+  const { settings } = useSettings();
   const sizeStyles = {
     sm: "px-3 py-1.5 text-xs rounded-lg gap-1.5",
     md: "px-4 py-2.5 text-xs sm:text-sm rounded-xl gap-2",
@@ -135,7 +140,7 @@ export function Button({
   };
 
   const baseStyles = {
-    primary: "bg-black text-white font-bold shadow-xs hover:bg-gray-800 active:scale-[0.99] transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none disabled:transform-none",
+    primary: "text-white font-bold shadow-xs hover:opacity-90 active:scale-[0.99] transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none disabled:transform-none",
     secondary: "bg-gray-100 text-gray-800 font-semibold border border-gray-200/80 hover:bg-gray-200 hover:border-gray-300 active:scale-[0.99] transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none",
     outline: "bg-white text-gray-800 font-semibold border border-gray-200 hover:bg-gray-50 hover:border-gray-300 shadow-2xs active:scale-[0.99] transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none",
     danger: "bg-rose-50 text-rose-600 font-semibold border border-rose-200 hover:bg-rose-100 hover:border-rose-300 active:scale-[0.99] transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none",
@@ -145,12 +150,14 @@ export function Button({
 
   const isIconOnly = variant === "icon";
   const appliedSize = isIconOnly ? "" : sizeStyles[size];
+  const buttonStyle = variant === "primary" ? { backgroundColor: settings?.primary_color || "#000000", ...style } : style;
 
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled || loading}
+      style={buttonStyle}
       className={`inline-flex items-center justify-center font-medium cursor-pointer select-none ${baseStyles[variant]} ${appliedSize} ${className}`}
     >
       {loading && <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />}
@@ -204,15 +211,20 @@ export function Badge({ status }: { status: string }) {
 }
 
 export function LoadingSpinner({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
+  const { settings } = useSettings();
   const sizes = { sm: "w-4 h-4", md: "w-6 h-6", lg: "w-10 h-10" };
   return (
     <div className="flex items-center justify-center py-16">
-      <div className={`${sizes[size]} animate-spin border-2 border-gray-300 border-t-black rounded-full`} />
+      <div
+        className={`${sizes[size]} animate-spin border-2 border-gray-300 rounded-full`}
+        style={{ borderTopColor: settings?.primary_color || "#000000" }}
+      />
     </div>
   );
 }
 
 export function EmptyState({ icon: Icon, title, description, action, embedded = false }: { icon: any; title: string; description: string; action?: { label: string; onClick: () => void }; embedded?: boolean }) {
+  const { settings } = useSettings();
   if (embedded) {
     return (
       <div className="text-center py-16 px-6">
@@ -220,7 +232,11 @@ export function EmptyState({ icon: Icon, title, description, action, embedded = 
         <p className="text-sm font-medium text-gray-500">{title}</p>
         <p className="text-xs text-gray-400 mt-1">{description}</p>
         {action && (
-          <button onClick={action.onClick} className="mt-4 px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
+          <button
+            onClick={action.onClick}
+            style={{ backgroundColor: settings?.primary_color || "#000000" }}
+            className="mt-4 px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
+          >
             {action.label}
           </button>
         )}
@@ -233,7 +249,11 @@ export function EmptyState({ icon: Icon, title, description, action, embedded = 
       <p className="text-sm font-medium text-gray-500">{title}</p>
       <p className="text-xs text-gray-400 mt-1">{description}</p>
       {action && (
-        <button onClick={action.onClick} className="mt-4 px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
+        <button
+          onClick={action.onClick}
+          style={{ backgroundColor: settings?.primary_color || "#000000" }}
+          className="mt-4 px-4 py-2 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
+        >
           {action.label}
         </button>
       )}

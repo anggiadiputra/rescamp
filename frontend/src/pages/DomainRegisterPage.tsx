@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Globe, Search, Shield, ArrowRight, Check, Sparkles, RefreshCw, CheckCircle2 } from "lucide-react";
 import { Card, Button, InfoBanner, LoadingSpinner, toast, PaymentModal } from "../components/ui";
 import { useAuth } from "../contexts/AuthContext";
+import { useSettings } from "../contexts/SettingsContext";
 import { api } from "../lib/api";
 import type { Customer } from "../lib/types";
 
@@ -16,6 +17,7 @@ function fmtPrice(amount: any): string {
 
 export default function DomainRegisterPage() {
   const { user } = useAuth();
+  const { settings } = useSettings();
   const isCustomer = user?.role === "customer";
   const nav = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -265,9 +267,10 @@ export default function DomainRegisterPage() {
         <button
           type="button"
           onClick={() => { setActiveTab("register"); setSearchParams({ tab: "register" }); }}
+          style={activeTab === "register" ? { backgroundColor: settings.primary_color || "#000000", color: "#ffffff" } : undefined}
           className={`flex-1 py-2.5 px-4 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 ${
             activeTab === "register"
-              ? "bg-black text-white shadow-xs"
+              ? "shadow-xs text-white"
               : "text-gray-600 hover:text-gray-900 hover:bg-white/50"
           }`}
         >
@@ -277,9 +280,10 @@ export default function DomainRegisterPage() {
         <button
           type="button"
           onClick={() => { setActiveTab("transfer"); setSearchParams({ tab: "transfer" }); }}
+          style={activeTab === "transfer" ? { backgroundColor: settings.primary_color || "#000000", color: "#ffffff" } : undefined}
           className={`flex-1 py-2.5 px-4 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 ${
             activeTab === "transfer"
-              ? "bg-black text-white shadow-xs"
+              ? "shadow-xs text-white"
               : "text-gray-600 hover:text-gray-900 hover:bg-white/50"
           }`}
         >
@@ -310,7 +314,8 @@ export default function DomainRegisterPage() {
               type="button"
               onClick={() => check()}
               disabled={bulkLoading}
-              className="h-11 px-5 bg-black hover:bg-gray-800 active:bg-gray-900 text-white font-bold text-sm rounded-xl transition-colors shadow-xs disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed shrink-0"
+              style={{ backgroundColor: settings.primary_color || "#000000" }}
+              className="h-11 px-5 hover:opacity-90 active:scale-98 text-white font-bold text-sm rounded-xl transition-all shadow-xs disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed shrink-0"
             >
               {bulkLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
               <span>Cari</span>
@@ -361,10 +366,11 @@ export default function DomainRegisterPage() {
                     {isAvail ? (
                       <button
                         onClick={() => handleSelectBulkDomain(r)}
+                        style={!isSelected ? { backgroundColor: settings.primary_color || "#000000" } : undefined}
                         className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0 cursor-pointer ${
                           isSelected
                             ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                            : "bg-black hover:bg-gray-800 text-white"
+                            : "hover:opacity-90 text-white"
                         }`}
                       >
                         {isSelected ? <Check className="w-3.5 h-3.5" /> : null}
@@ -393,7 +399,7 @@ export default function DomainRegisterPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-black text-white border border-black uppercase tracking-wider">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white uppercase tracking-wider" style={{ backgroundColor: settings.primary_color || "#000000" }}>
                     Selected Domain
                   </span>
                   <span className="text-xs font-bold text-emerald-600">✓ Ready to Register</span>
@@ -474,7 +480,7 @@ export default function DomainRegisterPage() {
                   <div className={`p-3.5 rounded-lg border flex items-center justify-between cursor-pointer transition-all ${privacy ? "border-black bg-gray-50/80 shadow-xs" : "border-gray-200 bg-white hover:border-gray-300"}`}
                     onClick={() => setPrivacy(!privacy)}>
                     <div className="flex items-center gap-3">
-                      <div className={`p-1.5 rounded ${privacy ? "bg-black text-white" : "bg-gray-100 text-gray-900"}`}>
+                      <div className="p-1.5 rounded text-white" style={privacy ? { backgroundColor: settings.primary_color || "#000000" } : { backgroundColor: "#f3f4f6", color: "#111827" }}>
                         <Shield className="w-4 h-4" />
                       </div>
                       <div>

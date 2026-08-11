@@ -4,8 +4,10 @@ import { Search, RefreshCw, ArrowRightLeft, Plus, AlertTriangle } from "lucide-r
 import { Card, Button, Badge, LoadingSpinner, EmptyState, SearchBar, Pagination, toast } from "../components/ui";
 import { api } from "../lib/api";
 import type { Domain, PaginatedResponse } from "../lib/types";
+import { useSettings } from "../contexts/SettingsContext";
 
 export default function DomainsPage() {
+  const { settings } = useSettings();
   const nav = useNavigate();
   const [domains, setDomains] = useState<Domain[]>([]);
   const [total, setTotal] = useState(0);
@@ -66,7 +68,8 @@ export default function DomainsPage() {
         <div className="flex gap-1.5 flex-wrap">
           {["", "active", "pending", "expired", "suspended", "cancelled"].map((s) => (
             <button key={s} onClick={() => { setStatusFilter(s); setPage(1); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors ${statusFilter === s ? "bg-black text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+              style={statusFilter === s ? { backgroundColor: settings.primary_color || "#000000", color: "#ffffff" } : undefined}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors cursor-pointer ${statusFilter === s ? "shadow-2xs text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
               {s || "all"}
             </button>
           ))}

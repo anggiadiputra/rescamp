@@ -9,7 +9,7 @@ import { useSettings } from "../contexts/SettingsContext";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function SettingsPage() {
-  const { refreshSettings, updatePreviewColors } = useSettings();
+  const { refreshSettings, updatePreviewColors, settings } = useSettings();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -270,7 +270,8 @@ export default function SettingsPage() {
         <Button
           onClick={() => handleSave()}
           disabled={saving}
-          className="px-4 sm:px-6 py-2.5 bg-black hover:bg-gray-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-2"
+          style={{ backgroundColor: settings.primary_color || "#000000" }}
+          className="px-4 sm:px-6 py-2.5 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-2 hover:opacity-90 cursor-pointer"
         >
           <Save className="w-4 h-4" />
           {saving ? "Menyimpan..." : "Simpan Konfigurasi"}
@@ -316,7 +317,8 @@ export default function SettingsPage() {
                       type="button"
                       onClick={() => handleSave(undefined, "brand")}
                       disabled={saving}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded-lg transition-colors shadow-xs cursor-pointer"
+                      style={{ backgroundColor: settings.primary_color || "#000000" }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white rounded-lg transition-colors shadow-xs hover:opacity-90 cursor-pointer"
                     >
                       <Save className="w-3.5 h-3.5" />
                       Simpan
@@ -443,7 +445,8 @@ export default function SettingsPage() {
                       type="button"
                       onClick={() => handleSave(undefined, "email")}
                       disabled={saving}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded-lg transition-colors shadow-xs cursor-pointer"
+                      style={{ backgroundColor: settings.primary_color || "#000000" }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white rounded-lg transition-colors shadow-xs hover:opacity-90 cursor-pointer"
                     >
                       <Save className="w-3.5 h-3.5" />
                       Simpan
@@ -457,7 +460,7 @@ export default function SettingsPage() {
                 <div className="space-y-3.5 text-xs">
                   <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg border border-gray-100">
                     <span className="text-gray-500 font-semibold uppercase text-[10px]">Aktif Provider:</span>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-black text-white uppercase tracking-wider">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold text-white uppercase tracking-wider" style={{ backgroundColor: settings.primary_color || "#000000" }}>
                       {form.email_provider === "kirisan" ? "Kirisan API (Recommended)" : "SMTP / Brevo"}
                     </span>
                   </div>
@@ -564,9 +567,10 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={() => setForm({ ...form, email_provider: "kirisan" })}
+                      style={form.email_provider === "kirisan" ? { backgroundColor: settings.primary_color || "#000000", color: "#ffffff" } : undefined}
                       className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                         form.email_provider === "kirisan"
-                          ? "bg-black text-white shadow-xs"
+                          ? "shadow-xs"
                           : "text-gray-600 hover:text-gray-900"
                       }`}
                     >
@@ -767,7 +771,8 @@ export default function SettingsPage() {
                       type="button"
                       onClick={() => handleSave(undefined, "theme")}
                       disabled={saving}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded-lg transition-colors shadow-xs cursor-pointer"
+                      style={{ backgroundColor: settings.primary_color || "#000000" }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white rounded-lg transition-colors shadow-xs hover:opacity-90 cursor-pointer"
                     >
                       <Save className="w-3.5 h-3.5" />
                       Simpan
@@ -903,7 +908,8 @@ export default function SettingsPage() {
                       type="button"
                       onClick={() => handleSave(undefined, "fonnte")}
                       disabled={saving}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded-lg transition-colors shadow-xs cursor-pointer"
+                      style={{ backgroundColor: settings.primary_color || "#000000" }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white rounded-lg transition-colors shadow-xs hover:opacity-90 cursor-pointer"
                     >
                       <Save className="w-3.5 h-3.5" />
                       Simpan
@@ -1036,7 +1042,8 @@ export default function SettingsPage() {
                       type="button"
                       onClick={() => handleSave(undefined, "sumopod")}
                       disabled={saving}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded-lg transition-colors shadow-xs cursor-pointer"
+                      style={{ backgroundColor: settings.primary_color || "#000000" }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white rounded-lg transition-colors shadow-xs hover:opacity-90 cursor-pointer"
                     >
                       <Save className="w-3.5 h-3.5" />
                       Simpan
@@ -1150,7 +1157,8 @@ export default function SettingsPage() {
                       type="button"
                       onClick={() => handleSave(undefined, "s3")}
                       disabled={saving}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded-lg transition-colors shadow-xs cursor-pointer"
+                      style={{ backgroundColor: settings.primary_color || "#000000" }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white rounded-lg transition-colors shadow-xs hover:opacity-90 cursor-pointer"
                     >
                       <Save className="w-3.5 h-3.5" />
                       Simpan
@@ -1311,7 +1319,8 @@ export default function SettingsPage() {
                         type="button"
                         onClick={() => handleSave(undefined, "turnstile")}
                         disabled={saving}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded-lg transition-colors shadow-xs cursor-pointer"
+                        style={{ backgroundColor: settings.primary_color || "#000000" }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white rounded-lg transition-colors shadow-xs hover:opacity-90 cursor-pointer"
                       >
                         <Save className="w-3.5 h-3.5" />
                         Simpan
@@ -1441,7 +1450,8 @@ export default function SettingsPage() {
                         type="button"
                         onClick={() => handleSave(undefined, "tax")}
                         disabled={saving}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded-lg transition-colors shadow-xs cursor-pointer"
+                        style={{ backgroundColor: settings.primary_color || "#000000" }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white rounded-lg transition-colors shadow-xs hover:opacity-90 cursor-pointer"
                       >
                         <Save className="w-3.5 h-3.5" />
                         Simpan
@@ -1655,7 +1665,8 @@ export default function SettingsPage() {
           <Button
             type="submit"
             disabled={saving}
-            className="px-5 sm:px-8 py-3 bg-black hover:bg-gray-800 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center gap-2"
+            style={{ backgroundColor: settings.primary_color || "#000000" }}
+            className="px-5 sm:px-8 py-3 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center gap-2 hover:opacity-90 cursor-pointer"
           >
             <Save className="w-4 h-4" />
             {saving ? "Menyimpan..." : "Simpan Semuanya"}

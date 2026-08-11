@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useSettings } from "../contexts/SettingsContext";
 import type { Domain, PaginatedResponse } from "../lib/types";
 
 function fmtBalance(amount: any, currency: string = "IDR"): string {
@@ -15,6 +16,7 @@ function fmtBalance(amount: any, currency: string = "IDR"): string {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { settings } = useSettings();
   const isCustomer = user?.role === "customer";
 
   const [domains, setDomains] = useState<Domain[]>([]);
@@ -109,7 +111,7 @@ export default function DashboardPage() {
           {domains.length === 0 ? (
             <div className="py-8 text-center">
               <p className="text-xs text-gray-400">No domains registered yet.</p>
-              <Link to="/domains/register" className="inline-block mt-3 px-4 py-2 bg-black text-white rounded-lg text-xs font-semibold hover:bg-gray-800">
+              <Link to="/domains/register" style={{ backgroundColor: settings.primary_color || "#000000" }} className="inline-block mt-3 px-4 py-2 text-white rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity">
                 Register Your First Domain
               </Link>
             </div>

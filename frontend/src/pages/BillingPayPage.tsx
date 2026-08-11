@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Card, Button, LoadingSpinner } from "../components/ui";
 import { api } from "../lib/api";
+import { useSettings } from "../contexts/SettingsContext";
 import { Lock, ArrowRight, CheckCircle2, Clock, AlertCircle, Copy, ShieldCheck, Check } from "lucide-react";
 
 export default function BillingPayPage() {
+  const { settings } = useSettings();
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -253,7 +255,7 @@ export default function BillingPayPage() {
 
           {isPaid && (
             <div className="text-center">
-              <Link to="/domains" className="inline-flex items-center gap-2 px-6 py-3 bg-black hover:bg-gray-800 text-white font-bold text-sm rounded-xl transition-colors">
+              <Link to="/domains" style={{ backgroundColor: settings.primary_color || "#000000" }} className="inline-flex items-center gap-2 px-6 py-3 text-white font-bold text-sm rounded-xl hover:opacity-90 transition-opacity">
                 <CheckCircle2 className="w-4 h-4" />
                 Lihat Domain Saya
               </Link>
