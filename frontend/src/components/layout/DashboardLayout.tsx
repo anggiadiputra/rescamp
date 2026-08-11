@@ -91,7 +91,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
                         : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                     }`}
                   >
-                    <item.icon className="w-4 h-4 shrink-0" />
+                    <item.icon className="w-5 h-5 shrink-0" />
                     {(!collapsed || sidebarOpen) && <span className="truncate">{item.label}</span>}
                   </Link>
                 );
