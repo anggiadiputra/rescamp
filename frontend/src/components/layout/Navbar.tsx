@@ -4,7 +4,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useSettings } from "../../contexts/SettingsContext";
 import { api } from "../../lib/api";
 import {
-  Globe, LogIn, UserPlus, LogOut, User, Menu, ChevronDown, Wallet, X, Eye, EyeOff,
+  Globe, LogIn, UserPlus, LogOut, User, Menu, ChevronDown, Wallet, X, Eye, EyeOff, LayoutDashboard,
 } from "lucide-react";
 import { Button } from "../ui";
 
@@ -184,12 +184,20 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                         <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
                       </div>
                       <Link
+                        to="/dashboard"
+                        onClick={() => setProfileOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-gray-900 hover:bg-gray-100 transition-colors"
+                      >
+                        <LayoutDashboard className="w-4 h-4 text-gray-500" /> Dashboard
+                      </Link>
+                      <Link
                         to="/profile"
                         onClick={() => setProfileOpen(false)}
                         className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
                       >
                         <User className="w-4 h-4 text-gray-400" /> Profil Akun
                       </Link>
+                      <div className="my-1 border-t border-gray-100" />
                       <button
                         onClick={() => {
                           setProfileOpen(false);

@@ -201,7 +201,7 @@ export default function LandingPage() {
       <section className="relative pt-12 pb-20 sm:pt-20 sm:pb-28 overflow-hidden bg-gradient-to-b from-gray-50 via-white to-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gray-100 border border-gray-200 text-gray-800 text-xs font-bold mb-6">
-            <span className="w-2 h-2 rounded-full bg-black animate-pulse" />
+            <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: settings.primary_color || "#000000" }} />
             Registrar Partner Resmi & Terpercaya
           </div>
 
@@ -228,7 +228,8 @@ export default function LandingPage() {
               <button
                 type="submit"
                 disabled={isSearching}
-                className="px-6 py-3.5 bg-black hover:bg-gray-800 text-white font-bold text-sm rounded-xl transition-all shadow-md flex items-center gap-2 shrink-0 disabled:opacity-60"
+                style={{ backgroundColor: settings.primary_color || "#000000" }}
+                className="px-6 py-3.5 hover:opacity-90 text-white font-bold text-sm rounded-xl transition-all shadow-md flex items-center gap-2 shrink-0 disabled:opacity-60 cursor-pointer"
               >
                 {isSearching ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 <span>Cari Domain</span>
@@ -276,7 +277,8 @@ export default function LandingPage() {
                           {isAvail ? (
                             <button
                               onClick={() => handleRegisterClick(dName)}
-                              className="px-3.5 py-1.5 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
+                              style={{ backgroundColor: settings.primary_color || "#000000" }}
+                              className="px-3.5 py-1.5 hover:opacity-90 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
                             >
                               Cari Domain <ChevronRight className="w-3.5 h-3.5" />
                             </button>
@@ -328,7 +330,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {WHY_US_ITEMS.map((item, idx) => (
               <div key={idx} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                <div className="w-12 h-12 rounded-xl bg-black text-white flex items-center justify-center mb-5">
+                <div className="w-12 h-12 rounded-xl text-white flex items-center justify-center mb-5" style={{ backgroundColor: settings.primary_color || "#000000" }}>
                   <item.icon className="w-6 h-6" />
                 </div>
                 <h4 className="text-lg font-bold text-gray-900 mb-2">{item.title}</h4>
@@ -355,7 +357,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {FEATURES_ITEMS.map((feat, idx) => (
               <div key={idx} className="p-8 rounded-2xl border border-gray-200 bg-gradient-to-br from-white to-gray-50/50 flex gap-5 items-start">
-                <div className="w-12 h-12 rounded-xl bg-black text-white flex items-center justify-center shrink-0 shadow-md">
+                <div className="w-12 h-12 rounded-xl text-white flex items-center justify-center shrink-0 shadow-md" style={{ backgroundColor: settings.primary_color || "#000000" }}>
                   <feat.icon className="w-6 h-6" />
                 </div>
                 <div>
