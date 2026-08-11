@@ -103,20 +103,18 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           <div className="p-3 border-t border-gray-100 hidden lg:block shrink-0">
             <button
               onClick={toggleCollapsed}
-              title={collapsed ? "Buka Sidebar" : "Kecilkan Sidebar"}
-              className={`w-full flex items-center rounded-xl text-xs font-semibold text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-all cursor-pointer ${
-                collapsed ? "justify-center py-2.5" : "justify-between px-3 py-2.5"
+              title={collapsed ? "Show Sidebar" : "Hide Sidebar"}
+              className={`w-full flex items-center rounded-xl text-xs font-bold text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-all cursor-pointer ${
+                collapsed ? "justify-center py-2.5" : "px-3 py-2.5 gap-2.5"
               }`}
             >
               {!collapsed ? (
                 <>
-                  <span className="flex items-center gap-2 text-xs font-bold text-gray-600">
-                    <PanelLeftClose className="w-4 h-4 text-gray-400" />
-                    <span>Sembunyikan Sidebar</span>
-                  </span>
+                  <PanelLeftClose className="w-5 h-5 text-gray-500 shrink-0" />
+                  <span>Show / Hide</span>
                 </>
               ) : (
-                <PanelLeftOpen className="w-4 h-4 text-gray-600" />
+                <PanelLeftOpen className="w-5 h-5 text-gray-600 shrink-0" />
               )}
             </button>
           </div>
