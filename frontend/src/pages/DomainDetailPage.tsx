@@ -4,7 +4,7 @@ import {
   Globe, ShieldCheck, Lock, Unlock, Key, RefreshCw, Server, Mail,
   AlertTriangle, Trash2, Copy, Check, ExternalLink, Calendar, User, ArrowLeft
 } from "lucide-react";
-import { Button, LoadingSpinner, Modal, InfoBanner, ConfirmDialog, toast, PaymentModal } from "../components/ui";
+import { Button, CardSkeleton, Modal, InfoBanner, ConfirmDialog, toast, PaymentModal } from "../components/ui";
 import { api } from "../lib/api";
 import type { Domain } from "../lib/types";
 import { useAuth } from "../contexts/AuthContext";
@@ -365,7 +365,14 @@ export default function DomainDetailPage() {
     setTimeout(() => setCopiedNs(false), 2000);
   }
 
-  if (loading) return <LoadingSpinner />;
+  if (loading && !domain) {
+    return (
+      <div className="space-y-6">
+        <CardSkeleton lines={4} />
+        <CardSkeleton lines={6} />
+      </div>
+    );
+  }
   if (!domain) {
     return (
       <div className="text-center py-16 space-y-4">

@@ -223,6 +223,58 @@ export function LoadingSpinner({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   );
 }
 
+export function Skeleton({ className = "" }: { className?: string }) {
+  return <div className={`animate-pulse bg-gray-200/80 rounded-md ${className}`} />;
+}
+
+export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
+  return (
+    <div className="w-full bg-white rounded-xl border border-gray-200 overflow-hidden shadow-xs">
+      <div className="bg-gray-50/70 border-b border-gray-100 px-4 py-3.5 flex justify-between gap-4">
+        {Array.from({ length: cols }).map((_, i) => (
+          <Skeleton key={i} className="h-4 w-24" />
+        ))}
+      </div>
+      <div className="divide-y divide-gray-100 p-4 space-y-4">
+        {Array.from({ length: rows }).map((_, r) => (
+          <div key={r} className="flex justify-between items-center gap-4 pt-3 first:pt-0">
+            {Array.from({ length: cols }).map((_, c) => (
+              <Skeleton key={c} className={`h-4 ${c === 0 ? "w-40" : "w-20"}`} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function StatCardSkeleton({ count = 4 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="bg-white rounded-xl border border-gray-200 p-5 shadow-xs flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-6 w-28" />
+          </div>
+          <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function CardSkeleton({ lines = 4 }: { lines?: number }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-xs space-y-4">
+      <Skeleton className="h-5 w-48" />
+      {Array.from({ length: lines }).map((_, i) => (
+        <Skeleton key={i} className={`h-4 ${i % 2 === 0 ? "w-full" : "w-3/4"}`} />
+      ))}
+    </div>
+  );
+}
+
 export function EmptyState({ icon: Icon, title, description, action, embedded = false }: { icon: any; title: string; description: string; action?: { label: string; onClick: () => void }; embedded?: boolean }) {
   const { settings } = useSettings();
   if (embedded) {

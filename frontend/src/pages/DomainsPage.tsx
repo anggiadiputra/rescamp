@@ -1,40 +1,30 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, RefreshCw, ArrowRightLeft, Plus, AlertTriangle } from "lucide-react";
-import { Card, Button, Badge, LoadingSpinner, EmptyState, SearchBar, Pagination, toast } from "../components/ui";
+import { Card, Button, Badge, TableSkeleton, EmptyState, SearchBar, Pagination } from "../components/ui";
 import { api } from "../lib/api";
 import type { Domain, PaginatedResponse } from "../lib/types";
 import { useSettings } from "../contexts/SettingsContext";
+import { useCachedFetch } from "../contexts/DataCacheContext";
 
 export default function DomainsPage() {
   const { settings } = useSettings();
   const nav = useNavigate();
-  const [domains, setDomains] = useState<Domain[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const perPage = 10;
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
-  const fetchDomains = () => {
-    setLoading(true);
-    const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
-    // All roles: fetch live from Resellercamp (no DB cache) to match dashboard exactly.
-    api.get<PaginatedResponse<Domain>>(`/domains/remote?${params}`)
-      .then((res) => { setDomains(res.data); setTotal(res.meta.total); })
-      .catch((err: any) => {
-        console.error(err);
-        toast(err?.message || "Gagal memuat domain", "error");
-      })
-      .finally(() => { setLoading(false); });
-  };
+  const { data, loading, isRefreshing, refetch } = useCachedFetch<PaginatedResponse<Domain>>(
+    `domains:page:${page}`,
+    () => api.get<PaginatedResponse<Domain>>(`/domains/remote?page=${page}&per_page=${perPage}`),
+    [page]
+  );
 
-  useEffect(() => {
-    fetchDomains();
-  }, [page]);
+  const domains = data?.data || [];
+  const total = data?.meta?.total || 0;
 
-  if (loading) return <LoadingSpinner />;
+  if (loading && !data) return <TableSkeleton rows={5} cols={5} />;
 
   // /domains/remote has no server-side search; filter client-side for all roles.
   const visibleDomains = domains
@@ -50,8 +40,8 @@ export default function DomainsPage() {
           <h1 className="text-xl font-bold text-gray-900">Domains</h1>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => fetchDomains()} disabled={loading} variant="outline">
-            <RefreshCw className={`w-3.5 h-3.5 mr-1 inline ${loading ? "animate-spin" : ""}`} />
+          <Button onClick={() => refetch()} disabled={isRefreshing} variant="outline">
+            <RefreshCw className={`w-3.5 h-3.5 mr-1 inline ${isRefreshing ? "animate-spin" : ""}`} />
             Refresh
           </Button>
           <Link to="/domains/register?tab=transfer">

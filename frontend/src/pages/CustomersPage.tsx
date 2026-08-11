@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, RefreshCw, User, Pencil, Trash2, Mail, Phone, Building2, MapPin, Globe, Calendar, ExternalLink } from "lucide-react";
-import { Card, Button, LoadingSpinner, EmptyState, Modal, ConfirmDialog, SearchBar, Pagination, toast } from "../components/ui";
+import { Card, Button, TableSkeleton, EmptyState, Modal, ConfirmDialog, SearchBar, Pagination, toast } from "../components/ui";
 import { api } from "../lib/api";
 import type { Customer, PaginatedResponse } from "../lib/types";
 import { useSettings } from "../contexts/SettingsContext";
+import { useCachedFetch } from "../contexts/DataCacheContext";
 
 const defaultForm = {
   name: "",
@@ -20,10 +21,7 @@ const defaultForm = {
 
 export default function CustomersPage() {
   const { settings } = useSettings();
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
   const perPage = 10;
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
@@ -37,21 +35,20 @@ export default function CustomersPage() {
   const [deleteId, setDeleteId] = useState(0);
   const [deleteName, setDeleteName] = useState("");
 
-  async function fetchCustomers() {
-    setLoading(true);
-    const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
-    try {
-      const res = await api.get<PaginatedResponse<Customer>>(`/customers/remote?${params}`);
-      setCustomers(res.data || []);
-      setTotal(res.meta?.total || 0);
-    } catch (err: any) {
-      if (err.name !== "AbortError") {
-        console.error(err);
-        toast(err?.message || "Gagal memuat customer dari Resellercamp", "error");
+  const { data, loading, isRefreshing, refetch } = useCachedFetch<PaginatedResponse<Customer>>(
+    `customers:page:${page}`,
+    async () => {
+      try {
+        return await api.get<PaginatedResponse<Customer>>(`/customers/remote?page=${page}&per_page=${perPage}`);
+      } catch (err: any) {
+        return await api.get<PaginatedResponse<Customer>>(`/customers?page=${page}&per_page=${perPage}`);
       }
-    }
-    setLoading(false);
-  }
+    },
+    [page]
+  );
+
+  const customers = data?.data || [];
+  const total = data?.meta?.total || 0;
 
   // Client-side filter for live Resellercamp data (server has no search param).
   const visibleCustomers = customers.filter((c) => {
@@ -63,11 +60,6 @@ export default function CustomersPage() {
       (c.company || "").toLowerCase().includes(q)
     );
   });
-
-  useEffect(() => {
-    fetchCustomers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
 
   async function save() {
     if (saving) return;
@@ -88,7 +80,7 @@ export default function CustomersPage() {
       setModalOpen(false);
       setEditMode(false);
       setForm(defaultForm);
-      fetchCustomers();
+      refetch();
     } catch (e: any) { toast(e.message, "error"); }
     setSaving(false);
   }
@@ -110,7 +102,7 @@ export default function CustomersPage() {
 
   const overviewCustomer = overviewId ? customers.find((c) => c.id === overviewId) || null : null;
 
-  if (loading) return <LoadingSpinner />;
+  if (loading && !data) return <TableSkeleton rows={5} cols={5} />;
 
   return (
     <div className="space-y-6 pb-12">
@@ -124,8 +116,8 @@ export default function CustomersPage() {
       <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
         <SearchBar value={search} onChange={setSearch} placeholder="Cari customer berdasarkan nama, email, perusahaan..." />
         <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
-          <Button variant="outline" onClick={() => fetchCustomers()} disabled={loading} className="shadow-2xs text-xs sm:text-sm !py-2.5">
-            <RefreshCw className={`w-4 h-4 inline mr-1.5 ${loading ? "animate-spin" : ""}`} />
+          <Button variant="outline" onClick={() => refetch()} disabled={isRefreshing} className="shadow-2xs text-xs sm:text-sm !py-2.5">
+            <RefreshCw className={`w-4 h-4 inline mr-1.5 ${isRefreshing ? "animate-spin" : ""}`} />
             Refresh
           </Button>
           <Button onClick={openCreate} className="text-xs sm:text-sm !py-2.5 shadow-sm">

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Plus, RefreshCw, Filter, ArrowLeft, Edit2, Trash2, Globe, Info, Copy, Check } from "lucide-react";
-import { Card, Button, LoadingSpinner, Modal, Pagination, toast } from "../components/ui";
+import { Card, Button, TableSkeleton, Modal, Pagination, toast } from "../components/ui";
 import { api } from "../lib/api";
 
 const RECORD_TYPES = [
@@ -241,11 +241,8 @@ export default function DnsManagePage() {
         </div>
 
         {/* Loading State */}
-        {loading ? (
-          <div className="p-12 text-center">
-            <LoadingSpinner />
-            <p className="text-xs font-semibold text-gray-500 mt-3">Fetching DNS records...</p>
-          </div>
+        {loading && records.length === 0 ? (
+          <TableSkeleton rows={5} cols={4} />
         ) : filteredRecords.length === 0 ? (
           /* Empty State */
           <div className="p-12 text-center space-y-3">

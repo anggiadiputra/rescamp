@@ -1,10 +1,10 @@
 import { Globe, AlertCircle, Clock, CheckCircle2, AlertTriangle } from "lucide-react";
-import { StatCard, Card, LoadingSpinner } from "../components/ui";
+import { StatCard, Card, StatCardSkeleton, CardSkeleton } from "../components/ui";
 import { api } from "../lib/api";
-import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useSettings } from "../contexts/SettingsContext";
+import { useCachedFetch } from "../contexts/DataCacheContext";
 import type { Domain, PaginatedResponse } from "../lib/types";
 
 function fmtBalance(amount: any, currency: string = "IDR"): string {
@@ -19,29 +19,30 @@ export default function DashboardPage() {
   const { settings } = useSettings();
   const isCustomer = user?.role === "customer";
 
-  const [domains, setDomains] = useState<Domain[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [balance, setBalance] = useState({ balance: "0.00", currency: "IDR" });
-  useEffect(() => {
-    const promises: Promise<any>[] = [
-      // All roles: fetch live Resellercamp for dashboard counts to match dashboard reseller.
-      api.get<PaginatedResponse<Domain>>("/domains/remote?per_page=5").catch(() => ({ data: [] })),
-    ];
-
-    if (!isCustomer) {
-      promises.push(api.get<any>("/billing/balance").catch(() => ({ balance: "0.00", currency: "IDR" })));
-    }
-
-    Promise.all(promises).then(([d, b]) => {
-      setDomains(d.data || []);
-      if (b) {
-        const bal = typeof b === "object" ? b : { balance: String(b), currency: "IDR" };
-        setBalance(bal);
+  const { data, loading } = useCachedFetch<{ domains: Domain[]; balance: any }>(
+    `dashboard:${user?.id || 0}`,
+    async () => {
+      const d = await api.get<PaginatedResponse<Domain>>("/domains/remote?per_page=5").catch(() => ({ data: [] }));
+      let b = { balance: "0.00", currency: "IDR" };
+      if (!isCustomer) {
+        b = await api.get<any>("/billing/balance").catch(() => ({ balance: "0.00", currency: "IDR" }));
       }
-    }).finally(() => setLoading(false));
-  }, [isCustomer]);
+      return { domains: d.data || [], balance: typeof b === "object" ? b : { balance: String(b), currency: "IDR" } };
+    },
+    [user?.id, isCustomer]
+  );
 
-  if (loading) return <LoadingSpinner />;
+  const domains = data?.domains || [];
+  const balance = data?.balance || { balance: "0.00", currency: "IDR" };
+
+  if (loading && !data) {
+    return (
+      <div className="space-y-6">
+        <StatCardSkeleton count={4} />
+        <CardSkeleton lines={5} />
+      </div>
+    );
+  }
 
   const active = domains.filter((d) => d.status === "active").length;
   const expired = domains.filter((d) => d.status === "expired").length;

@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
-import { Card, LoadingSpinner, Pagination, SearchBar } from "../components/ui";
+import { useState } from "react";
+import { Card, TableSkeleton, Pagination, SearchBar } from "../components/ui";
 import { Tag } from "lucide-react";
 import { api } from "../lib/api";
+import { useCachedFetch } from "../contexts/DataCacheContext";
 
 function fmtPrice(amount: any, currency: string = "IDR"): string {
   if (!amount) return "-";
@@ -12,23 +13,18 @@ function fmtPrice(amount: any, currency: string = "IDR"): string {
 }
 
 export default function PricesPage() {
-  const [prices, setPrices] = useState<Record<string, any>>({});
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const perPage = 10;
 
-  useEffect(() => {
-    setLoading(true);
-    api.get<any>("/billing/prices")
-      .then((data) => setPrices(data || {}))
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: prices, loading } = useCachedFetch<Record<string, any>>(
+    "prices:list",
+    () => api.get<any>("/billing/prices")
+  );
 
-  if (loading) return <LoadingSpinner />;
+  if (loading && !prices) return <TableSkeleton rows={5} cols={4} />;
 
-  const allEntries = Object.entries(prices)
+  const allEntries = Object.entries(prices || {})
     .filter(([k]) => k !== "addons")
     .filter(([tld]) => !search || tld.toLowerCase().includes(search.toLowerCase().replace(/^\./, "")));
 

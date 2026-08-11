@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
-import { Card, LoadingSpinner, EmptyState, Modal, Pagination, Button, SearchBar, toast } from "../components/ui";
+import { Card, TableSkeleton, StatCardSkeleton, EmptyState, Modal, Pagination, Button, SearchBar, toast } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import { useSettings } from "../contexts/SettingsContext";
@@ -274,7 +274,14 @@ export default function BillingPage() {
     navigate(`/billing/pay/${orderId}`);
   }
 
-  if (initialLoading) return <LoadingSpinner />;
+  if (initialLoading) {
+    return (
+      <div className="space-y-6 pb-12">
+        <StatCardSkeleton count={3} />
+        <TableSkeleton rows={5} cols={5} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-12">
@@ -420,10 +427,7 @@ export default function BillingPage() {
         </div>
 
         {tableLoading && transactions.length === 0 ? (
-          <div className="py-16 flex flex-col items-center justify-center gap-3">
-            <LoadingSpinner size="md" />
-            <span className="text-xs sm:text-sm text-gray-500 font-medium">Memuat data transaksi...</span>
-          </div>
+          <TableSkeleton rows={5} cols={6} />
         ) : transactions.length === 0 ? (
           <div className="py-12">
             <EmptyState
