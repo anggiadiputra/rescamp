@@ -118,8 +118,8 @@ export async function resolveResellerCreds(userId?: number): Promise<ResellerCre
   const creds: ResellerCreds = { resellerId, apiKey };
 
   // Cache the resolved credentials
-  if (resellerId && apiKey) {
-    credsCache.set(userId, { creds, expiresAt: Date.now() + CACHE_TTL_MS });
+  if (targetId > 0 && resellerId && apiKey) {
+    credsCache.set(targetId, { creds, expiresAt: Date.now() + CACHE_TTL_MS });
   }
 
   return creds;
