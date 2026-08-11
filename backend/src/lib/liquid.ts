@@ -78,7 +78,14 @@ export class LiquidClient {
 
   // --- Domain ---
   checkAvailability(domain: string) {
-    return this.request<any>("GET", `/domains/availability?domain=${domain}`);
+    return this.request<any>("GET", `/domains/availability?domain=${encodeURIComponent(domain)}`);
+  }
+
+  checkBulkAvailability(domains: string[]) {
+    if (!domains || domains.length === 0) return Promise.resolve([]);
+    if (domains.length === 1 && domains[0]) return this.checkAvailability(domains[0]);
+    const qs = domains.filter((d): d is string => Boolean(d)).map((d) => `domain=${encodeURIComponent(d)}`).join("&");
+    return this.request<any>("GET", `/domains/availability?${qs}`);
   }
 
   /**
@@ -463,8 +470,23 @@ export class LiquidClient {
   getCurrency(symbol: string) {
     return this.request<any>("GET", `/currencies/${symbol}`);
   }
-  getTlds() {
-    return this.request<any>("GET", "/tlds");
+  async getTlds(forceRefresh = false) {
+    const cacheKey = "tlds_list_cache";
+    if (!forceRefresh) {
+      const cached = cacheStore.get(cacheKey);
+      if (cached && Date.now() < cached.expiresAt) {
+        return cached.data;
+      }
+    }
+    try {
+      const data = await this.request<any>("GET", "/tlds");
+      cacheStore.set(cacheKey, { data, expiresAt: Date.now() + 15 * 60_000 });
+      return data;
+    } catch (err) {
+      const cached = cacheStore.get(cacheKey);
+      if (cached) return cached.data;
+      throw err;
+    }
   }
   getTld(name: string) {
     return this.request<any>("GET", `/tlds/${name}`);
@@ -715,7 +737,7 @@ export class LiquidClient {
     }
   }
 
-  async getCustomerPrices(forceRefresh = true) {
+  async getCustomerPrices(forceRefresh = false) {
     const cacheKey = `cust_prices:${this.authHeader}`;
     if (!forceRefresh) {
       const cached = cacheStore.get(cacheKey);

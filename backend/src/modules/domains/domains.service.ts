@@ -1141,19 +1141,40 @@ export async function deleteDomainRecord(user: { id: number; resellerId: string 
   await db.delete(domains).where(eq(domains.id, domain.id));
 }
 
-export async function bulkAvailability(user: { id?: number; resellerId: string | null; apiKey: string | null; role?: string }, keyword: string) {
-  const liquid = await getLiquid(user);
+// Short-TTL search result cache (60 seconds) to provide instant 0ms responses for repeated keyword lookups
+interface CachedSearchResult {
+  results: any[];
+  expiresAt: number;
+}
+const searchResultCache = new Map<string, CachedSearchResult>();
+const SEARCH_CACHE_TTL_MS = 60_000;
 
-  // Extract base keyword and requested TLD if user searched with extension (e.g. "nama.web.id")
-  const cleanInput = keyword.trim().toLowerCase();
-  const parts = cleanInput.split(".");
-  const baseKeyword = parts[0];
+export async function bulkAvailability(user: { id?: number; resellerId: string | null; apiKey: string | null; role?: string }, keyword: string) {
+  // 1. Strict Input Sanitization & Validation
+  if (!keyword || typeof keyword !== "string") return [];
+  
+  // Strip protocols, spaces, and invalid control/injection characters
+  let cleanInput = keyword.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/[^\w\.\-]/g, "");
+  const parts = cleanInput.split(".").filter(Boolean);
+  if (parts.length === 0) return [];
+  
+  let baseKeyword = parts[0] || "";
+  if (!baseKeyword) return [];
+  // Limit max label length per RFC 1035 (63 chars)
+  if (baseKeyword.length > 63) baseKeyword = baseKeyword.slice(0, 63);
   const requestedTld = parts.length > 1 ? parts.slice(1).join(".") : null;
 
+  const cacheKey = `search:${baseKeyword}:${requestedTld || "all"}`;
+  const cached = searchResultCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.results;
+  }
+
+  const liquid = await getLiquid(user);
   let prices: any = {};
   const tldSet = new Set<string>();
 
-  // 1. Fetch active customer prices from Resellercamp
+  // 2. Fetch active customer prices from Resellercamp (uses 15-min in-memory cache)
   try {
     const raw = await liquid.getCustomerPrices();
     prices = formatCustomerPrices(raw);
@@ -1164,7 +1185,7 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     console.warn("[bulkAvailability] getCustomerPrices warning:", e?.message);
   }
 
-  // 2. Also try liquid.getPrices() fallback if getCustomerPrices returned empty
+  // Fallback: liquid.getPrices() if getCustomerPrices returned empty
   if (tldSet.size === 0) {
     try {
       const raw = await liquid.getPrices();
@@ -1175,7 +1196,7 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     } catch {}
   }
 
-  // 3. Query GET /v1/tlds from Resellercamp to get all supported dashboard TLDs
+  // 3. Query GET /v1/tlds from Resellercamp (uses 15-min in-memory cache)
   try {
     const tldRes = await liquid.getTlds().catch(() => null);
     const arr = Array.isArray(tldRes) ? tldRes : tldRes?.data || tldRes?.tlds || [];
@@ -1202,35 +1223,74 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     }
   }
 
+  const domainsToQuery = tldsToQuery.map(tld => `${baseKeyword}.${tld}`);
+  const availabilityMap = new Map<string, string>();
+
+  // 4. Single-Batch HTTP Request: Query availability for ALL domains in 1 single HTTP call!
+  try {
+    const rawAvailability = await liquid.checkBulkAvailability(domainsToQuery);
+    if (Array.isArray(rawAvailability)) {
+      for (const item of rawAvailability) {
+        if (item && typeof item === "object") {
+          for (const [d, val] of Object.entries(item)) {
+            const st = typeof val === "string" ? val : (val as any)?.status || (val as any)?.classkey || "error";
+            availabilityMap.set(d.toLowerCase(), String(st).toLowerCase());
+          }
+        }
+      }
+    } else if (rawAvailability && typeof rawAvailability === "object") {
+      const sourceObj = rawAvailability.data || rawAvailability.result || rawAvailability;
+      for (const [d, val] of Object.entries(sourceObj)) {
+        const st = typeof val === "string" ? val : (val as any)?.status || (val as any)?.classkey || "error";
+        availabilityMap.set(d.toLowerCase(), String(st).toLowerCase());
+      }
+    }
+  } catch (e: any) {
+    console.warn("[bulkAvailability] checkBulkAvailability batched call warning, falling back to individual calls:", e?.message);
+  }
+
+  // Fallback fallback: if batched call failed to return status for some domains, populate using individual check
   const results = await Promise.all(
     tldsToQuery.map(async (tld) => {
-      try {
-        const res = await liquid.checkAvailability(`${baseKeyword}.${tld}`);
-        const arr = Array.isArray(res) ? res : [];
-        const first = arr[0];
-        const status = first ? (Object.values(first)[0] as any)?.status : "error";
-        const tldPrice = prices[tld] || {};
-        return {
-          domain: `${baseKeyword}.${tld}`,
-          tld,
-          available: status === "available",
-          status,
-          price: tldPrice.price_new || tldPrice.price_register || null,
-          renew_price: tldPrice.price_renew || null,
-          transfer_price: tldPrice.price_transfer || tldPrice.price_renew || null,
-          create_years: tldPrice.create_years || null,
-          renew_years: tldPrice.renew_years || null,
-          privacy_protect: tldPrice.privacy_protect || "70.00",
-          currency: tldPrice.currency || "IDR",
-        };
-      } catch {
-        return { domain: `${baseKeyword}.${tld}`, tld, available: false, status: "error", price: null, renew_price: null, transfer_price: null, privacy_protect: "70.00", currency: "IDR" };
+      const fullDomain = `${baseKeyword}.${tld}`;
+      let status = availabilityMap.get(fullDomain.toLowerCase());
+
+      if (!status || status === "error") {
+        try {
+          const res = await liquid.checkAvailability(fullDomain);
+          const arr = Array.isArray(res) ? res : [];
+          const first = arr[0];
+          status = first ? (Object.values(first)[0] as any)?.status : "error";
+        } catch {
+          status = "error";
+        }
       }
+
+      const tldPrice = prices[tld] || {};
+      return {
+        domain: fullDomain,
+        tld,
+        available: status === "available",
+        status: status || "error",
+        price: tldPrice.price_new || tldPrice.price_register || null,
+        renew_price: tldPrice.price_renew || null,
+        transfer_price: tldPrice.price_transfer || tldPrice.price_renew || null,
+        create_years: tldPrice.create_years || null,
+        renew_years: tldPrice.renew_years || null,
+        privacy_protect: tldPrice.privacy_protect || "70.00",
+        currency: tldPrice.currency || "IDR",
+      };
     })
   );
 
-  // Filter out any TLD results that returned an API error (e.g. "not sale" or invalid TLD)
-  return results.filter(r => r.status !== "error");
+  const filteredResults = results.filter(r => r.status !== "error");
+  
+  // Cache successful search results for 60s
+  if (filteredResults.length > 0) {
+    searchResultCache.set(cacheKey, { results: filteredResults, expiresAt: Date.now() + SEARCH_CACHE_TTL_MS });
+  }
+
+  return filteredResults;
 }
 
 export async function syncDomainsFromLiquid(userParam: { id: number; role?: string | null; resellerId?: string | null; apiKey?: string | null }) {
