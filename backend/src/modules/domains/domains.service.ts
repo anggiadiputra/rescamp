@@ -23,10 +23,11 @@ async function getLiquid(user?: { id?: number; resellerId?: string | null; apiKe
     const creds = await resolveResellerCreds(user.id);
     return new LiquidClient(creds.resellerId, creds.apiKey);
   }
-  // Fallback for calls without userId (should be rare)
-  const resellerId = user?.resellerId || "";
-  const apiKey = user?.apiKey || "";
-  return new LiquidClient(resellerId, apiKey);
+  if (user?.resellerId && user?.apiKey) {
+    return new LiquidClient(user.resellerId, user.apiKey);
+  }
+  const creds = await resolveResellerCreds(0);
+  return new LiquidClient(creds.resellerId, creds.apiKey);
 }
 
 export function parsePrivacyProtectionStatus(raw: any): boolean {

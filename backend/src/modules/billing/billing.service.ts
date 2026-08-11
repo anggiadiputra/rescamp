@@ -54,7 +54,7 @@ export async function getBalance(user: { id?: number; resellerId: string | null;
 }
 
 export async function getPrices(user: { id?: number; resellerId: string | null; apiKey: string | null; role?: string }, forceRefresh = true) {
-  const creds = user.id ? await resolveResellerCreds(user.id) : { resellerId: user.resellerId || "", apiKey: user.apiKey || "" };
+  const creds = await resolveResellerCreds(user?.id || 0);
   const liquid = getLiquid(creds);
 
   // Always fetch 100% LIVE directly from Resellercamp (GET /customers/prices)

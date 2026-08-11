@@ -83,6 +83,7 @@ export default function LandingPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResult, setSearchResult] = useState<any[] | null>(null);
   const [popularDomains, setPopularDomains] = useState<any[]>(POPULAR_DOMAINS);
+  const [livePrices, setLivePrices] = useState<Record<string, any>>({});
   const [authModal, setAuthModal] = useState<{ domain: string; transferPrice: string } | null>(null);
 
   useEffect(() => {
@@ -90,6 +91,7 @@ export default function LandingPage() {
     api.get<any>("/billing/prices", { signal: controller.signal })
       .then((data) => {
         if (data && typeof data === "object" && Object.keys(data).length > 0) {
+          setLivePrices(data);
           const featuredTlds = [".COM", ".ID", ".MY.ID", ".WEB.ID", ".BIZ.ID", ".XYZ", ".CO.ID"];
           const updated = featuredTlds.map((tld) => {
             const key = tld.replace(/^\./, "").toLowerCase();
@@ -247,13 +249,19 @@ export default function LandingPage() {
                   {searchResult.map((res: any, idx: number) => {
                     const dName = res.domain || res.domainName || `${keyword}.com`;
                     const isAvail = res.available !== false;
-                    const priceNum = Number(res.price || "180");
-                    const actualPrice = priceNum < 1000 ? priceNum * 1000 : priceNum;
-                    const formattedPrice = `Rp ${Math.round(actualPrice).toLocaleString("id-ID")}`;
 
-                    const transferNum = Number(res.transfer_price || res.renew_price || res.price || "209");
-                    const actualTransferPrice = transferNum < 1000 ? transferNum * 1000 : transferNum;
-                    const formattedTransferPrice = `Rp ${Math.round(actualTransferPrice).toLocaleString("id-ID")}`;
+                    const itemTld = String(res.tld || dName.split(".").slice(1).join(".") || "").toLowerCase();
+                    const liveInfo = livePrices[itemTld];
+
+                    const rawPrice = res.price || liveInfo?.price_new || liveInfo?.price_register || null;
+                    const priceNum = rawPrice ? Number(rawPrice) : 0;
+                    const actualPrice = priceNum > 0 ? (priceNum < 1000 ? priceNum * 1000 : priceNum) : 0;
+                    const formattedPrice = actualPrice > 0 ? `Rp ${Math.round(actualPrice).toLocaleString("id-ID")}` : "Cek Harga";
+
+                    const rawTransfer = res.transfer_price || res.renew_price || liveInfo?.price_transfer || liveInfo?.price_renew || liveInfo?.price_new || null;
+                    const transferNum = rawTransfer ? Number(rawTransfer) : 0;
+                    const actualTransferPrice = transferNum > 0 ? (transferNum < 1000 ? transferNum * 1000 : transferNum) : 0;
+                    const formattedTransferPrice = actualTransferPrice > 0 ? `Rp ${Math.round(actualTransferPrice).toLocaleString("id-ID")}` : "Cek Harga";
 
                     return (
                       <div key={idx} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">

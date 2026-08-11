@@ -40,42 +40,48 @@ const CACHE_TTL_MS = 5 * 60_000; // 5 minutes
  * 5. If still no credentials → fallback to first reseller in DB
  * 6. Cache the resolved credentials
  */
-export async function resolveResellerCreds(userId: number): Promise<ResellerCreds> {
+export async function resolveResellerCreds(userId?: number): Promise<ResellerCreds> {
+  const targetId = Number(userId || 0);
+
   // Check cache first
-  const cached = credsCache.get(userId);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.creds;
-  }
-
-  const [user] = await db.select().from(users).where(eq(users.id, userId));
-  if (!user) {
-    return { resellerId: "", apiKey: "" };
-  }
-
-  let targetUser = user;
-
-  // If customer, resolve parent reseller
-  if (user.role === "customer" && user.parentResellerId) {
-    const [parent] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
-    if (parent?.resellerId) {
-      targetUser = parent;
+  if (targetId > 0) {
+    const cached = credsCache.get(targetId);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.creds;
     }
   }
 
-  // Try to get credentials from target user
-  let resellerId = targetUser.resellerId || "";
+  let resellerId = "";
   let apiKey = "";
 
-  // Decrypt apiKeyEncrypted first, fallback to plaintext apiKey
-  if (targetUser.apiKeyEncrypted) {
-    try {
-      apiKey = await decryptApiKey(targetUser.apiKeyEncrypted);
-    } catch (e) {
-      console.error("[resolveResellerCreds] decryptApiKey failed, trying plaintext:", e);
-      apiKey = targetUser.apiKey || "";
+  if (targetId > 0) {
+    const [user] = await db.select().from(users).where(eq(users.id, targetId));
+    if (user) {
+      let targetUser = user;
+
+      // If customer, resolve parent reseller
+      if (user.role === "customer" && user.parentResellerId) {
+        const [parent] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
+        if (parent?.resellerId) {
+          targetUser = parent;
+        }
+      }
+
+      // Try to get credentials from target user
+      resellerId = targetUser.resellerId || "";
+
+      // Decrypt apiKeyEncrypted first, fallback to plaintext apiKey
+      if (targetUser.apiKeyEncrypted) {
+        try {
+          apiKey = await decryptApiKey(targetUser.apiKeyEncrypted);
+        } catch (e) {
+          console.error("[resolveResellerCreds] decryptApiKey failed, trying plaintext:", e);
+          apiKey = targetUser.apiKey || "";
+        }
+      } else {
+        apiKey = targetUser.apiKey || "";
+      }
     }
-  } else {
-    apiKey = targetUser.apiKey || "";
   }
 
   // Fallback: first reseller in DB
