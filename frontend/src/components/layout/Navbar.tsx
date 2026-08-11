@@ -42,7 +42,7 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   }, [location.pathname]);
 
   return (
-    <header className="bg-white/90 backdrop-blur-md border-b border-gray-200/80 sticky top-0 z-30 flex flex-col transition-all">
+    <header className="backdrop-blur-md border-b border-gray-200/80 sticky top-0 z-30 flex flex-col transition-all" style={{ backgroundColor: settings.header_color || "rgba(255, 255, 255, 0.9)" }}>
       <div className={`${onToggleSidebar ? "px-4 sm:px-6 md:px-8 w-full" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full"} h-16 flex items-center justify-between gap-4`}>
         {/* Left Side: Brand & Mobile Sidebar Toggle */}
         <div className="flex items-center gap-3">
@@ -57,7 +57,7 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
           )}
 
           <Link to={user ? "/dashboard" : "/"} className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-black text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform duration-200">
+            <div className="w-9 h-9 rounded-xl text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform duration-200" style={{ backgroundColor: settings.primary_color || "#000000" }}>
               <Globe className="w-5 h-5" />
             </div>
             <span className="text-base font-black text-gray-900 tracking-tight leading-none group-hover:text-black transition-colors">
@@ -166,7 +166,7 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                   onClick={() => setProfileOpen(!profileOpen)}
                   className="flex items-center gap-2.5 p-1.5 pr-2.5 rounded-xl hover:bg-gray-100 transition-all border border-transparent hover:border-gray-200 cursor-pointer"
                 >
-                  <div className="w-9 h-9 rounded-xl bg-black text-white font-black flex items-center justify-center text-sm shadow-xs shrink-0">
+                  <div className="w-9 h-9 rounded-xl text-white font-black flex items-center justify-center text-sm shadow-xs shrink-0" style={{ backgroundColor: settings.primary_color || "#000000" }}>
                     {(user.name || user.email || "U").slice(0, 2).toUpperCase()}
                   </div>
                   <div className="hidden md:flex text-left leading-tight">

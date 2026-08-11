@@ -45,6 +45,7 @@ interface SettingsContextType {
   settings: SystemSettings;
   loading: boolean;
   refreshSettings: () => Promise<void>;
+  updatePreviewColors: (colors: { primary_color?: string; header_color?: string; sidebar_color?: string }) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | null>(null);
@@ -73,19 +74,36 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  function updatePreviewColors(colors: { primary_color?: string; header_color?: string; sidebar_color?: string }) {
+    setSettings((prev) => ({
+      ...prev,
+      ...colors,
+    }));
+  }
+
   useEffect(() => {
     fetchSettings();
   }, []);
 
-  // Dynamically update document title and primary color CSS variables
+  // Dynamically update document title and CSS theme custom properties
   useEffect(() => {
     if (settings.seo_title || settings.brand_name) {
       document.title = settings.seo_title || `${settings.brand_name} — Domain Registrar`;
     }
-  }, [settings.seo_title, settings.brand_name]);
+    const root = document.documentElement;
+    if (settings.primary_color) {
+      root.style.setProperty("--primary-color", settings.primary_color);
+    }
+    if (settings.header_color) {
+      root.style.setProperty("--header-color", settings.header_color);
+    }
+    if (settings.sidebar_color) {
+      root.style.setProperty("--sidebar-color", settings.sidebar_color);
+    }
+  }, [settings.seo_title, settings.brand_name, settings.primary_color, settings.header_color, settings.sidebar_color]);
 
   return (
-    <SettingsContext.Provider value={{ settings, loading, refreshSettings: fetchSettings }}>
+    <SettingsContext.Provider value={{ settings, loading, refreshSettings: fetchSettings, updatePreviewColors }}>
       {children}
     </SettingsContext.Provider>
   );
@@ -94,7 +112,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 export function useSettings() {
   const ctx = useContext(SettingsContext);
   if (!ctx) {
-    return { settings: DEFAULT_SYSTEM_SETTINGS, loading: false, refreshSettings: async () => {} };
+    return {
+      settings: DEFAULT_SYSTEM_SETTINGS,
+      loading: false,
+      refreshSettings: async () => {},
+      updatePreviewColors: () => {},
+    };
   }
   return ctx;
 }

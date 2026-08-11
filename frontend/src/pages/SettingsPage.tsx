@@ -9,7 +9,7 @@ import { useSettings } from "../contexts/SettingsContext";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function SettingsPage() {
-  const { refreshSettings } = useSettings();
+  const { refreshSettings, updatePreviewColors } = useSettings();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -31,6 +31,11 @@ export default function SettingsPage() {
 
   // Track initial/saved form state to allow section cancellation
   const [initialForm, setInitialForm] = useState<Record<string, any>>({});
+
+  function handleColorChange(key: "primary_color" | "header_color" | "sidebar_color", val: string) {
+    setForm((prev) => ({ ...prev, [key]: val }));
+    updatePreviewColors({ [key]: val });
+  }
 
   // Reseller sync
   const [syncing, setSyncing] = useState(false);
@@ -814,13 +819,13 @@ export default function SettingsPage() {
                       <input
                         type="color"
                         value={form.primary_color || "#000000"}
-                        onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
+                        onChange={(e) => handleColorChange("primary_color", e.target.value)}
                         className="w-8 h-8 rounded border border-gray-200 cursor-pointer p-0.5"
                       />
                       <input
                         type="text"
                         value={form.primary_color || "#000000"}
-                        onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
+                        onChange={(e) => handleColorChange("primary_color", e.target.value)}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-mono"
                       />
                     </div>
@@ -831,13 +836,13 @@ export default function SettingsPage() {
                       <input
                         type="color"
                         value={form.header_color || "#ffffff"}
-                        onChange={(e) => setForm({ ...form, header_color: e.target.value })}
+                        onChange={(e) => handleColorChange("header_color", e.target.value)}
                         className="w-8 h-8 rounded border border-gray-200 cursor-pointer p-0.5"
                       />
                       <input
                         type="text"
                         value={form.header_color || "#ffffff"}
-                        onChange={(e) => setForm({ ...form, header_color: e.target.value })}
+                        onChange={(e) => handleColorChange("header_color", e.target.value)}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-mono"
                       />
                     </div>
@@ -848,13 +853,13 @@ export default function SettingsPage() {
                       <input
                         type="color"
                         value={form.sidebar_color || "#ffffff"}
-                        onChange={(e) => setForm({ ...form, sidebar_color: e.target.value })}
+                        onChange={(e) => handleColorChange("sidebar_color", e.target.value)}
                         className="w-8 h-8 rounded border border-gray-200 cursor-pointer p-0.5"
                       />
                       <input
                         type="text"
                         value={form.sidebar_color || "#ffffff"}
-                        onChange={(e) => setForm({ ...form, sidebar_color: e.target.value })}
+                        onChange={(e) => handleColorChange("sidebar_color", e.target.value)}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-mono"
                       />
                     </div>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { useSettings } from "../../contexts/SettingsContext";
 import {
   LayoutDashboard, Globe, Users, Receipt, Tag, Settings, PlusCircle, FileText, PanelLeftOpen, PanelLeftClose,
 } from "lucide-react";
@@ -27,6 +28,7 @@ const resellerNavItems = [
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { settings } = useSettings();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("sidebar_collapsed") === "true");
@@ -55,7 +57,8 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
         {/* Sidebar */}
         <aside
-          className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200/80 transform transition-all duration-200 ease-in-out lg:translate-x-0 lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:self-start lg:overflow-y-auto lg:shrink-0 ${
+          style={{ backgroundColor: settings.sidebar_color || "#ffffff" }}
+          className={`fixed inset-y-0 left-0 z-50 border-r border-gray-200/80 transform transition-all duration-200 ease-in-out lg:translate-x-0 lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:self-start lg:overflow-y-auto lg:shrink-0 ${
             sidebarOpen ? "translate-x-0" : "-translate-x-full"
           } ${collapsed ? "lg:w-20" : "lg:w-64"} w-64`}
         >
@@ -87,11 +90,12 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
                   to={item.href}
                   onClick={() => setSidebarOpen(false)}
                   title={collapsed ? item.label : undefined}
+                  style={active ? { backgroundColor: settings.primary_color || "#000000", color: "#ffffff" } : undefined}
                   className={`w-full flex items-center gap-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                     collapsed ? "lg:justify-center lg:px-0 lg:py-3 px-3.5 py-2.5" : "px-3.5 py-2.5"
                   } ${
                     active
-                      ? "bg-black text-white shadow-xs"
+                      ? "shadow-xs"
                       : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                   }`}
                 >
