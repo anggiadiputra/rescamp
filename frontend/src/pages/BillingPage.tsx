@@ -316,7 +316,7 @@ export default function BillingPage() {
             </button>
           </div>
           <div className="flex items-center gap-3 pt-1">
-            <Link to="/domains" className="px-4 py-2 bg-black hover:bg-gray-800 text-white font-bold text-xs sm:text-sm rounded-xl transition-colors shadow-2xs">
+            <Link to="/domains" style={{ backgroundColor: settings.primary_color || "#000000" }} className="px-4 py-2 text-white font-bold text-xs sm:text-sm rounded-xl transition-opacity hover:opacity-90 shadow-2xs">
               Lihat Daftar Domain Saya →
             </Link>
             <button onClick={clearReturnStatus} className="px-4 py-2 border border-emerald-300 hover:bg-emerald-100 text-emerald-900 font-semibold text-xs sm:text-sm rounded-xl transition-colors">
@@ -345,7 +345,7 @@ export default function BillingPage() {
             </button>
           </div>
           <div className="flex items-center gap-3 pt-1">
-            <Link to="/domains/register" className="px-4 py-2 bg-black hover:bg-gray-800 text-white font-bold text-xs sm:text-sm rounded-xl transition-colors shadow-2xs">
+            <Link to="/domains/register" style={{ backgroundColor: settings.primary_color || "#000000" }} className="px-4 py-2 text-white font-bold text-xs sm:text-sm rounded-xl transition-colors shadow-2xs">
               Kembali ke Pencarian Domain
             </Link>
             <button onClick={clearReturnStatus} className="px-4 py-2 border border-amber-300 hover:bg-amber-100 text-amber-900 font-semibold text-xs sm:text-sm rounded-xl transition-colors">

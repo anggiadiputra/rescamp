@@ -567,9 +567,10 @@ export default function DomainRegisterPage() {
 
               {/* Submit CTA Button */}
               <Button
+                variant="primary"
                 onClick={submit}
                 disabled={submitting || (!isCustomer && customers.length === 0)}
-                className="w-full py-3.5 text-sm font-bold bg-black hover:bg-gray-800 text-white rounded-lg transition-all active:scale-98 flex items-center justify-center gap-2 shadow-xs"
+                className="w-full py-3.5 text-sm font-bold shadow-xs"
               >
                 {submitting ? (
                   <>
@@ -669,9 +670,10 @@ export default function DomainRegisterPage() {
             )}
 
             <Button
+              variant="primary"
               onClick={submitTransfer}
               disabled={transferSubmitting || (!isCustomer && customers.length === 0)}
-              className="w-full py-3.5 text-sm font-bold bg-black hover:bg-gray-800 text-white rounded-lg transition-all active:scale-98 flex items-center justify-center gap-2 shadow-xs mt-2"
+              className="w-full py-3.5 text-sm font-bold shadow-xs mt-2"
             >
               {transferSubmitting ? (
                 <>

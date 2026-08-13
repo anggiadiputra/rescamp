@@ -400,6 +400,7 @@ export function PaymentModal({
   expiresAt?: string | Date | number;
   onSuccess?: () => void;
 }) {
+  const { settings } = useSettings();
   const [copied, setCopied] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
   const [timeLeft, setTimeLeft] = useState(3600); // remaining seconds
@@ -495,11 +496,14 @@ export function PaymentModal({
           <div className="flex items-center justify-between">
             {steps.map((step, i) => (
               <div key={step.num} className="flex items-center gap-1.5">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300 ${
-                  activeStep >= step.num
-                    ? "bg-black text-white shadow-sm"
-                    : "bg-gray-200 text-gray-400"
-                }`}>
+                <div
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300 ${
+                    activeStep >= step.num
+                      ? "text-white shadow-sm"
+                      : "bg-gray-200 text-gray-400"
+                  }`}
+                  style={activeStep >= step.num ? { backgroundColor: settings?.primary_color || "#000000" } : undefined}
+                >
                   {activeStep > step.num ? (
                     <CheckCircle2 className="w-3.5 h-3.5" />
                   ) : (
@@ -510,7 +514,10 @@ export function PaymentModal({
                   {step.label}
                 </span>
                 {i < steps.length - 1 && (
-                  <div className={`w-8 sm:w-12 h-px mx-1 transition-colors ${activeStep > step.num ? "bg-black" : "bg-gray-200"}`} />
+                  <div
+                    className={`w-8 sm:w-12 h-px mx-1 transition-colors ${activeStep > step.num ? "" : "bg-gray-200"}`}
+                    style={activeStep > step.num ? { backgroundColor: settings?.primary_color || "#000000" } : undefined}
+                  />
                 )}
               </div>
             ))}
@@ -624,7 +631,8 @@ export function PaymentModal({
                 target="_blank"
                 rel="noreferrer"
                 onClick={() => setActiveStep(2)}
-                className="w-full py-3.5 bg-gradient-to-r from-gray-900 to-black hover:from-gray-800 hover:to-gray-900 text-white font-bold text-sm rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2.5 cursor-pointer text-center block active:scale-[0.98]"
+                style={{ backgroundColor: settings?.primary_color || "#000000" }}
+                className="w-full py-3.5 hover:opacity-90 text-white font-bold text-sm rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2.5 cursor-pointer text-center block active:scale-[0.98]"
               >
                 <Lock className="w-4 h-4" />
                 Bayar Sekarang
@@ -732,6 +740,7 @@ export function Pagination({
   totalItems?: number;
   perPage?: number;
 }) {
+  const { settings } = useSettings();
   if (totalPages <= 1) return null;
 
   const getPageNumbers = () => {
@@ -773,8 +782,9 @@ export function Pagination({
             <button
               key={idx}
               onClick={() => onPage(p)}
+              style={p === page ? { backgroundColor: settings?.primary_color || "#000000", color: "#ffffff" } : undefined}
               className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
-                p === page ? "bg-black text-white shadow-2xs" : "border border-gray-200 text-gray-600 hover:bg-gray-50"
+                p === page ? "text-white shadow-2xs" : "border border-gray-200 text-gray-600 hover:bg-gray-50"
               }`}
             >
               {p}

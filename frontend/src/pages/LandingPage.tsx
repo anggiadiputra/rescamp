@@ -526,7 +526,8 @@ export default function LandingPage() {
                   const target = `/domains/register?tab=transfer&domain=${encodeURIComponent(authModal.domain)}`;
                   nav(`/login?redirect=${encodeURIComponent(target)}`);
                 }}
-                className="w-full py-3 bg-black hover:bg-gray-800 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                style={{ backgroundColor: settings.primary_color || "#000000" }}
+                className="w-full py-3 hover:opacity-90 text-white font-bold text-xs sm:text-sm rounded-xl transition-opacity shadow-sm flex items-center justify-center gap-2 cursor-pointer"
               >
                 🔑 Masuk ke Akun (Login)
               </button>
@@ -535,7 +536,8 @@ export default function LandingPage() {
                   const target = `/domains/register?tab=transfer&domain=${encodeURIComponent(authModal.domain)}`;
                   nav(`/register?redirect=${encodeURIComponent(target)}`);
                 }}
-                className="w-full py-3 bg-gray-900 hover:bg-black text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                style={{ backgroundColor: settings.primary_color || "#000000" }}
+                className="w-full py-3 hover:opacity-90 text-white font-bold text-xs sm:text-sm rounded-xl transition-opacity shadow-sm flex items-center justify-center gap-2 cursor-pointer"
               >
                 📝 Buat Akun Baru (Register)
               </button>

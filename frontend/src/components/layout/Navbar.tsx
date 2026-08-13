@@ -104,7 +104,7 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
                   <Button
                     variant="primary"
                     size="md"
-                    className={location.pathname === "/register" ? "bg-black text-white ring-2 ring-black/20" : ""}
+                    className={location.pathname === "/register" ? "ring-2 ring-black/20" : ""}
                   >
                     <UserPlus className="w-4 h-4 mr-1.5 inline" />
                     Daftar

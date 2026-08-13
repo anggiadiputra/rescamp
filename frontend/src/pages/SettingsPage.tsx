@@ -552,7 +552,8 @@ export default function SettingsPage() {
                       type="button"
                       onClick={handleTestKirisan}
                       disabled={testingKirisan}
-                      className="w-full sm:w-auto px-4 py-2 bg-gray-900 hover:bg-black text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 shrink-0"
+                      style={{ backgroundColor: settings.primary_color || "#000000" }}
+                      className="w-full sm:w-auto px-4 py-2 hover:opacity-90 text-white font-semibold text-xs rounded-lg transition-opacity flex items-center justify-center gap-1.5 shrink-0"
                     >
                       <Send className="w-3.5 h-3.5" />
                       {testingKirisan ? "Menguji..." : "Uji Kirisan API"}
@@ -579,9 +580,10 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={() => setForm({ ...form, email_provider: "smtp" })}
+                      style={form.email_provider === "smtp" ? { backgroundColor: settings.primary_color || "#000000", color: "#ffffff" } : undefined}
                       className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                         form.email_provider === "smtp"
-                          ? "bg-black text-white shadow-xs"
+                          ? "shadow-xs"
                           : "text-gray-600 hover:text-gray-900"
                       }`}
                     >
@@ -1590,7 +1592,8 @@ export default function SettingsPage() {
                     type="button"
                     onClick={handleSyncReseller}
                     disabled={syncing}
-                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-all flex items-center gap-2"
+                    variant="primary"
+                    size="md"
                   >
                     <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
                     {syncing ? "Syncing..." : "Sync Sekarang"}

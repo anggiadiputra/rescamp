@@ -397,9 +397,6 @@ export default function DomainDetailPage() {
         <Link to="/domains" className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
           <ArrowLeft className="w-4 h-4" />
         </Link>
-        <div className="p-2.5 rounded-xl text-white shadow-sm flex items-center justify-center shrink-0" style={{ backgroundColor: settings.primary_color || "#000000" }}>
-          <Globe className="w-6 h-6" />
-        </div>
         <div>
           <h1 className="text-2xl font-black text-gray-900 tracking-tight font-mono">{domain.domainName}</h1>
         </div>
@@ -661,7 +658,8 @@ export default function DomainDetailPage() {
               onClick={() => { setNsForm(activeNs.length ? [...activeNs] : ["", ""]); setNsOpen(true); }}
               disabled={domain.status === "suspended"}
               title={domain.status === "suspended" ? "Domain suspended — unsuspend dulu" : undefined}
-              className={`w-full py-3 bg-gray-900 text-white text-sm font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 ${domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:bg-black cursor-pointer"}`}
+              style={{ backgroundColor: settings.primary_color || "#000000" }}
+              className={`w-full py-3 text-white text-sm font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 ${domain.status === "suspended" ? "opacity-50 cursor-not-allowed" : "hover:opacity-90 cursor-pointer"}`}
             >
               <Globe className="w-4 h-4" /> Ubah Nameservers Domain
             </button>
@@ -690,7 +688,7 @@ export default function DomainDetailPage() {
             }`}
           >
             <div className="flex items-center justify-between">
-              <div className="p-2.5 bg-gray-900 text-white rounded-xl group-hover:scale-105 transition-transform">
+              <div className="p-2.5 text-white rounded-xl group-hover:scale-105 transition-transform shrink-0" style={{ backgroundColor: settings.primary_color || "#000000" }}>
                 <Server className="w-5 h-5" />
               </div>
               <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-black transition-colors" />
@@ -957,7 +955,7 @@ export default function DomainDetailPage() {
 
             <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
               <Button variant="secondary" onClick={() => setRenewOpen(false)}>Batal</Button>
-              <Button onClick={doRenew} disabled={renewLoading} className="bg-black hover:bg-gray-800 text-white rounded-xl">
+              <Button variant="primary" onClick={doRenew} disabled={renewLoading}>
                 {renewLoading ? "Memproses..." : "Lanjutkan Pembayaran"}
               </Button>
             </div>
@@ -1006,7 +1004,7 @@ export default function DomainDetailPage() {
 
             <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
               <Button variant="secondary" onClick={() => setBuyPrivacyOpen(false)}>Batal</Button>
-              <Button onClick={doBuyPrivacy} disabled={privacyBuying} className="bg-black hover:bg-gray-800 text-white rounded-xl">
+              <Button variant="primary" onClick={doBuyPrivacy} disabled={privacyBuying}>
                 {privacyBuying ? "Memproses..." : "Lanjutkan Pembayaran"}
               </Button>
             </div>
@@ -1069,7 +1067,8 @@ export default function DomainDetailPage() {
               toast("Auth code berhasil disalin!");
               setTimeout(() => setCopiedAuth(false), 2000);
             }}
-            className="w-full py-2.5 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+            style={{ backgroundColor: settings.primary_color || "#000000" }}
+            className="w-full py-2.5 text-white text-xs font-bold rounded-xl shadow-sm transition-all hover:opacity-90 flex items-center justify-center gap-2 cursor-pointer"
           >
             {copiedAuth ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
             {copiedAuth ? "Tersalin ke Clipboard" : "Salin Auth Code"}
