@@ -379,35 +379,35 @@ export default function LandingPage() {
       </section>
 
       {/* Price Table Showcase */}
-      <section className="py-16 bg-gray-900 text-white">
+      <section className="py-20 bg-gray-50/80 border-y border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-10">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8">
             <div>
-              <h3 className="text-xl sm:text-3xl font-black tracking-tight">Transparansi Harga Domain</h3>
-              <p className="text-xs sm:text-sm text-gray-400 mt-1">Daftar harga registrasi dan perpanjangan jujur untuk seluruh pengguna.</p>
+              <h3 className="text-xl sm:text-3xl font-black text-gray-900 tracking-tight">Transparansi Harga Domain</h3>
+              <p className="text-xs sm:text-sm text-gray-500 mt-1">Daftar harga registrasi dan perpanjangan jujur untuk seluruh pengguna.</p>
             </div>
-            <Link to="/prices" className="mt-4 sm:mt-0 text-xs font-bold text-gray-300 hover:text-white flex items-center gap-1">
+            <Link to="/prices" className="mt-4 sm:mt-0 text-xs font-bold text-gray-600 hover:text-black flex items-center gap-1 bg-white px-3.5 py-2 rounded-xl border border-gray-200 shadow-2xs transition-colors">
               Lihat Daftar Harga Lengkap →
             </Link>
           </div>
 
-          <div className="hidden md:block overflow-x-auto rounded-2xl border border-gray-800 bg-gray-800/50 backdrop-blur-sm">
+          <div className="hidden md:block overflow-x-auto rounded-2xl border border-gray-200/80 bg-white shadow-sm">
             <table className="w-full text-xs sm:text-sm text-left">
               <thead>
-                <tr className="bg-gray-800 text-gray-400 border-b border-gray-700 font-bold uppercase tracking-wider">
+                <tr className="bg-gray-50/80 text-gray-500 border-b border-gray-100 font-bold uppercase tracking-wider text-[11px]">
                   <th className="p-4">Ekstensi</th>
                   <th className="p-4">Harga Registrasi</th>
                   <th className="p-4">Harga Renewal</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800">
+              <tbody className="divide-y divide-gray-100">
                 {popularDomains.map((item) => (
-                  <tr key={item.tld} className="hover:bg-gray-800/80 transition-colors">
-                    <td className="p-4 font-mono font-bold text-white text-base">
-                      {item.tld} <span className="ml-2 text-[10px] px-2 py-0.5 rounded bg-gray-700 text-gray-300 font-sans">{item.badge}</span>
+                  <tr key={item.tld} className="hover:bg-gray-50/60 transition-colors">
+                    <td className="p-4 font-mono font-bold text-gray-900 text-base">
+                      {item.tld} <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-sans border border-gray-200">{item.badge}</span>
                     </td>
-                    <td className="p-4 font-mono font-bold text-emerald-400">{item.price}/thn</td>
-                    <td className="p-4 font-mono text-gray-300">{item.renew}/thn</td>
+                    <td className="p-4 font-mono font-bold text-emerald-600 text-base">{item.price}/thn</td>
+                    <td className="p-4 font-mono text-gray-600 font-semibold">{item.renew}/thn</td>
                   </tr>
                 ))}
               </tbody>
@@ -417,19 +417,19 @@ export default function LandingPage() {
           {/* Mobile card fallback */}
           <div className="md:hidden space-y-3">
             {popularDomains.map((item) => (
-              <div key={item.tld} className="rounded-xl border border-gray-700 bg-gray-800/60 p-4 space-y-2">
+              <div key={item.tld} className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-xs">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold text-white text-lg">{item.tld}</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-gray-700 text-gray-300 font-sans">{item.badge}</span>
+                  <span className="font-mono font-bold text-gray-900 text-lg">{item.tld}</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-sans border border-gray-200">{item.badge}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <span className="text-gray-400">Registrasi</span>
-                    <p className="font-mono font-bold text-emerald-400">{item.price}/thn</p>
+                    <span className="text-gray-500 font-medium">Registrasi</span>
+                    <p className="font-mono font-bold text-emerald-600 text-sm">{item.price}/thn</p>
                   </div>
                   <div>
-                    <span className="text-gray-400">Renewal</span>
-                    <p className="font-mono text-gray-300">{item.renew}/thn</p>
+                    <span className="text-gray-500 font-medium">Renewal</span>
+                    <p className="font-mono text-gray-600 font-semibold">{item.renew}/thn</p>
                   </div>
                 </div>
               </div>
