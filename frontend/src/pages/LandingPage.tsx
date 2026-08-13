@@ -68,12 +68,13 @@ const FEATURES_ITEMS = [
     desc: "Dapatkan bukti transaksi faktur lunas berformat resmi yang dapat diunduh dan dicetak kapan saja untuk kebutuhan pembukuan.",
     icon: FileText,
   },
-  {
-    title: "Dukungan Ekstensi Indonesia & Global",
-    desc: "Menyediakan puluhan ekstensi populer internasional (.com, .net, .org, .xyz) hingga ccTLD resmi Indonesia (.id, .co.id, .my.id, .web.id).",
-    icon: Award,
-  },
-];
+function fmtPrice(amount: any, currency: string = "IDR"): string {
+  if (!amount) return "-";
+  const num = Number(amount);
+  if (isNaN(num)) return "-";
+  const actual = num < 1000 ? num * 1000 : num;
+  return `${currency} ${Math.round(actual).toLocaleString("id-ID")}`;
+}
 
 export default function LandingPage() {
   const nav = useNavigate();
@@ -379,64 +380,79 @@ export default function LandingPage() {
       </section>
 
       {/* Price Table Showcase */}
-      <section className="py-20 bg-gray-50/80 border-y border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8">
-            <div>
-              <h3 className="text-xl sm:text-3xl font-black text-gray-900 tracking-tight">Transparansi Harga Domain</h3>
-              <p className="text-xs sm:text-sm text-gray-500 mt-1">Daftar harga registrasi dan perpanjangan jujur untuk seluruh pengguna.</p>
-            </div>
-            <Link to="/prices" className="mt-4 sm:mt-0 text-xs font-bold text-gray-600 hover:text-black flex items-center gap-1 bg-white px-3.5 py-2 rounded-xl border border-gray-200 shadow-2xs transition-colors">
-              Lihat Daftar Harga Lengkap →
-            </Link>
-          </div>
+      {(() => {
+        const priceEntries = Object.keys(livePrices).length > 0
+          ? Object.entries(livePrices).filter(([k]) => k !== "addons")
+          : [
+              ["com", { price_new: 180000, price_renew: 209000, price_transfer: 180000 }],
+              ["id", { price_new: 241500, price_renew: 241500, price_transfer: 241500 }],
+              ["my.id", { price_new: 5000, price_renew: 15000, price_transfer: 15000 }],
+              ["web.id", { price_new: 5000, price_renew: 60000, price_transfer: 60000 }],
+              ["biz.id", { price_new: 5000, price_renew: 15000, price_transfer: 15000 }],
+              ["xyz", { price_new: 68890, price_renew: 194350, price_transfer: 194350 }],
+              ["co.id", { price_new: 310500, price_renew: 310500, price_transfer: 310500 }],
+            ];
 
-          <div className="hidden md:block overflow-x-auto rounded-2xl border border-gray-200/80 bg-white shadow-sm">
-            <table className="w-full text-xs sm:text-sm text-left">
-              <thead>
-                <tr className="bg-gray-50/80 text-gray-500 border-b border-gray-100 font-bold uppercase tracking-wider text-[11px]">
-                  <th className="p-4">Ekstensi</th>
-                  <th className="p-4">Harga Registrasi</th>
-                  <th className="p-4">Harga Renewal</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {popularDomains.map((item) => (
-                  <tr key={item.tld} className="hover:bg-gray-50/60 transition-colors">
-                    <td className="p-4 font-mono font-bold text-gray-900 text-base">
-                      {item.tld} <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-sans border border-gray-200">{item.badge}</span>
-                    </td>
-                    <td className="p-4 font-mono font-bold text-emerald-600 text-base">{item.price}/thn</td>
-                    <td className="p-4 font-mono text-gray-600 font-semibold">{item.renew}/thn</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile card fallback */}
-          <div className="md:hidden space-y-3">
-            {popularDomains.map((item) => (
-              <div key={item.tld} className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold text-gray-900 text-lg">{item.tld}</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-sans border border-gray-200">{item.badge}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-gray-500 font-medium">Registrasi</span>
-                    <p className="font-mono font-bold text-emerald-600 text-sm">{item.price}/thn</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 font-medium">Renewal</span>
-                    <p className="font-mono text-gray-600 font-semibold">{item.renew}/thn</p>
-                  </div>
-                </div>
+        return (
+          <section className="py-20 bg-gray-50/80 border-y border-gray-100">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="mb-8">
+                <h3 className="text-xl sm:text-3xl font-black text-gray-900 tracking-tight">Transparansi Harga Domain</h3>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1">Daftar harga registrasi, perpanjangan, dan transfer jujur untuk seluruh pengguna.</p>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
+
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto rounded-2xl border border-gray-200/80 bg-white shadow-sm">
+                <table className="w-full text-xs sm:text-sm text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50/80 text-gray-500 border-b border-gray-100 font-bold uppercase tracking-wider text-[11px]">
+                      <th className="p-4">Ekstensi</th>
+                      <th className="p-4 text-right">Harga Registrasi</th>
+                      <th className="p-4 text-right">Harga Renewal</th>
+                      <th className="p-4 text-right">Harga Transfer</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {priceEntries.map(([tldKey, info]: [string, any]) => (
+                      <tr key={tldKey} className="hover:bg-gray-50/60 transition-colors">
+                        <td className="p-4 font-mono font-bold text-gray-900 text-base">.{tldKey.toUpperCase()}</td>
+                        <td className="p-4 font-mono font-bold text-emerald-600 text-base text-right">{fmtPrice(info.price_new || info.price_register, info.currency)}/thn</td>
+                        <td className="p-4 font-mono text-gray-600 font-semibold text-right">{fmtPrice(info.price_renew, info.currency)}/thn</td>
+                        <td className="p-4 font-mono text-gray-600 font-semibold text-right">{fmtPrice(info.price_transfer, info.currency)}/thn</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Card Fallback */}
+              <div className="md:hidden space-y-3">
+                {priceEntries.map(([tldKey, info]: [string, any]) => (
+                  <div key={tldKey} className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-gray-900 text-lg">.{tldKey.toUpperCase()}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <span className="text-gray-500 font-medium">Registrasi</span>
+                        <p className="font-mono font-bold text-emerald-600 text-xs mt-0.5">{fmtPrice(info.price_new || info.price_register, info.currency)}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 font-medium">Renewal</span>
+                        <p className="font-mono text-gray-600 font-semibold text-xs mt-0.5">{fmtPrice(info.price_renew, info.currency)}</p>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 font-medium">Transfer</span>
+                        <p className="font-mono text-gray-600 font-semibold text-xs mt-0.5">{fmtPrice(info.price_transfer, info.currency)}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        );
+      })()}
 
       {/* CTA Section */}
       <section className="py-20 bg-black text-white text-center relative overflow-hidden">
