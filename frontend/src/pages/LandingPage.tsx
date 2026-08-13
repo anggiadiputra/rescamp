@@ -496,48 +496,48 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-950 text-gray-400 py-12 border-t border-gray-900 text-xs">
+      <footer className="bg-gray-950 text-gray-400 py-12 border-t border-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           <div>
-            <div className="flex items-center gap-2 text-white font-black text-base mb-3">
+            <div className="flex items-center gap-2.5 text-white font-black text-lg mb-3">
               <div
-                className="w-7 h-7 rounded-lg text-white flex items-center justify-center shrink-0"
+                className="w-8 h-8 rounded-xl text-white flex items-center justify-center shrink-0 shadow-xs"
                 style={{ backgroundColor: settings.primary_color || "#000000" }}
               >
-                <Globe className="w-4 h-4 text-white" />
+                <Globe className="w-4.5 h-4.5 text-white" />
               </div>
-              {brand}
+              <span>{brand}</span>
             </div>
-            <p className="text-gray-500 leading-relaxed">
+            <p className="text-xs sm:text-sm text-gray-400/90 leading-relaxed">
               Platform pencarian dan pendaftaran nama domain terpercaya dengan harga transparan &amp; proteksi privasi lengkap.
             </p>
           </div>
           <div>
-            <p className="font-bold text-white uppercase tracking-wider mb-3">Navigasi</p>
-            <ul className="space-y-2">
-              <li><a href="#why-us" className="hover:text-white transition-colors">Why Us</a></li>
-              <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-              <li><Link to="/prices" className="hover:text-white transition-colors">Price List</Link></li>
+            <p className="text-xs font-bold text-white uppercase tracking-wider mb-3.5">Navigasi</p>
+            <ul className="space-y-2.5 text-xs sm:text-sm font-semibold">
+              <li><a href="#why-us" className="text-gray-400 hover:text-white transition-colors">Why Us</a></li>
+              <li><a href="#features" className="text-gray-400 hover:text-white transition-colors">Features</a></li>
+              <li><Link to="/prices" className="text-gray-400 hover:text-white transition-colors">Price List</Link></li>
             </ul>
           </div>
           <div>
-            <p className="font-bold text-white uppercase tracking-wider mb-3">Layanan</p>
-            <ul className="space-y-2">
-              <li><Link to="/domains/register" className="hover:text-white transition-colors">Registrasi Domain</Link></li>
-              <li><Link to="/domains/transfer" className="hover:text-white transition-colors">Transfer Domain</Link></li>
-              <li><Link to="/prices" className="hover:text-white transition-colors">Harga Domain .ID &amp; Global</Link></li>
+            <p className="text-xs font-bold text-white uppercase tracking-wider mb-3.5">Layanan</p>
+            <ul className="space-y-2.5 text-xs sm:text-sm font-semibold">
+              <li><Link to="/domains/register" className="text-gray-400 hover:text-white transition-colors">Registrasi Domain</Link></li>
+              <li><Link to="/domains/transfer" className="text-gray-400 hover:text-white transition-colors">Transfer Domain</Link></li>
+              <li><Link to="/prices" className="text-gray-400 hover:text-white transition-colors">Harga Domain .ID &amp; Global</Link></li>
             </ul>
           </div>
           <div>
-            <p className="font-bold text-white uppercase tracking-wider mb-3">Akun &amp; Portal</p>
-            <ul className="space-y-2">
-              <li><Link to="/login" className="hover:text-white transition-colors">Masuk Akun</Link></li>
-              <li><Link to="/register" className="hover:text-white transition-colors">Daftar Akun Baru</Link></li>
-              <li><Link to="/dashboard" className="hover:text-white transition-colors">Dashboard Customer</Link></li>
+            <p className="text-xs font-bold text-white uppercase tracking-wider mb-3.5">Akun &amp; Portal</p>
+            <ul className="space-y-2.5 text-xs sm:text-sm font-semibold">
+              <li><Link to="/login" className="text-gray-400 hover:text-white transition-colors">Masuk Akun</Link></li>
+              <li><Link to="/register" className="text-gray-400 hover:text-white transition-colors">Daftar Akun Baru</Link></li>
+              <li><Link to="/dashboard" className="text-gray-400 hover:text-white transition-colors">Dashboard Customer</Link></li>
             </ul>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-gray-900/80 pt-6 text-center text-gray-500">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-gray-900/80 pt-6 text-center text-xs font-medium text-gray-500">
           &copy; {new Date().getFullYear()} {brand} &mdash; Official Authorized Domain Registrar Portal. All rights reserved.
         </div>
       </footer>
