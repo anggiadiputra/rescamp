@@ -68,6 +68,13 @@ const FEATURES_ITEMS = [
     desc: "Dapatkan bukti transaksi faktur lunas berformat resmi yang dapat diunduh dan dicetak kapan saja untuk kebutuhan pembukuan.",
     icon: FileText,
   },
+  {
+    title: "Dukungan Ekstensi Indonesia & Global",
+    desc: "Menyediakan puluhan ekstensi populer internasional (.com, .net, .org, .xyz) hingga ccTLD resmi Indonesia (.id, .co.id, .my.id, .web.id).",
+    icon: Award,
+  },
+];
+
 function fmtPrice(amount: any, currency: string = "IDR"): string {
   if (!amount) return "-";
   const num = Number(amount);
