@@ -462,14 +462,8 @@ export default function LandingPage() {
       })()}
 
       {/* CTA Section */}
-      <section className="py-24 bg-gray-950 text-white text-center relative overflow-hidden">
-        {/* Subtle Ambient Brand Glow */}
-        <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] opacity-20 blur-3xl rounded-full pointer-events-none"
-          style={{ backgroundColor: settings.primary_color || "#06b6d4" }}
-        />
-
-        <div className="max-w-4xl mx-auto px-4 relative z-10 space-y-6">
+      <section className="py-20 bg-gray-950 text-white text-center">
+        <div className="max-w-4xl mx-auto px-4 space-y-6">
           <h2 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
             Siap Mengamankan Nama Domain Terbaik Anda?
           </h2>
@@ -481,13 +475,13 @@ export default function LandingPage() {
             <Link
               to="/register"
               style={{ backgroundColor: settings.primary_color || "#000000" }}
-              className="w-full sm:w-auto px-8 py-3.5 text-white hover:opacity-90 font-bold text-sm rounded-xl transition-all shadow-lg hover:shadow-xl cursor-pointer active:scale-98"
+              className="w-full sm:w-auto px-8 py-3.5 text-white hover:opacity-90 font-bold text-sm rounded-xl transition-all shadow-md cursor-pointer active:scale-98"
             >
               Daftar Akun Gratis
             </Link>
             <Link
               to="/domains/register"
-              className="w-full sm:w-auto px-8 py-3.5 bg-white/10 hover:bg-white/20 text-white font-bold text-sm rounded-xl border border-white/20 backdrop-blur-md transition-all flex items-center justify-center gap-2 active:scale-98"
+              className="w-full sm:w-auto px-8 py-3.5 bg-gray-900 hover:bg-gray-800 text-white font-bold text-sm rounded-xl border border-gray-800 transition-all flex items-center justify-center gap-2 active:scale-98"
             >
               Cek Ketersediaan Domain <ArrowRight className="w-4 h-4" />
             </Link>
