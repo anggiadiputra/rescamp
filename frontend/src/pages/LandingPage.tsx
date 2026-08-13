@@ -388,7 +388,7 @@ export default function LandingPage() {
 
       {/* Price Table Showcase */}
       {(() => {
-        const priceEntries = Object.keys(livePrices).length > 0
+        const priceEntries: [string, any][] = (Object.keys(livePrices).length > 0
           ? Object.entries(livePrices).filter(([k]) => k !== "addons")
           : [
               ["com", { price_new: 180000, price_renew: 209000, price_transfer: 180000 }],
@@ -398,7 +398,7 @@ export default function LandingPage() {
               ["biz.id", { price_new: 5000, price_renew: 15000, price_transfer: 15000 }],
               ["xyz", { price_new: 68890, price_renew: 194350, price_transfer: 194350 }],
               ["co.id", { price_new: 310500, price_renew: 310500, price_transfer: 310500 }],
-            ];
+            ]) as [string, any][];
 
         return (
           <section className="py-20 bg-gray-50/80 border-y border-gray-100">
