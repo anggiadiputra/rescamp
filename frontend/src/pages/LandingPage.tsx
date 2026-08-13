@@ -462,17 +462,33 @@ export default function LandingPage() {
       })()}
 
       {/* CTA Section */}
-      <section className="py-20 bg-black text-white text-center relative overflow-hidden">
-        <div className="max-w-4xl mx-auto px-4 relative z-10">
-          <h2 className="text-3xl sm:text-5xl font-black tracking-tight">Siap Mengamankan Nama Domain Terbaik Anda?</h2>
-          <p className="mt-4 text-base sm:text-lg text-gray-300">
-            Dapatkan nama domain impian Anda hari ini dengan kemudahan aktivasi instan & dukungan 24/7.
+      <section className="py-24 bg-gray-950 text-white text-center relative overflow-hidden">
+        {/* Subtle Ambient Brand Glow */}
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] opacity-20 blur-3xl rounded-full pointer-events-none"
+          style={{ backgroundColor: settings.primary_color || "#06b6d4" }}
+        />
+
+        <div className="max-w-4xl mx-auto px-4 relative z-10 space-y-6">
+          <h2 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
+            Siap Mengamankan Nama Domain Terbaik Anda?
+          </h2>
+          <p className="max-w-2xl mx-auto text-base sm:text-lg text-gray-300 leading-relaxed">
+            Dapatkan nama domain impian Anda hari ini dengan kemudahan aktivasi instan &amp; dukungan 24/7.
           </p>
-          <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
-            <Link to="/register" className="px-8 py-3.5 bg-white text-black hover:bg-gray-100 font-black text-sm rounded-xl transition-all shadow-lg">
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link
+              to="/register"
+              style={{ backgroundColor: settings.primary_color || "#000000" }}
+              className="w-full sm:w-auto px-8 py-3.5 text-white hover:opacity-90 font-bold text-sm rounded-xl transition-all shadow-lg hover:shadow-xl cursor-pointer active:scale-98"
+            >
               Daftar Akun Gratis
             </Link>
-            <Link to="/domains/register" className="px-8 py-3.5 bg-gray-900 hover:bg-gray-800 text-white font-bold text-sm rounded-xl border border-gray-700 transition-all flex items-center justify-center gap-2">
+            <Link
+              to="/domains/register"
+              className="w-full sm:w-auto px-8 py-3.5 bg-white/10 hover:bg-white/20 text-white font-bold text-sm rounded-xl border border-white/20 backdrop-blur-md transition-all flex items-center justify-center gap-2 active:scale-98"
+            >
               Cek Ketersediaan Domain <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
@@ -484,39 +500,45 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           <div>
             <div className="flex items-center gap-2 text-white font-black text-base mb-3">
-              <Globe className="w-5 h-5 text-blue-500" /> {brand}
+              <div
+                className="w-7 h-7 rounded-lg text-white flex items-center justify-center shrink-0"
+                style={{ backgroundColor: settings.primary_color || "#000000" }}
+              >
+                <Globe className="w-4 h-4 text-white" />
+              </div>
+              {brand}
             </div>
             <p className="text-gray-500 leading-relaxed">
-              Platform pencarian dan pendaftaran nama domain terpercaya dengan harga transparan & proteksi privasi lengkap.
+              Platform pencarian dan pendaftaran nama domain terpercaya dengan harga transparan &amp; proteksi privasi lengkap.
             </p>
           </div>
           <div>
             <p className="font-bold text-white uppercase tracking-wider mb-3">Navigasi</p>
             <ul className="space-y-2">
-              <li><a href="#why-us" className="hover:text-white">Why Us</a></li>
-              <li><a href="#features" className="hover:text-white">Features</a></li>
-              <li><Link to="/prices" className="hover:text-white">Price List</Link></li>
+              <li><a href="#why-us" className="hover:text-white transition-colors">Why Us</a></li>
+              <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
+              <li><Link to="/prices" className="hover:text-white transition-colors">Price List</Link></li>
             </ul>
           </div>
           <div>
             <p className="font-bold text-white uppercase tracking-wider mb-3">Layanan</p>
             <ul className="space-y-2">
-              <li><Link to="/domains/register" className="hover:text-white">Registrasi Domain</Link></li>
-              <li><Link to="/domains/transfer" className="hover:text-white">Transfer Domain</Link></li>
-              <li><Link to="/prices" className="hover:text-white">Harga Domain .ID & Global</Link></li>
+              <li><Link to="/domains/register" className="hover:text-white transition-colors">Registrasi Domain</Link></li>
+              <li><Link to="/domains/transfer" className="hover:text-white transition-colors">Transfer Domain</Link></li>
+              <li><Link to="/prices" className="hover:text-white transition-colors">Harga Domain .ID &amp; Global</Link></li>
             </ul>
           </div>
           <div>
-            <p className="font-bold text-white uppercase tracking-wider mb-3">Akun & Portal</p>
+            <p className="font-bold text-white uppercase tracking-wider mb-3">Akun &amp; Portal</p>
             <ul className="space-y-2">
-              <li><Link to="/login" className="hover:text-white">Masuk Akun</Link></li>
-              <li><Link to="/register" className="hover:text-white">Daftar Akun Baru</Link></li>
-              <li><Link to="/dashboard" className="hover:text-white">Dashboard Customer</Link></li>
+              <li><Link to="/login" className="hover:text-white transition-colors">Masuk Akun</Link></li>
+              <li><Link to="/register" className="hover:text-white transition-colors">Daftar Akun Baru</Link></li>
+              <li><Link to="/dashboard" className="hover:text-white transition-colors">Dashboard Customer</Link></li>
             </ul>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-gray-900 pt-6 text-center text-gray-600">
-          &copy; {new Date().getFullYear()} {brand} — Official Authorized Domain Registrar Portal. All rights reserved.
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-gray-900/80 pt-6 text-center text-gray-500">
+          &copy; {new Date().getFullYear()} {brand} &mdash; Official Authorized Domain Registrar Portal. All rights reserved.
         </div>
       </footer>
 
