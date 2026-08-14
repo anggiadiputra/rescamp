@@ -10,7 +10,7 @@ const envVars = {
   JWT_EXPIRY: process.env.JWT_EXPIRY || "24h",
   DEFAULT_RESELLER_ID: process.env.DEFAULT_RESELLER_ID || "",
   RESELLER_API_KEY: process.env.RESELLER_API_KEY || process.env.LIQUID_API_KEY || "",
-  SUMOPOD_API_KEY: process.env.SUMOPOD_API_KEY || "7eb441b5d404b13bd1ea23784355043543f6426225101e63a0b85ba6f5d72219",
+  SUMOPOD_API_KEY: process.env.SUMOPOD_API_KEY || "",
   SUMOPOD_PAYMENT_URL: process.env.SUMOPOD_PAYMENT_URL || "https://api-pay-sandbox.sumopod.com/api/v1",
   SUMOPOD_WEBHOOK_TOKEN: process.env.SUMOPOD_WEBHOOK_TOKEN || "",
   SUMOPOD_WEBHOOK_SECRET: process.env.SUMOPOD_WEBHOOK_SECRET || "",
@@ -23,6 +23,11 @@ const envVars = {
 
 if (!envVars.JWT_SECRET || envVars.JWT_SECRET.length < 16) {
   throw new Error("JWT_SECRET must be set in .env and at least 16 characters");
+}
+
+// C3: fail fast instead of using a hardcoded/leaked API key
+if (!envVars.SUMOPOD_API_KEY) {
+  throw new Error("SUMOPOD_API_KEY must be set in .env (rotate the previously hardcoded key in the Sumopod dashboard)");
 }
 
 export const env = envVars;

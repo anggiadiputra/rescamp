@@ -191,11 +191,14 @@ export class SumopodClient {
    */
   async verifyWebhookToken(receivedToken: string | undefined): Promise<boolean> {
     const cfg = await getSumopodConfig();
+    // C2: fail closed — if no token is configured, no token is accepted
     if (!cfg.webhookToken) {
-      // If no token is configured (DB nor env), permit in sandbox/development mode
-      return true;
+      return false;
     }
-    return receivedToken === cfg.webhookToken;
+    const a = Buffer.from(receivedToken || "");
+    const b = Buffer.from(cfg.webhookToken);
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
   }
 }
 

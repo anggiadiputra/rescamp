@@ -6,7 +6,14 @@
  * for production, use unique salt per encryption and store alongside ciphertext
  */
 
-const ENC_KEY = process.env.ENCRYPTION_KEY || "change-this-in-production-min-32-chars!!";
+// C3: fail fast — no fallback key. Without a strong ENCRYPTION_KEY every
+// apiKeyEncrypted/codeEncrypted value in the DB would be decryptable by anyone.
+// Rotation: run scripts/reencrypt-secrets.ts with OLD_ENCRYPTION_KEY set to the
+// previous key before switching ENCRYPTION_KEY.
+const ENC_KEY = process.env.ENCRYPTION_KEY || "";
+if (!ENC_KEY || ENC_KEY.length < 32) {
+  throw new Error("ENCRYPTION_KEY must be set in .env and at least 32 characters (rotate keys via scripts/reencrypt-secrets.ts)");
+}
 const SALT = new TextEncoder().encode("resellercamp-salt-v1");
 const IV_LENGTH = 12; // 96 bits for GCM
 
