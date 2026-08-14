@@ -4,17 +4,7 @@ import * as h from "./domains.handler";
 import { authGuard, resellerGuard } from "../../middleware/auth";
 import { dnsRoutes } from "../dns/dns.route";
 import { forwardingRoutes } from "../forwarding/forwarding.route";
-import { domainCheckRateLimiter, getClientIP } from "../../lib/rate-limit";
-import { AppError } from "../../lib/error";
-
-function rateLimit(limiter: ReturnType<typeof import("../../lib/rate-limit").createRateLimiter>, message: string = "Terlalu banyak permintaan. Silakan coba lagi nanti.") {
-  return ({ request }: { request: Request }) => {
-    const ip = getClientIP(request);
-    if (!limiter.isAllowed(ip)) {
-      throw new AppError(message, 429);
-    }
-  };
-}
+import { domainCheckRateLimiter, rateLimit } from "../../lib/rate-limit";
 
 export const domainRoutes = new Elysia({ prefix: "/domains" })
   .get("/availability", h.checkAvailability as any, { beforeHandle: rateLimit(domainCheckRateLimiter, "Terlalu banyak permintaan cek domain."), detail: { tags: ["Domains"], summary: "Check availability" } })

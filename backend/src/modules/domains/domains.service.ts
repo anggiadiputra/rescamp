@@ -4,7 +4,6 @@ import { eq, and, like, inArray, or, sql } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { resolveResellerCreds } from "../../lib/reseller-creds";
-import { sanitizeDomain, sanitizeNameserver } from "../../lib/sanitize";
 
 // ponytail: helper used by mutators below. Single source of truth for the
 // "domain-suspended → reject any user config" rule. upgrade path: when we add
@@ -721,6 +720,20 @@ export async function getDomain(userParam: any, lookup: string | number) {
   }
   if (!liquidItem) {
     throw new AppError("Domain not found", 404);
+  }
+
+  // H11: ownership check on the live-only fallback — a customer must only reach
+  // domains belonging to their own Liquid customer id (resellers see all their own).
+  if (userRole === "customer") {
+    const custs = await db.select({ id: customers.id, liquidCustomerId: customers.liquidCustomerId }).from(customers)
+      .where(or(eq(customers.userId, userId), eq(customers.email, user.email || "")));
+    const liquidCustId = String(liquidItem.customer_id || liquidItem.customerid || liquidItem.customerId || "").trim();
+    const owned = liquidCustId && custs.some((c) => c.liquidCustomerId && String(c.liquidCustomerId) === liquidCustId);
+    // ponytail: fail closed when the API response lacks customer_id; add field
+    // mapping here if a Liquid domain response shape without customer_id appears.
+    if (!owned) {
+      throw new AppError("Domain not found", 404);
+    }
   }
 
   const statusMap: Record<string, string> = {
