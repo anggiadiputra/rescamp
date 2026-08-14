@@ -2,6 +2,7 @@ import { db } from "../../db";
 import { appSettings, users } from "../../db/schema";
 import { eq, sql } from "drizzle-orm";
 import { env } from "../../config/env";
+import { AppError } from "../../lib/error";
 
 export interface SettingsData {
   // Brand & SEO
@@ -188,10 +189,39 @@ export async function getSystemSettings(): Promise<Record<string, string>> {
   }
 }
 
+// H16: SSRF guard — URLs in settings must be https and point at known providers.
+// Prevents a (compromised) reseller from steering the app's outgoing requests
+// (which carry real API keys/tokens) to an attacker host.
+const URL_FIELD_ALLOWED_HOSTS: Record<string, string[]> = {
+  kirisan_api_url: ["api.kirisan.com"],
+  fonnte_api_url: ["api.fonnte.com"],
+  turnstile_verify_url: ["challenges.cloudflare.com"],
+  sumopod_base_url: ["api-pay.sumopod.com", "api-pay-sandbox.sumopod.com"],
+};
+
+function validateSettingUrl(key: string, value: string) {
+  if (!key.endsWith("_url")) return; // non-URL fields unchecked
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new AppError(`URL tidak valid untuk pengaturan "${key}"`, 400);
+  }
+  if (parsed.protocol !== "https:") {
+    throw new AppError(`Pengaturan "${key}" harus menggunakan https://`, 400);
+  }
+  const allowed = URL_FIELD_ALLOWED_HOSTS[key];
+  if (allowed && !allowed.includes(parsed.hostname)) {
+    throw new AppError(`Host "${parsed.hostname}" tidak diizinkan untuk pengaturan "${key}"`, 400);
+  }
+}
+
 export async function updateSystemSettings(data: Record<string, any>): Promise<Record<string, string>> {
   await ensureSettingsTableExists();
   for (const [key, value] of Object.entries(data)) {
     const stringVal = typeof value === "boolean" ? (value ? "true" : "false") : String(value ?? "");
+
+    validateSettingUrl(key, stringVal);
 
     const [existing] = await db.select().from(appSettings).where(eq(appSettings.key, key));
 
