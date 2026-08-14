@@ -270,8 +270,8 @@ export async function listCustomersFromLiquid(
         if (!lc.email || remoteEmails.has(lc.email.toLowerCase())) continue;
         items.unshift({
           id: lc.id as any,
-          liquidCustomerId: lc.liquidCustomerId || null,
-          name: lc.name || lc.email.split("@")[0],
+          liquidCustomerId: lc.liquidCustomerId || "",
+          name: lc.name || (lc.email ? lc.email.split("@")[0] || "" : ""),
           email: lc.email,
           company: lc.company || "",
           address: lc.address || "",
