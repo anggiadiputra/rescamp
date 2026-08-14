@@ -597,17 +597,17 @@ export class LiquidClient {
     const password = data.password || this.generateSecurePassword();
 
     return this.request<any>("POST", "/customers", {
-      name: data.name,
+      name: data.name || "Customer",
       email: data.email,
       password,
-      company: data.company || "",
-      address_line_1: data.address || data.address_line_1 || "",
-      city: data.city || "",
-      state: data.state || "",
-      country_code: (data.country || data.country_code || "ID").slice(0, 2).toUpperCase(),
+      company: data.company || "Personal",
+      address_line_1: data.address || data.address_line_1 || "Indonesia",
+      city: data.city || "Jakarta",
+      state: data.state?.trim() || "Not Applicable",
+      country_code: (data.country || data.country_code || "ID").slice(0, 2).toLowerCase(),
       zipcode: data.zipcode || data.zip || "10110",
       tel_cc_no,
-      tel_no,
+      tel_no: tel_no || "8123456789",
       send_welcome_email: data.send_welcome_email || "true",
       notify: "true",
     });
