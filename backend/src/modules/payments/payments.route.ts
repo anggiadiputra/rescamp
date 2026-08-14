@@ -2,20 +2,10 @@ import { Elysia, t } from "elysia";
 import { sumopodClient } from "../../lib/sumopod";
 import { processWebhookPayload } from "./payments.service";
 import { db } from "../../db";
-import { transactions, domains } from "../../db/schema";
-import { eq, and, or, like } from "drizzle-orm";
+import { transactions, domains, customers } from "../../db/schema";
+import { eq, and, or } from "drizzle-orm";
 import { authGuard } from "../../middleware/auth";
-import { webhookRateLimiter, paymentStatusRateLimiter, getClientIP } from "../../lib/rate-limit";
-import { AppError } from "../../lib/error";
-
-function rateLimit(limiter: ReturnType<typeof import("../../lib/rate-limit").createRateLimiter>, message: string = "Terlalu banyak permintaan. Silakan coba lagi nanti.") {
-  return ({ request }: { request: Request }) => {
-    const ip = getClientIP(request);
-    if (!limiter.isAllowed(ip)) {
-      throw new AppError(message, 429);
-    }
-  };
-}
+import { webhookRateLimiter, paymentStatusRateLimiter, rateLimit } from "../../lib/rate-limit";
 
 export const paymentRoutes = new Elysia({ prefix: "/payments" })
   // Webhook Receiver (Public - called by Sumopod Payment Gateway)
@@ -45,12 +35,11 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
           svixSignature,
           rawBody
         );
-      } else {
-        isSigValid = true; // Fallback if HMAC secret is not configured
       }
+      // C2: fail closed — no signature/token configured means every webhook is rejected
 
       if (!isTokenValid && !isSigValid) {
-        console.warn("[sumopod webhook] Unauthorized webhook attempt headers:", headers);
+        console.warn("[sumopod webhook] Unauthorized webhook attempt (invalid token/signature)");
         set.status = 401;
         return { error: "Invalid webhook token or signature" };
       }
@@ -65,25 +54,21 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
     }
   )
 
-  // Status check for frontend & payment link status polling (Public by orderId)
+  // Status check for frontend & payment link status polling
   .get(
     "/status/:orderId",
     async ({ params, store, set }) => {
       const userId = Number((store as any)?.user?.sub || 0);
+      const role = String((store as any)?.user?.role || "");
       const { orderId } = params;
 
         const cleanOrderId = String(orderId || "").trim();
-        const numericMatch = cleanOrderId.replace(/^INV-0*/i, "").replace(/^0+/, "");
-        const parsedNumericId = numericMatch ? parseInt(numericMatch, 10) : NaN;
 
         const conditions: any[] = [
           eq(transactions.orderId, cleanOrderId),
           eq(transactions.paymentId, cleanOrderId),
           eq(transactions.liquidTransactionId, cleanOrderId),
         ];
-        if (!isNaN(parsedNumericId)) {
-          conditions.push(eq(transactions.id, parsedNumericId));
-        }
 
         // Direct DB lookup for the specific transaction
         const foundRows = await db
@@ -94,23 +79,7 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
 
         let tx = foundRows[0] || null;
 
-        // Fallback A: SQL LIKE search on description/metadata — works even if transaction
-        // was saved under a different userId (e.g. customer's userId, not reseller's userId)
-        if (!tx) {
-          const likeRows = await db
-            .select()
-            .from(transactions)
-            .where(
-              or(
-                like(transactions.description, `%${cleanOrderId}%`),
-                like(transactions.metadata, `%${cleanOrderId}%`),
-              )
-            )
-            .limit(1);
-          tx = likeRows[0] || null;
-        }
-
-        // Fallback B: in-memory scan of requesting user's own transactions (legacy path)
+        // Fallback: in-memory scan of requesting user's own transactions (legacy path)
         if (!tx) {
           const userTxList = await db
             .select()
@@ -131,6 +100,22 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
         if (!tx) {
           set.status = 404;
           return { error: "Transaction not found" };
+        }
+
+        // H10: ownership check — a user may only read their own transaction.
+        // Resellers may read transactions of their own customers.
+        if (tx.userId !== userId) {
+          let ownedByCustomer = false;
+          if (role === "reseller" && tx.customerId) {
+            const [childCust] = await db.select({ id: customers.id }).from(customers)
+              .where(and(eq(customers.id, tx.customerId), eq(customers.userId, userId)))
+              .limit(1);
+            ownedByCustomer = !!childCust;
+          }
+          if (!ownedByCustomer) {
+            set.status = 404;
+            return { error: "Transaction not found" };
+          }
         }
 
         let metaObj: any = {};
@@ -231,7 +216,7 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
         };
       },
       {
-        beforeHandle: rateLimit(paymentStatusRateLimiter, "Terlalu banyak permintaan status payment."),
+        beforeHandle: [authGuard, rateLimit(paymentStatusRateLimiter, "Terlalu banyak permintaan status payment.")],
         detail: { tags: ["Payments"], summary: "Get order & payment status by order ID" },
       }
     )
