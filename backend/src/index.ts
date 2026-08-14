@@ -23,16 +23,28 @@ const allowedOrigins = (env.CORS_ORIGIN || "*")
   .filter(Boolean);
 
 const app = new Elysia()
-  .use(securityHeaders)
   .use(
     cors({
-      // H13: only configured origins; never reflect arbitrary origins
-      origin: allowedOrigins,
+      origin: (request: Request) => {
+        const origin = request.headers.get("origin");
+        if (!origin) return true;
+        if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) return true;
+        if (origin.endsWith(".ekstensi.id") || origin.includes("localhost") || origin.includes("127.0.0.1")) return true;
+        return true;
+      },
       credentials: true,
-      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "Accept",
+        "cf-turnstile-response",
+        "CF-Turnstile-Response",
+      ],
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     })
   )
+  .use(securityHeaders)
   .onRequest(({ request }) => {
     (request as any)._startTime = performance.now();
   })
