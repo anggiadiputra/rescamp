@@ -2,7 +2,7 @@ import { customers } from "../../db/schema/customers";
 import * as svc from "./domains.service";
 import { db } from "../../db";
 import { users } from "../../db/schema";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { AppError } from "../../lib/error";
 
 async function getUser(ctx: any) {
@@ -267,10 +267,17 @@ export async function listRemote(ctx: any) {
 
     let customerLiquidId: string | null = null;
     if (u.role === "customer") {
+      const cleanEmail = (u.email || "").trim().toLowerCase();
       const [c] = await db
         .select({ liquidCustomerId: customers.liquidCustomerId })
         .from(customers)
-        .where(eq(customers.email, u.email));
+        .where(
+          or(
+            eq(customers.userId, u.id),
+            eq(customers.email, u.email),
+            eq(customers.email, cleanEmail)
+          )
+        );
       customerLiquidId = c?.liquidCustomerId || null;
       if (!customerLiquidId) {
         ctx.set.status = 200;
