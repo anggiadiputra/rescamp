@@ -403,8 +403,8 @@ export default function LandingPage() {
         return (
           <section className="py-20 bg-gray-50/80 border-y border-gray-100">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="mb-8">
-                <h3 className="text-xl sm:text-3xl font-black text-gray-900 tracking-tight">Transparansi Harga Domain</h3>
+              <div className="mb-8 text-center">
+                <h3 className="text-xl sm:text-3xl font-black text-gray-900 tracking-tight">Harga Domain</h3>
                 <p className="text-xs sm:text-sm text-gray-500 mt-1">Daftar harga registrasi, perpanjangan, dan transfer jujur untuk seluruh pengguna.</p>
               </div>
 
