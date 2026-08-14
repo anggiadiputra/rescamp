@@ -179,6 +179,7 @@ export async function register(data: {
           email: data.email,
           company: data.company || "",
           phone: data.phone || "",
+          customer_id: liquidCustomerId || "",
           liquid_customer_id: liquidCustomerId || "",
           purpose: "register_success",
         });
