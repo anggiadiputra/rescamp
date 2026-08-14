@@ -1,6 +1,13 @@
 import { t } from "elysia";
 import { sanitizeInput, sanitizePhone } from "../../lib/sanitize";
 
+// Password policy: min 8 chars, must contain at least one letter and one digit
+export const passwordField = t.String({
+  minLength: 8,
+  pattern: "^(?=.*[A-Za-z])(?=.*\\d).{8,}$",
+  error: "Password minimal 8 karakter dan harus mengandung huruf & angka",
+});
+
 export const sendRegisterOtpSchema = t.Object({
   email: t.String({ 
     format: "email",
@@ -23,13 +30,12 @@ export const registerSchema = t.Object({
     format: "email",
     transform: (v: string) => (v || "").trim().toLowerCase(),
   }),
-  password: t.String({ minLength: 6 }),
+  password: passwordField,
   name: t.String({ 
     minLength: 1,
     transform: (v: string) => sanitizeInput(v),
   }),
   reseller_id: t.Optional(t.String()),
-  api_key: t.Optional(t.String()),
   company: t.Optional(t.String()),
   address: t.Optional(t.String()),
   city: t.Optional(t.String()),
@@ -47,7 +53,7 @@ export const customerRegisterSchema = t.Object({
     format: "email",
     transform: (v: string) => (v || "").trim().toLowerCase(),
   }),
-  password: t.String({ minLength: 6 }),
+  password: passwordField,
   name: t.String({ 
     minLength: 1,
     transform: (v: string) => sanitizeInput(v),
@@ -95,6 +101,12 @@ export const loginSchema = t.Object({
     format: "email",
     transform: (v: string) => (v || "").trim().toLowerCase(),
   }),
+  // Legacy accounts may have shorter passwords; policy is enforced on register/reset only
   password: t.String({ minLength: 6 }),
   cfTurnstileResponse: t.Optional(t.String()),
+});
+
+export const resetPasswordSchema = t.Object({
+  token: t.String({ minLength: 1 }),
+  password: passwordField,
 });

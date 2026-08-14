@@ -7,14 +7,15 @@ import { AppError } from "../../lib/error";
 import { LiquidClient } from "../../lib/liquid";
 import { sendEmail } from "../../lib/email";
 import { env } from "../../config/env";
-import { encryptOtpCode, decryptOtpCode, encryptApiKey, decryptApiKey } from "../../lib/encryption";
+import { encryptOtpCode, decryptOtpCode } from "../../lib/encryption";
 import { resolveResellerCreds, resolveCredsFromUser, invalidateCredsCache } from "../../lib/reseller-creds";
 
 const MYSQL_DUP_ENTRY = 1062;
 
 export async function sendRegisterOtp(email: string) {
   const [existingUser] = await db.select().from(users).where(eq(users.email, email));
-  if (existingUser) throw new AppError("Email sudah terdaftar", 409);
+  // Anti-enumeration: same response whether or not the email is registered; no OTP sent if taken
+  if (existingUser) return { message: "Kode OTP verifikasi pendaftaran telah dikirim ke email Anda" };
 
   const code = generateOtp();
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 menit
@@ -24,7 +25,7 @@ export async function sendRegisterOtp(email: string) {
   );
 
   const encryptedCode = await encryptOtpCode(code);
-  await db.insert(otpCodes).values({ email, code, codeEncrypted: encryptedCode, purpose: "register", expiresAt });
+  await db.insert(otpCodes).values({ email, code: "", codeEncrypted: encryptedCode, purpose: "register", expiresAt });
 
   await sendEmail(email, "register_otp", { otp: code, code, expiry_minutes: 5 });
 
@@ -33,17 +34,17 @@ export async function sendRegisterOtp(email: string) {
 
 export async function register(data: {
   email: string; password: string; name: string; reseller_id: string;
-  api_key?: string;
   company?: string; address?: string; city?: string; state?: string;
   country?: string; zipcode?: string; phone_cc?: string; phone?: string;
   code?: string;
 }) {
   if (data.code) {
     const [record] = await db.select().from(otpCodes).where(
-      and(eq(otpCodes.email, data.email), eq(otpCodes.code, data.code), eq(otpCodes.purpose, "register"), eq(otpCodes.used, false))
+      and(eq(otpCodes.email, data.email), eq(otpCodes.purpose, "register"), eq(otpCodes.used, false))
     );
     if (!record) throw new AppError("Kode OTP verifikasi tidak valid", 401);
     if (new Date() > record.expiresAt) throw new AppError("Kode OTP sudah kadaluarsa", 401);
+    if (!(await otpCodeMatches(record, data.code))) throw new AppError("Kode OTP verifikasi tidak valid", 401);
     // N1: CAS — if a concurrent caller already consumed this code, affectedRows=0 → reject
     const markUsed: any = await db.update(otpCodes).set({ used: true })
       .where(and(eq(otpCodes.id, record.id), eq(otpCodes.used, false)));
@@ -61,53 +62,47 @@ export async function register(data: {
   }
 
   const passwordHash = await hashPassword(data.password);
-  const role = data.api_key ? "reseller" : "customer";
+  // C1: registration always creates a customer account. api_key was removed from
+  // the public schema — it previously granted reseller role to any caller.
+  const role = "customer";
   // For customer: use reseller_id from request, or fallback to DEFAULT_RESELLER_ID from .env
   const resellerId = data.reseller_id || (process.env.DEFAULT_RESELLER_ID || "");
   let parentResellerId: number | null = null;
   let resellerObj: any = null;
-  if (role === "customer") {
-    if (
-      !data.company?.trim() ||
-      !data.address?.trim() ||
-      !data.city?.trim() ||
-      !data.state?.trim() ||
-      !data.country?.trim() ||
-      !data.zipcode?.trim() ||
-      !data.phone?.trim()
-    ) {
-      throw new AppError("Seluruh data profil (Perusahaan, Alamat, Kota, Provinsi, Negara, Kode Pos, Nomor Telepon) wajib diisi dengan benar.", 400);
-    }
-
-    let reseller: any = null;
-    if (resellerId) {
-      [reseller] = await db.select().from(users).where(eq(users.resellerId, resellerId));
-    }
-    // Fallback 1: If not found by resellerId, search for any user with role = 'reseller'
-    if (!reseller) {
-      [reseller] = await db.select().from(users).where(eq(users.role, "reseller"));
-    }
-    // Fallback 2: If still no reseller found in users table, get the first user in the database
-    if (!reseller) {
-      [reseller] = await db.select().from(users).limit(1);
-    }
-
-    if (reseller) {
-      parentResellerId = reseller.id;
-      resellerObj = reseller;
-    }
+  if (
+    !data.company?.trim() ||
+    !data.address?.trim() ||
+    !data.city?.trim() ||
+    !data.state?.trim() ||
+    !data.country?.trim() ||
+    !data.zipcode?.trim() ||
+    !data.phone?.trim()
+  ) {
+    throw new AppError("Seluruh data profil (Perusahaan, Alamat, Kota, Provinsi, Negara, Kode Pos, Nomor Telepon) wajib diisi dengan benar.", 400);
   }
 
+  // H3: reseller_id must resolve to a real reseller account — no arbitrary fallbacks
+  let reseller: any = null;
+  if (resellerId) {
+    [reseller] = await db.select().from(users).where(eq(users.resellerId, resellerId));
+    if (reseller && reseller.role !== "reseller") reseller = null;
+  }
+  if (!reseller) {
+    throw new AppError("Reseller tidak ditemukan. Hubungi penyedia layanan.", 400);
+  }
+  parentResellerId = reseller.id;
+  resellerObj = reseller;
+
   try {
-    const encryptedApiKey = data.api_key ? await encryptApiKey(data.api_key) : null;
+    // apiKey/apiKeyEncrypted no longer written — resellers are provisioned manually
     const result: any = await db.insert(users).values({
       email: data.email,
       passwordHash,
       name: data.name,
       role,
-      resellerId: role === "reseller" ? data.reseller_id : null,
-      apiKey: data.api_key || null, // plaintext (legacy, for backward compatibility)
-      apiKeyEncrypted: encryptedApiKey, // encrypted (new)
+      resellerId: null,
+      apiKey: null,
+      apiKeyEncrypted: null,
       parentResellerId,
     });
     const userId = Number(result[0]?.insertId || result.insertId);
@@ -117,12 +112,8 @@ export async function register(data: {
     // Auto-create LIQUID customer for customer role (so they appear in resellercamp immediately)
     let liquidCustomerId: string | null = null;
     if (role === "customer") {
-      console.log(`[auth.register DEBUG] ===== LIQUID CUSTOMER CREATION START =====`);
-      console.log(`[auth.register DEBUG] email=${data.email}, role=${role}`);
-      console.log(`[auth.register DEBUG] resellerObj present: ${!!resellerObj}, parentResellerId: ${parentResellerId}`);
       try {
         const creds = resellerObj ? await resolveCredsFromUser(resellerObj) : await resolveResellerCreds(parentResellerId || undefined);
-        console.log(`[auth.register DEBUG] Resolved creds: resellerId=${creds.resellerId ? creds.resellerId.substring(0, 6) + "..." : "EMPTY"}, apiKey=${creds.apiKey ? creds.apiKey.substring(0, 6) + "..." : "EMPTY"}`);
         if (creds.resellerId && creds.apiKey) {
           const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
           const createPayload = {
@@ -132,25 +123,19 @@ export async function register(data: {
             country: data.country || "ID", zipcode: data.zipcode || "",
             tel_cc_no: data.phone_cc || "62", phone: data.phone || "",
           };
-          console.log(`[auth.register DEBUG] createCustomer payload:`, JSON.stringify(createPayload));
           const liqCust: any = await liquid.createCustomer(createPayload);
-          console.log(`[auth.register DEBUG] createCustomer raw response:`, JSON.stringify(liqCust));
           const lCustId = String(liqCust?.data?.customer_id || liqCust?.customer_id || liqCust?.id || liqCust?.data?.id || "").trim();
-          console.log(`[auth.register DEBUG] Extracted liquidCustomerId: "${lCustId}"`);
           if (lCustId && lCustId !== "null" && lCustId !== "undefined") {
             liquidCustomerId = lCustId;
-            console.log(`[auth.register DEBUG] ✅ Successfully created LIQUID customer ${lCustId} for ${data.email}`);
           } else {
-            console.warn(`[auth.register DEBUG] ⚠️ createCustomer returned OK but no valid customer_id extracted`);
+            console.warn("[auth.register] createCustomer returned OK but no valid customer_id extracted");
           }
         } else {
-          console.warn(`[auth.register DEBUG] ⚠️ SKIPPED: No valid reseller credentials found (resellerId or apiKey is empty)`);
+          console.warn("[auth.register] Skipped LIQUID customer auto-create: no reseller credentials configured");
         }
       } catch (e: any) {
-        console.error(`[auth.register DEBUG] ❌ LIQUID customer auto-create FAILED:`, e?.message || e);
-        console.error(`[auth.register DEBUG] ❌ Full error:`, e);
+        console.error("[auth.register] LIQUID customer auto-create failed:", e?.message || e);
       }
-      console.log(`[auth.register DEBUG] ===== LIQUID CUSTOMER CREATION END (liquidCustomerId=${liquidCustomerId}) =====`);
     }
 
     // Always insert local customer record for customers
@@ -482,15 +467,29 @@ function generateResetToken(): string {
   return token;
 }
 
+// H7: OTPs are stored encrypted only; this helper decrypts-and-compares with a
+// legacy fallback for rows written before encryption was enforced.
+async function otpCodeMatches(record: any, input: string): Promise<boolean> {
+  if (record.codeEncrypted) {
+    try {
+      return (await decryptOtpCode(record.codeEncrypted)) === input.trim();
+    } catch {
+      return false;
+    }
+  }
+  return record.code === input.trim();
+}
+
 export async function sendLoginOtp(email: string, password: string) {
   // N4: never auto-create a user from a customer record — that path was an
   // account takeover (attacker supplied password became the user's password).
   // User must register via /auth/register first; if email is only in `customers`
   // (legacy data, no users row), reject and direct them to register.
   const [user] = await db.select().from(users).where(eq(users.email, email));
-  if (!user) throw new AppError("Email tidak ditemukan. Silakan daftar terlebih dahulu.", 400);
+  // H6 anti-enumeration: identical message whether the email exists or the password is wrong
+  if (!user) throw new AppError("Email atau password salah", 401);
   const valid = await verifyPassword(password, user.passwordHash);
-  if (!valid) throw new AppError("Password salah", 401);
+  if (!valid) throw new AppError("Email atau password salah", 401);
 
   const code = generateOtp();
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 menit
@@ -501,7 +500,7 @@ export async function sendLoginOtp(email: string, password: string) {
   );
 
   const encryptedCode = await encryptOtpCode(code);
-  await db.insert(otpCodes).values({ email, code, codeEncrypted: encryptedCode, purpose: "login", expiresAt });
+  await db.insert(otpCodes).values({ email, code: "", codeEncrypted: encryptedCode, purpose: "login", expiresAt });
 
   await sendEmail(email, "login_otp", { otp: code, code, expiry_minutes: 5 });
 
@@ -511,20 +510,15 @@ export async function sendLoginOtp(email: string, password: string) {
 export async function verifyLoginOtp(email: string, code: string) {
   const cleanEmail = (email || "").trim();
   const cleanCode = (code || "").trim();
-  
-  // Try encrypted first, fallback to plaintext for backward compatibility
-  let [record] = await db.select().from(otpCodes).where(
-    and(eq(otpCodes.email, cleanEmail), eq(otpCodes.codeEncrypted, await encryptOtpCode(cleanCode)), eq(otpCodes.purpose, "login"), eq(otpCodes.used, false))
+  if (!cleanCode) throw new AppError("Kode OTP tidak valid atau sudah digunakan", 401);
+
+  const [record] = await db.select().from(otpCodes).where(
+    and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "login"), eq(otpCodes.used, false))
   );
-  
-  // Fallback to plaintext code comparison for legacy OTPs
-  if (!record) {
-    [record] = await db.select().from(otpCodes).where(
-      and(eq(otpCodes.email, cleanEmail), eq(otpCodes.code, cleanCode), eq(otpCodes.purpose, "login"), eq(otpCodes.used, false))
-    );
+
+  if (!record || !(await otpCodeMatches(record, cleanCode))) {
+    throw new AppError("Kode OTP tidak valid atau sudah digunakan", 401);
   }
-  
-  if (!record) throw new AppError("Kode OTP tidak valid atau sudah digunakan", 401);
   if (new Date() > record.expiresAt) throw new AppError("Kode OTP sudah kadaluarsa. Silakan minta kode baru.", 401);
 
   // N1: CAS — concurrent caller cannot consume the same code twice
@@ -547,7 +541,10 @@ export async function verifyLoginOtp(email: string, code: string) {
 export async function forgotPassword(email: string) {
   const cleanEmail = (email || "").trim();
   const [user] = await db.select().from(users).where(eq(users.email, cleanEmail));
-  if (!user) throw new AppError("Email tidak terdaftar dalam sistem", 404);
+  // H6 anti-enumeration: same response whether or not the email exists; nothing sent if not
+  if (!user) {
+    return { message: "Link & Kode OTP reset password telah berhasil dikirim" };
+  }
 
   const token = generateResetToken();
   const otpCode = generateOtp();
@@ -561,11 +558,14 @@ export async function forgotPassword(email: string) {
   // Insert both token and 6-digit OTP code so user can reset via link OR OTP code
   const encryptedToken = await encryptOtpCode(token);
   const encryptedOtpCode = await encryptOtpCode(otpCode);
-  await db.insert(otpCodes).values({ email: cleanEmail, code: token, codeEncrypted: encryptedToken, purpose: "reset", expiresAt });
-  await db.insert(otpCodes).values({ email: cleanEmail, code: otpCode, codeEncrypted: encryptedOtpCode, purpose: "reset", expiresAt });
+  await db.insert(otpCodes).values({ email: cleanEmail, code: "", codeEncrypted: encryptedToken, purpose: "reset", expiresAt });
+  await db.insert(otpCodes).values({ email: cleanEmail, code: "", codeEncrypted: encryptedOtpCode, purpose: "reset", expiresAt });
 
-  const frontendUrl = env.CORS_ORIGIN;
-  const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+  // H9: token goes in the URL fragment (#token=...) so it never hits Referer headers,
+  // browser history entries, or reverse-proxy access logs.
+  const origins = (env.CORS_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const frontendUrl = origins[0] && origins[0] !== "*" ? origins[0] : env.APP_URL || "";
+  const resetLink = `${frontendUrl}/reset-password#token=${token}`;
 
   await sendEmail(cleanEmail, "reset_password", {
     token,
@@ -574,9 +574,9 @@ export async function forgotPassword(email: string) {
     reset_link: resetLink,
     reset_url: resetLink,
     link: resetLink,
-    url: resetLink,
     button_url: resetLink,
     action_url: resetLink,
+    url: resetLink,
     expiry_minutes: 30,
   });
 
@@ -589,21 +589,18 @@ export async function resetPassword(tokenOrCode: string, newPassword: string) {
   const clean = (tokenOrCode || "").trim();
   if (!clean) throw new AppError("Token atau Kode OTP reset tidak valid", 400);
 
-  // Try encrypted first, fallback to plaintext for backward compatibility
-  const encryptedValue = await encryptOtpCode(clean);
-  let [record] = await db.select().from(otpCodes).where(
-    and(eq(otpCodes.codeEncrypted, encryptedValue), eq(otpCodes.purpose, "reset"), eq(otpCodes.used, false))
-  );
-  
-  // Fallback to plaintext code comparison for legacy tokens
-  if (!record) {
-    [record] = await db.select().from(otpCodes).where(
-      and(eq(otpCodes.code, clean), eq(otpCodes.purpose, "reset"), eq(otpCodes.used, false))
-    );
+  // H7: find the unused reset record and decrypt-compare (legacy plaintext fallback inside)
+  const rows = await db.select().from(otpCodes).where(
+    and(eq(otpCodes.purpose, "reset"), eq(otpCodes.used, false))
+  ).limit(500);
+
+  let record: any = null;
+  for (const r of rows) {
+    if (await otpCodeMatches(r, clean)) { record = r; break; }
   }
 
   if (!record) throw new AppError("Token atau Kode OTP reset tidak valid atau sudah digunakan", 401);
-  if (new Date() > record.expiresAt) throw new AppError("Token atau Kode OTP reset sudah kadaluarsa", 401);
+  if (new Date() > (record as any).expiresAt) throw new AppError("Token atau Kode OTP reset sudah kadaluarsa", 401);
 
   // Invalidate all reset tokens for this email
   await db.update(otpCodes).set({ used: true }).where(

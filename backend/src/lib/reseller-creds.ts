@@ -15,6 +15,7 @@ import { users } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { decryptApiKey } from "./encryption";
 import { env } from "../config/env";
+import { AppError } from "./error";
 
 export interface ResellerCreds {
   resellerId: string;
@@ -84,38 +85,24 @@ export async function resolveResellerCreds(userId?: number): Promise<ResellerCre
     }
   }
 
-  // Fallback: first reseller in DB
-  if (!resellerId || !apiKey) {
-    const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
-    if (defaultReseller) {
-      if (!resellerId) resellerId = defaultReseller.resellerId || "";
-      if (!apiKey) {
-        if (defaultReseller.apiKeyEncrypted) {
-          try {
-            apiKey = await decryptApiKey(defaultReseller.apiKeyEncrypted);
-          } catch (e) {
-            console.error("[resolveResellerCreds] decryptApiKey fallback failed:", e);
-            apiKey = defaultReseller.apiKey || "";
-          }
-        } else {
-          apiKey = defaultReseller.apiKey || "";
-        }
-      }
-    }
-  }
-
-  // Fallback: app_settings table in database
+  // H2: no fallback to an arbitrary "first reseller" — that would let any
+  // customer operate against an unrelated master account.
+  // Fallback: app_settings table in database (explicit operator configuration)
   if (!resellerId || !apiKey) {
     const dbSettings = await resolveFromAppSettings();
     if (!resellerId) resellerId = dbSettings.resellerId;
     if (!apiKey) apiKey = dbSettings.apiKey;
   }
 
-  // Fallback: process.env / .env variables
+  // Fallback: process.env / .env variables (explicit operator configuration)
   if (!resellerId) resellerId = env.DEFAULT_RESELLER_ID || "";
   if (!apiKey) apiKey = env.RESELLER_API_KEY || "";
 
   const creds: ResellerCreds = { resellerId, apiKey };
+
+  if (!creds.resellerId || !creds.apiKey) {
+    throw new AppError("Kredensial reseller tidak ditemukan. Hubungi penyedia layanan.", 502);
+  }
 
   // Cache the resolved credentials
   if (targetId > 0 && resellerId && apiKey) {
@@ -177,37 +164,23 @@ export async function resolveCredsFromUser(user: {
     }
   }
 
-  // Fallback: first reseller in DB
-  if (!resellerId || !apiKey) {
-    const [defaultReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
-    if (defaultReseller) {
-      if (!resellerId) resellerId = defaultReseller.resellerId || "";
-      if (!apiKey) {
-        if (defaultReseller.apiKeyEncrypted) {
-          try {
-            apiKey = await decryptApiKey(defaultReseller.apiKeyEncrypted);
-          } catch (e) {
-            apiKey = defaultReseller.apiKey || "";
-          }
-        } else {
-          apiKey = defaultReseller.apiKey || "";
-        }
-      }
-    }
-  }
-
-  // Fallback: app_settings table in database
+  // H2: no fallback to an arbitrary "first reseller" in the DB
+  // Fallback: app_settings table in database (explicit operator configuration)
   if (!resellerId || !apiKey) {
     const dbSettings = await resolveFromAppSettings();
     if (!resellerId) resellerId = dbSettings.resellerId;
     if (!apiKey) apiKey = dbSettings.apiKey;
   }
 
-  // Fallback: process.env / .env variables
+  // Fallback: process.env / .env variables (explicit operator configuration)
   if (!resellerId) resellerId = env.DEFAULT_RESELLER_ID || "";
   if (!apiKey) apiKey = env.RESELLER_API_KEY || "";
 
   const creds: ResellerCreds = { resellerId, apiKey };
+
+  if (!creds.resellerId || !creds.apiKey) {
+    throw new AppError("Kredensial reseller tidak ditemukan. Hubungi penyedia layanan.", 502);
+  }
 
   if (resellerId && apiKey) {
     credsCache.set(user.id, { creds, expiresAt: Date.now() + CACHE_TTL_MS });

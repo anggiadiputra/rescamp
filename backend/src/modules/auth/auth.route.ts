@@ -1,21 +1,8 @@
 import { Elysia } from "elysia";
-import { loginSchema, registerSchema, customerRegisterSchema, sendRegisterOtpSchema, sendOtpSchema } from "./auth.schema";
+import { loginSchema, registerSchema, customerRegisterSchema, sendRegisterOtpSchema, sendOtpSchema, resetPasswordSchema } from "./auth.schema";
 import * as h from "./auth.handler";
 import { authGuard } from "../../middleware/auth";
-import { otpRateLimiter, authRateLimiter, getClientIP } from "../../lib/rate-limit";
-import { AppError } from "../../lib/error";
-
-/**
- * Rate limit middleware factory
- */
-function rateLimit(limiter: ReturnType<typeof import("../../lib/rate-limit").createRateLimiter>, message: string = "Terlalu banyak permintaan. Silakan coba lagi nanti.") {
-  return ({ request }: { request: Request }) => {
-    const ip = getClientIP(request);
-    if (!limiter.isAllowed(ip)) {
-      throw new AppError(message, 429);
-    }
-  };
-}
+import { otpRateLimiter, authRateLimiter, rateLimit } from "../../lib/rate-limit";
 
 export const authRoutes = new Elysia({ prefix: "/auth" })
   // OTP endpoints - stricter limit (5/minute)
@@ -39,8 +26,12 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
     detail: { tags: ["Auth"], summary: "Send password reset link" },
   })
   .post("/reset-password", h.resetPassword, {
+    body: resetPasswordSchema,
     beforeHandle: rateLimit(otpRateLimiter, "Terlalu banyak permintaan reset password. Silakan coba lagi dalam 1 menit."),
     detail: { tags: ["Auth"], summary: "Reset password with token" },
+  })
+  .post("/logout", h.logout, {
+    detail: { tags: ["Auth"], summary: "Logout and clear session cookie" },
   })
   // Login and register - standard limit (10/minute)
   .post("/login", h.login, {

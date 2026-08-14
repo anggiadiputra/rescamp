@@ -23,13 +23,9 @@ export async function sendEmail(
   type: "login_otp" | "register_otp" | "reset_password" | "register_success",
   variables: Record<string, any>
 ) {
-  // Always log email dispatch details to console for development visibility
-  console.log(`\n=================================================`);
+  // H1: never log OTP codes or reset links — they are live credentials.
+  // Log only destination + type.
   console.log(`[EMAIL DISPATCH] Type: ${type} | To: ${to}`);
-  if (variables.reset_link) console.log(`🔗 RESET LINK: ${variables.reset_link}`);
-  if (variables.code || variables.otp) console.log(`🔑 OTP CODE  : ${variables.code || variables.otp}`);
-  if (variables.liquid_customer_id) console.log(`👤 CUSTOMER ID: ${variables.liquid_customer_id}`);
-  console.log(`=================================================\n`);
 
   const cfg = await getKirisanConfig();
   if (!cfg.token || !cfg.channelKey) {

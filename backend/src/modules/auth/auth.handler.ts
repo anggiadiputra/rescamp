@@ -4,11 +4,24 @@ import type { JwtPayload } from "../../lib/jwt";
 import { verifyTurnstileToken } from "../../lib/turnstile";
 import { AppError } from "../../lib/error";
 
+// H8: JWT rides in an httpOnly cookie instead of frontend localStorage.
+// Bearer header still accepted for non-browser clients.
+function setAuthCookie(ctx: any, token: string) {
+  const secure = (process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true") ? "; Secure" : "";
+  ctx.set.headers["Set-Cookie"] = `token=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=86400${secure}`;
+}
+
+function clearAuthCookie(ctx: any) {
+  const secure = (process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true") ? "; Secure" : "";
+  ctx.set.headers["Set-Cookie"] = `token=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${secure}`;
+}
+
 export async function register(ctx: any) {
   if (!ctx.body?.code) {
     await verifyTurnstileToken(ctx.body?.cfTurnstileResponse || ctx.headers?.["cf-turnstile-response"]);
   }
   const result = await svc.register(ctx.body);
+  setAuthCookie(ctx, result.token);
   ctx.set.status = 201;
   return { data: result };
 }
@@ -18,6 +31,7 @@ export async function registerCustomer(ctx: any) {
     await verifyTurnstileToken(ctx.body?.cfTurnstileResponse || ctx.headers?.["cf-turnstile-response"]);
   }
   const result = await svc.register({ ...ctx.body, api_key: undefined });
+  setAuthCookie(ctx, result.token);
   ctx.set.status = 201;
   return { data: result };
 }
@@ -25,7 +39,13 @@ export async function registerCustomer(ctx: any) {
 export async function login(ctx: any) {
   await verifyTurnstileToken(ctx.body?.cfTurnstileResponse || ctx.headers?.["cf-turnstile-response"]);
   const result = await svc.login(ctx.body);
+  setAuthCookie(ctx, result.token);
   return { data: result };
+}
+
+export async function logout(ctx: any) {
+  clearAuthCookie(ctx);
+  return { success: true, message: "Logged out" };
 }
 
 export async function me(ctx: any) {
@@ -69,6 +89,7 @@ export async function sendRegisterOtp(ctx: any) {
 export async function verifyOtp(ctx: any) {
   const { email, code } = ctx.body;
   const result = await svc.verifyLoginOtp(email, code);
+  setAuthCookie(ctx, result.token);
   return { data: result };
 }
 
