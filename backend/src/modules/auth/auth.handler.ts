@@ -5,14 +5,18 @@ import { verifyTurnstileToken } from "../../lib/turnstile";
 import { AppError } from "../../lib/error";
 
 export async function register(ctx: any) {
-  await verifyTurnstileToken(ctx.body?.cfTurnstileResponse || ctx.headers?.["cf-turnstile-response"]);
+  if (!ctx.body?.code) {
+    await verifyTurnstileToken(ctx.body?.cfTurnstileResponse || ctx.headers?.["cf-turnstile-response"]);
+  }
   const result = await svc.register(ctx.body);
   ctx.set.status = 201;
   return { data: result };
 }
 
 export async function registerCustomer(ctx: any) {
-  await verifyTurnstileToken(ctx.body?.cfTurnstileResponse || ctx.headers?.["cf-turnstile-response"]);
+  if (!ctx.body?.code) {
+    await verifyTurnstileToken(ctx.body?.cfTurnstileResponse || ctx.headers?.["cf-turnstile-response"]);
+  }
   const result = await svc.register({ ...ctx.body, api_key: undefined });
   ctx.set.status = 201;
   return { data: result };
