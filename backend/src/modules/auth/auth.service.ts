@@ -1,6 +1,6 @@
 import { db } from "../../db";
 import { users, customers, otpCodes, domains } from "../../db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../../lib/hash";
 import { signToken } from "../../lib/jwt";
 import { AppError } from "../../lib/error";
@@ -13,7 +13,8 @@ import { resolveResellerCreds, resolveCredsFromUser, invalidateCredsCache } from
 const MYSQL_DUP_ENTRY = 1062;
 
 export async function sendRegisterOtp(email: string) {
-  const [existingUser] = await db.select().from(users).where(eq(users.email, email));
+  const cleanEmail = (email || "").trim().toLowerCase();
+  const [existingUser] = await db.select().from(users).where(eq(users.email, cleanEmail));
   // Anti-enumeration: same response whether or not the email is registered; no OTP sent if taken
   if (existingUser) return { message: "Kode OTP verifikasi pendaftaran telah dikirim ke email Anda" };
 
@@ -21,13 +22,13 @@ export async function sendRegisterOtp(email: string) {
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 menit
 
   await db.update(otpCodes).set({ used: true }).where(
-    and(eq(otpCodes.email, email), eq(otpCodes.purpose, "register"), eq(otpCodes.used, false))
+    and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "register"), eq(otpCodes.used, false))
   );
 
   const encryptedCode = await encryptOtpCode(code);
-  await db.insert(otpCodes).values({ email, code: "", codeEncrypted: encryptedCode, purpose: "register", expiresAt });
+  await db.insert(otpCodes).values({ email: cleanEmail, code: "", codeEncrypted: encryptedCode, purpose: "register", expiresAt });
 
-  await sendEmail(email, "register_otp", { otp: code, code, expiry_minutes: 5 });
+  await sendEmail(cleanEmail, "register_otp", { otp: code, code, expiry_minutes: 5 });
 
   return { message: "Kode OTP verifikasi pendaftaran telah dikirim ke email Anda" };
 }
@@ -38,10 +39,11 @@ export async function register(data: {
   country?: string; zipcode?: string; phone_cc?: string; phone?: string;
   code?: string;
 }) {
+  const cleanEmail = (data.email || "").trim().toLowerCase();
   if (data.code) {
     const [record] = await db.select().from(otpCodes).where(
-      and(eq(otpCodes.email, data.email), eq(otpCodes.purpose, "register"), eq(otpCodes.used, false))
-    );
+      and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "register"), eq(otpCodes.used, false))
+    ).orderBy(desc(otpCodes.id)).limit(1);
     if (!record) throw new AppError("Kode OTP verifikasi tidak valid", 401);
     if (new Date() > record.expiresAt) throw new AppError("Kode OTP sudah kadaluarsa", 401);
     if (!(await otpCodeMatches(record, data.code))) throw new AppError("Kode OTP verifikasi tidak valid", 401);
@@ -54,8 +56,8 @@ export async function register(data: {
   } else {
     // If an OTP was issued for this email, require code verification
     const [record] = await db.select().from(otpCodes).where(
-      and(eq(otpCodes.email, data.email), eq(otpCodes.purpose, "register"), eq(otpCodes.used, false))
-    );
+      and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "register"), eq(otpCodes.used, false))
+    ).orderBy(desc(otpCodes.id)).limit(1);
     if (record && new Date() <= record.expiresAt) {
       throw new AppError("Kode OTP verifikasi diperlukan. Silakan periksa email Anda.", 400);
     }
@@ -481,11 +483,12 @@ async function otpCodeMatches(record: any, input: string): Promise<boolean> {
 }
 
 export async function sendLoginOtp(email: string, password: string) {
+  const cleanEmail = (email || "").trim().toLowerCase();
   // N4: never auto-create a user from a customer record — that path was an
   // account takeover (attacker supplied password became the user's password).
   // User must register via /auth/register first; if email is only in `customers`
   // (legacy data, no users row), reject and direct them to register.
-  const [user] = await db.select().from(users).where(eq(users.email, email));
+  const [user] = await db.select().from(users).where(eq(users.email, cleanEmail));
   // H6 anti-enumeration: identical message whether the email exists or the password is wrong
   if (!user) throw new AppError("Email atau password salah", 401);
   const valid = await verifyPassword(password, user.passwordHash);
@@ -496,25 +499,25 @@ export async function sendLoginOtp(email: string, password: string) {
 
   // Invalidate old OTPs
   await db.update(otpCodes).set({ used: true }).where(
-    and(eq(otpCodes.email, email), eq(otpCodes.purpose, "login"), eq(otpCodes.used, false))
+    and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "login"), eq(otpCodes.used, false))
   );
 
   const encryptedCode = await encryptOtpCode(code);
-  await db.insert(otpCodes).values({ email, code: "", codeEncrypted: encryptedCode, purpose: "login", expiresAt });
+  await db.insert(otpCodes).values({ email: cleanEmail, code: "", codeEncrypted: encryptedCode, purpose: "login", expiresAt });
 
-  await sendEmail(email, "login_otp", { otp: code, code, expiry_minutes: 5 });
+  await sendEmail(cleanEmail, "login_otp", { otp: code, code, expiry_minutes: 5 });
 
   return { message: "Kode OTP telah dikirim ke email Anda" };
 }
 
 export async function verifyLoginOtp(email: string, code: string) {
-  const cleanEmail = (email || "").trim();
+  const cleanEmail = (email || "").trim().toLowerCase();
   const cleanCode = (code || "").trim();
   if (!cleanCode) throw new AppError("Kode OTP tidak valid atau sudah digunakan", 401);
 
   const [record] = await db.select().from(otpCodes).where(
     and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "login"), eq(otpCodes.used, false))
-  );
+  ).orderBy(desc(otpCodes.id)).limit(1);
 
   if (!record || !(await otpCodeMatches(record, cleanCode))) {
     throw new AppError("Kode OTP tidak valid atau sudah digunakan", 401);

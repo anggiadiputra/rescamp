@@ -35,7 +35,8 @@ export default function LoginPage() {
   async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault();
     if (loading || resendCooldown > 0) return;
-    if ((settings.turnstile_enabled === true || settings.turnstile_enabled === "true") && !cfTurnstileToken) {
+    const isTurnstileRequired = settings.turnstile_enabled === true || settings.turnstile_enabled === "true";
+    if (isTurnstileRequired && !cfTurnstileToken) {
       setError("Silakan selesaikan verifikasi Turnstile terlebih dahulu.");
       return;
     }
@@ -43,9 +44,11 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await api.post("/auth/send-otp", { email, password, cfTurnstileResponse: cfTurnstileToken });
+      setCfTurnstileToken(""); // Token consumed by Cloudflare
       setStep("otp");
       setResendCooldown(30); // Mulai countdown 30 detik
     } catch (err: any) {
+      setCfTurnstileToken("");
       setError(err.message || "Gagal mengirim OTP");
     }
     setLoading(false);
@@ -67,6 +70,8 @@ export default function LoginPage() {
   }
 
   if (step === "otp") {
+    const isTurnstileRequired = settings.turnstile_enabled === true || settings.turnstile_enabled === "true";
+
     return (
       <div className="max-w-md mx-auto mt-16 px-4">
         <Card>
@@ -103,13 +108,22 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-4 text-center space-y-2">
-            <button onClick={() => { setStep("credentials"); setError(""); }} className="text-xs text-gray-500 hover:text-black font-semibold">
+            <button onClick={() => { setStep("credentials"); setOtp(""); setCfTurnstileToken(""); setError(""); }} className="text-xs text-gray-500 hover:text-black font-semibold">
               ← Kembali
             </button>
             <p className="text-xs text-gray-400">
               Tidak menerima kode?{" "}
               <button
-                onClick={handleSendOtp}
+                onClick={(e) => {
+                  if (isTurnstileRequired) {
+                    setStep("credentials");
+                    setOtp("");
+                    setCfTurnstileToken("");
+                    setError("Silakan lakukan verifikasi Turnstile dan klik Kirim OTP.");
+                  } else {
+                    handleSendOtp(e);
+                  }
+                }}
                 disabled={loading || resendCooldown > 0}
                 className="text-black font-semibold hover:underline disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed"
               >
