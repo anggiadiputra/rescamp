@@ -12,7 +12,7 @@
 
 import { db } from "../db";
 import { users } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { decryptApiKey } from "./encryption";
 import { env } from "../config/env";
 import { AppError } from "./error";
