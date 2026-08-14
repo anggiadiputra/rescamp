@@ -26,7 +26,8 @@ const app = new Elysia()
   .use(securityHeaders)
   .use(
     cors({
-      origin: true,
+      // H13: only configured origins; never reflect arbitrary origins
+      origin: allowedOrigins,
       credentials: true,
       allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -69,7 +70,8 @@ const app = new Elysia()
     set.status = 500;
     const errMsg = error instanceof Error ? error.message : "Internal server error";
     console.error(`[HTTP ERROR] ${method} ${url} 500 (${duration}ms) - ${errMsg}`, error);
-    return { error: errMsg, statusCode: 500 };
+    // H14: generic body to the client; internal details stay in server logs
+    return { error: "Internal server error", statusCode: 500 };
   })
   .get("/", () => ({ message: "Domain Dashboard API", version: "1.0.0" }))
   .group("/api", (app) =>
