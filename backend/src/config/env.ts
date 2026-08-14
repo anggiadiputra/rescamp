@@ -25,9 +25,9 @@ if (!envVars.JWT_SECRET || envVars.JWT_SECRET.length < 16) {
   throw new Error("JWT_SECRET must be set in .env and at least 16 characters");
 }
 
-// C3: fail fast instead of using a hardcoded/leaked API key
+// Warn if SUMOPOD_API_KEY is missing in .env (can still be resolved from app_settings DB)
 if (!envVars.SUMOPOD_API_KEY) {
-  throw new Error("SUMOPOD_API_KEY must be set in .env (rotate the previously hardcoded key in the Sumopod dashboard)");
+  console.warn("[env] SUMOPOD_API_KEY is not set in .env (Sumopod functions will rely on app_settings database configuration)");
 }
 
 export const env = envVars;
