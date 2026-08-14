@@ -17,14 +17,16 @@ if (!ENC_KEY || ENC_KEY.length < 32) {
 const SALT = new TextEncoder().encode("resellercamp-salt-v1");
 const IV_LENGTH = 12; // 96 bits for GCM
 
+const LEGACY_DEFAULT_KEY = "change-this-in-production-min-32-chars!!";
+
 /**
- * Derive a 256-bit AES key from the encryption key string
+ * Derive a 256-bit AES key from any key string
  */
-async function getKey(): Promise<CryptoKey> {
+async function deriveKeyFromString(keyString: string): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(ENC_KEY),
+    encoder.encode(keyString),
     "PBKDF2",
     false,
     ["deriveKey"]
@@ -42,6 +44,13 @@ async function getKey(): Promise<CryptoKey> {
     false,
     ["encrypt", "decrypt"]
   );
+}
+
+/**
+ * Derive a 256-bit AES key from the active ENCRYPTION_KEY
+ */
+async function getKey(): Promise<CryptoKey> {
+  return deriveKeyFromString(ENC_KEY);
 }
 
 /**
@@ -69,7 +78,8 @@ export async function encrypt(plaintext: string): Promise<string> {
 }
 
 /**
- * Decrypt base64-encoded ciphertext to plaintext string
+ * Decrypt base64-encoded ciphertext to plaintext string.
+ * Supports automatic fallback to OLD_ENCRYPTION_KEY or legacy default key if primary key fails.
  */
 export async function decrypt(ciphertextBase64: string): Promise<string> {
   // Decode from base64
@@ -79,15 +89,35 @@ export async function decrypt(ciphertextBase64: string): Promise<string> {
   const iv = combined.slice(0, IV_LENGTH);
   const ciphertext = combined.slice(IV_LENGTH);
 
-  const key = await getKey();
+  // Try primary key first
+  try {
+    const key = await getKey();
+    const plaintext = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv },
+      key,
+      ciphertext
+    );
+    return new TextDecoder().decode(plaintext);
+  } catch (primaryError) {
+    // Attempt fallback to OLD_ENCRYPTION_KEY or legacy default key
+    const fallbackKeys = [
+      process.env.OLD_ENCRYPTION_KEY,
+      LEGACY_DEFAULT_KEY,
+    ].filter((k): k is string => Boolean(k && k !== ENC_KEY));
 
-  const plaintext = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv },
-    key,
-    ciphertext
-  );
-
-  return new TextDecoder().decode(plaintext);
+    for (const fallbackKeyString of fallbackKeys) {
+      try {
+        const fallbackKey = await deriveKeyFromString(fallbackKeyString);
+        const plaintext = await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv },
+          fallbackKey,
+          ciphertext
+        );
+        return new TextDecoder().decode(plaintext);
+      } catch {}
+    }
+    throw primaryError;
+  }
 }
 
 /**
