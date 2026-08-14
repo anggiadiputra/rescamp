@@ -1,8 +1,9 @@
 import { db } from "../db";
 import { appSettings } from "../db/schema";
-import { eq } from "drizzle-orm";
 import { AppError } from "./error";
 import { env } from "../config/env";
+
+let warnedBypass = false;
 
 export async function verifyTurnstileToken(token?: string, remoteip?: string): Promise<boolean> {
   // Retrieve settings
@@ -18,6 +19,11 @@ export async function verifyTurnstileToken(token?: string, remoteip?: string): P
 
   // If Turnstile is not enabled or secret key is missing, bypass verification
   if (!isEnabled || !secretKey) {
+    // H17: warn once — auth endpoints are unprotected against bots in this mode
+    if (!warnedBypass) {
+      warnedBypass = true;
+      console.warn("[security] Turnstile captcha DISABLED — login/register/OTP endpoints have no bot protection. Set turnstile_enabled=true and turnstile_secret_key in Settings.");
+    }
     return true;
   }
 

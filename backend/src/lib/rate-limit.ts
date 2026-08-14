@@ -2,6 +2,7 @@
  * Simple in-memory rate limiter using token bucket algorithm
  * ponytail: in-memory only; for production with multiple instances, use Redis
  */
+import { AppError } from "./error";
 
 interface RateLimitStore {
   tokens: number;
@@ -96,23 +97,58 @@ export const webhookRateLimiter = createRateLimiter({
 });
 
 /**
- * Get client IP from request with reverse proxy header support
+ * Get client IP from request.
+ * H5: headers are trusted ONLY when TRUST_PROXY=true (app behind a proxy that
+ * overwrites them). Otherwise the real socket IP is used via the Bun server.
  */
-export function getClientIP(request: Request): string {
-  const cfIp = request.headers.get("cf-connecting-ip");
-  if (cfIp) return cfIp.trim();
+export function getClientIP(request: Request, server?: any): string {
+  if (process.env.TRUST_PROXY === "true") {
+    const cfIp = request.headers.get("cf-connecting-ip");
+    if (cfIp) return cfIp.trim();
 
-  const realIp = request.headers.get("x-real-ip");
-  if (realIp) return realIp.trim();
+    const realIp = request.headers.get("x-real-ip");
+    if (realIp) return realIp.trim();
 
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0];
-    if (first && first.trim()) {
-      return first.trim();
+    const forwarded = request.headers.get("x-forwarded-for");
+    if (forwarded) {
+      const first = forwarded.split(",")[0];
+      if (first && first.trim()) {
+        return first.trim();
+      }
     }
   }
 
-  return "127.0.0.1";
+  try {
+    const ip = server?.requestIP?.(request)?.address;
+    if (ip) return ip;
+  } catch {}
+
+  return "unknown";
 }
+
+/**
+ * Elysia beforeHandle factory that throws 429 via AppError when the limiter
+ * refuses the client IP. Accepts the message so routes can localize.
+ */
+export function rateLimit(
+  limiter: ReturnType<typeof createRateLimiter>,
+  message: string = "Terlalu banyak permintaan. Silakan coba lagi nanti.",
+) {
+  return ({ request, server }: { request: Request; server: any }) => {
+    const ip = getClientIP(request, server);
+    if (!limiter.isAllowed(ip)) {
+      throw new AppError(message, 429);
+    }
+  };
+}
+
+// Eviction: drop stale buckets so spoofed/unbounded keys can't grow memory forever
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of store) {
+    if (now - record.lastRefill > 30 * 60 * 1000) {
+      store.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
 
