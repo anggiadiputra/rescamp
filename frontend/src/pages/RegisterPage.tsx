@@ -40,6 +40,10 @@ export default function RegisterPage() {
   async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault();
     if (loading) return;
+    if ((settings.turnstile_enabled === true || settings.turnstile_enabled === "true") && !cfTurnstileToken) {
+      setError("Silakan selesaikan verifikasi Turnstile terlebih dahulu.");
+      return;
+    }
     setError(""); setLoading(true);
     try {
       await api.post("/auth/send-register-otp", {
@@ -170,7 +174,11 @@ export default function RegisterPage() {
               <div className="mt-1"><WaBadge phone={`+${form.phone_cc}${form.phone}`} /></div>
             </div>
           </div>
-          <TurnstileWidget onVerify={(token) => setCfTurnstileToken(token)} />
+          <TurnstileWidget 
+            onVerify={(token) => { setCfTurnstileToken(token); setError(""); }}
+            onExpire={() => setCfTurnstileToken("")}
+            onError={() => setCfTurnstileToken("")}
+          />
           <Button type="submit" disabled={loading} className="w-full py-3 font-semibold text-sm">
             {loading ? "Mengirim Kode OTP..." : "Kirim Kode OTP Verifikasi"}
           </Button>

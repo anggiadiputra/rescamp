@@ -31,6 +31,10 @@ export default function LoginPage() {
   async function handleSendOtp(e: React.FormEvent) {
     e.preventDefault();
     if (loading || resendCooldown > 0) return;
+    if ((settings.turnstile_enabled === true || settings.turnstile_enabled === "true") && !cfTurnstileToken) {
+      setError("Silakan selesaikan verifikasi Turnstile terlebih dahulu.");
+      return;
+    }
     setError("");
     setLoading(true);
     try {
@@ -135,7 +139,11 @@ export default function LoginPage() {
             </label>
             <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
           </div>
-          <TurnstileWidget onVerify={(token) => setCfTurnstileToken(token)} />
+          <TurnstileWidget 
+            onVerify={(token) => { setCfTurnstileToken(token); setError(""); }}
+            onExpire={() => setCfTurnstileToken("")}
+            onError={() => setCfTurnstileToken("")}
+          />
           <Button type="submit" disabled={loading} className="w-full">{loading ? "Mengirim OTP..." : "Kirim OTP"}</Button>
         </form>
 
