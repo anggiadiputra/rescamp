@@ -60,6 +60,7 @@ export default function SettingsPage() {
     kirisan_login_otp_template_id: "",
     kirisan_register_otp_template_id: "",
     kirisan_reset_password_template_id: "",
+    kirisan_register_success_template_id: "",
     smtp_host: "smtp-relay.brevo.com",
     smtp_port: "587",
     smtp_user: "",
@@ -433,7 +434,8 @@ export default function SettingsPage() {
                       onClick={() => cancelSectionEdit("email", [
                         "email_provider", "kirisan_api_url", "kirisan_token", "kirisan_channel_key",
                         "kirisan_template_id", "kirisan_login_otp_template_id", "kirisan_register_otp_template_id",
-                        "kirisan_reset_password_template_id", "smtp_host", "smtp_port", "smtp_user", "smtp_pass",
+                        "kirisan_reset_password_template_id", "kirisan_register_success_template_id",
+                        "smtp_host", "smtp_port", "smtp_user", "smtp_pass",
                         "smtp_from_email", "smtp_from_name"
                       ])}
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
@@ -487,7 +489,7 @@ export default function SettingsPage() {
                           {maskSecret(form.kirisan_channel_key)}
                         </p>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 pt-1">
                         <div className="bg-gray-50 p-2 rounded border border-gray-100">
                           <span className="text-[9px] uppercase font-bold text-gray-400 block">Expiry Alert ID</span>
                           <span className="text-xs font-mono font-bold text-gray-800">{form.kirisan_template_id || "—"}</span>
@@ -503,6 +505,10 @@ export default function SettingsPage() {
                         <div className="bg-gray-50 p-2 rounded border border-gray-100">
                           <span className="text-[9px] uppercase font-bold text-gray-400 block">Reset Pass ID</span>
                           <span className="text-xs font-mono font-bold text-gray-800">{form.kirisan_reset_password_template_id || "—"}</span>
+                        </div>
+                        <div className="bg-gray-50 p-2 rounded border border-gray-100">
+                          <span className="text-[9px] uppercase font-bold text-gray-400 block">Reg Success ID</span>
+                          <span className="text-xs font-mono font-bold text-gray-800">{form.kirisan_register_success_template_id || "—"}</span>
                         </div>
                       </div>
                     </div>
@@ -648,7 +654,7 @@ export default function SettingsPage() {
                           />
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                           <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Register OTP Template ID</label>
                           <input
@@ -660,13 +666,23 @@ export default function SettingsPage() {
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Reset Password Template ID</label>
+                          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Reset Pass Template ID</label>
                           <input
                             type="text"
                             value={form.kirisan_reset_password_template_id || ""}
                             onChange={(e) => setForm({ ...form, kirisan_reset_password_template_id: e.target.value })}
                             className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white font-mono text-xs"
                             placeholder="Contoh: 104"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Reg Success Template ID</label>
+                          <input
+                            type="text"
+                            value={form.kirisan_register_success_template_id || ""}
+                            onChange={(e) => setForm({ ...form, kirisan_register_success_template_id: e.target.value })}
+                            className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white font-mono text-xs"
+                            placeholder="Contoh: 105"
                           />
                         </div>
                       </div>
