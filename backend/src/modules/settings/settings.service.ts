@@ -21,6 +21,7 @@ export interface SettingsData {
   kirisan_login_otp_template_id?: string;
   kirisan_register_otp_template_id?: string;
   kirisan_reset_password_template_id?: string;
+  kirisan_register_success_template_id?: string;
   smtp_host?: string;
   smtp_port?: string;
   smtp_user?: string;
@@ -85,6 +86,7 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   kirisan_login_otp_template_id: "",
   kirisan_register_otp_template_id: "",
   kirisan_reset_password_template_id: "",
+  kirisan_register_success_template_id: "",
   smtp_host: "smtp-relay.brevo.com",
   smtp_port: "587",
   smtp_user: "",

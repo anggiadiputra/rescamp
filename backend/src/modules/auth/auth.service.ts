@@ -171,6 +171,22 @@ export async function register(data: {
       } catch (e) { console.error("[auth] customer record insert failed:", e); }
     }
 
+    // Dispatch registration confirmation email via Kirisan API (asynchronous / non-blocking)
+    (async () => {
+      try {
+        await sendEmail(data.email, "register_success", {
+          name: data.name,
+          email: data.email,
+          company: data.company || "",
+          phone: data.phone || "",
+          liquid_customer_id: liquidCustomerId || "",
+          purpose: "register_success",
+        });
+      } catch (e: any) {
+        console.error("[auth] Send registration confirmation email failed:", e?.message || e);
+      }
+    })();
+
     const token = await signToken({ sub: user.id, email: user.email, role: user.role as string });
     return {
       user: { id: user.id, email: user.email, name: user.name, role: user.role, hasProfile },

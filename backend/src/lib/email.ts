@@ -14,15 +14,21 @@ async function getKirisanConfig() {
     loginOtpTemplateId: map.kirisan_login_otp_template_id || map.kirisan_template_id || "",
     registerOtpTemplateId: map.kirisan_register_otp_template_id || map.kirisan_template_id || "",
     resetPasswordTemplateId: map.kirisan_reset_password_template_id || map.kirisan_template_id || "",
+    registerSuccessTemplateId: map.kirisan_register_success_template_id || map.kirisan_template_id || "",
   };
 }
 
-export async function sendEmail(to: string, type: "login_otp" | "register_otp" | "reset_password", variables: Record<string, any>) {
+export async function sendEmail(
+  to: string,
+  type: "login_otp" | "register_otp" | "reset_password" | "register_success",
+  variables: Record<string, any>
+) {
   // Always log email dispatch details to console for development visibility
   console.log(`\n=================================================`);
   console.log(`[EMAIL DISPATCH] Type: ${type} | To: ${to}`);
   if (variables.reset_link) console.log(`🔗 RESET LINK: ${variables.reset_link}`);
   if (variables.code || variables.otp) console.log(`🔑 OTP CODE  : ${variables.code || variables.otp}`);
+  if (variables.liquid_customer_id) console.log(`👤 CUSTOMER ID: ${variables.liquid_customer_id}`);
   console.log(`=================================================\n`);
 
   const cfg = await getKirisanConfig();
@@ -35,6 +41,7 @@ export async function sendEmail(to: string, type: "login_otp" | "register_otp" |
   if (type === "login_otp") templateId = cfg.loginOtpTemplateId;
   else if (type === "register_otp") templateId = cfg.registerOtpTemplateId;
   else if (type === "reset_password") templateId = cfg.resetPasswordTemplateId;
+  else if (type === "register_success") templateId = cfg.registerSuccessTemplateId;
   if (!templateId) {
     console.warn("[email] No template ID for", type);
     return;
