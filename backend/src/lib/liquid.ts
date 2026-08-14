@@ -583,11 +583,11 @@ export class LiquidClient {
    * Uses crypto.getRandomValues() for cryptographic security
    */
   private generateSecurePassword(): string {
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
-    const array = new Uint32Array(16);
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%";
+    const array = new Uint32Array(12);
     crypto.getRandomValues(array);
     let password = "";
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 12; i++) {
       password += chars[(array[i] ?? 0) % chars.length];
     }
     return password;
