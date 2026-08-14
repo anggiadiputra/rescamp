@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { api, setToken, clearToken } from "../lib/api";
+import { api } from "../lib/api";
 
 interface User {
   id: number; email: string; name: string; role?: string; hasProfile?: boolean;
@@ -20,9 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const t = localStorage.getItem("token");
-    if (!t) { setLoading(false); return; }
-    setToken(t);
+    // H8: session is in an httpOnly cookie — just ask /auth/me, no localStorage
     const controller = new AbortController();
     api.get<{ user: User }>("/auth/me", { signal: controller.signal })
       .then((res) => {
@@ -30,7 +28,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch((err: any) => {
         if (err?.name === "AbortError" || err?.message?.includes("aborted")) return;
-        clearToken();
       })
       .finally(() => {
         if (!controller.signal.aborted) {
@@ -42,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(email: string, password: string, cfTurnstileResponse?: string) {
     const res = await api.post<{ user: User; token: string }>("/auth/login", { email, password, cfTurnstileResponse });
-    setToken(res.token); setUser(res.user);
+    setUser(res.user);
   }
 
   async function register(data: { email: string; password: string; name: string; reseller_id?: string; api_key?: string; cfTurnstileResponse?: string; company?: string; address?: string; city?: string; state?: string; country?: string; zipcode?: string; phone_cc?: string; phone?: string; code?: string }) {
@@ -54,12 +51,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       zipcode: data.zipcode, phone_cc: data.phone_cc, phone: data.phone,
       code: data.code,
     };
-    if (data.api_key) body.api_key = data.api_key;
+    // C1: api_key is no longer accepted by the backend — registration always creates a customer
     const res = await api.post<{ user: User; token: string }>("/auth/register", body);
-    setToken(res.token); setUser(res.user);
+    setUser(res.user);
   }
 
-  function logout() { clearToken(); setUser(null); }
+  function logout() {
+    api.post("/auth/logout").catch(() => {});
+    setUser(null);
+  }
 
   return <AuthContext.Provider value={{ user, loading, login, register, logout }}>{children}</AuthContext.Provider>;
 }

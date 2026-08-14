@@ -1,11 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_BASE || (typeof window !== "undefined" && window.location.hostname.includes("dash.ekstensi.id") ? "https://api.ekstensi.id/api" : "/api");
 
-let token = localStorage.getItem("token");
-
 function headers(): Record<string, string> {
-  const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) h["Authorization"] = `Bearer ${token}`;
-  return h;
+  return { "Content-Type": "application/json" };
 }
 
 export interface RequestOptions {
@@ -20,13 +16,14 @@ async function request<T>(method: string, path: string, body?: unknown, options?
     headers: headers(),
     body: body ? JSON.stringify(body) : undefined,
     signal: options?.signal,
+    // H8: session lives in an httpOnly cookie set by the backend — no localStorage token
+    credentials: "include",
   });
 
   const json = await res.json().catch(() => ({}));
 
   if (!res.ok) {
     if (res.status === 401) {
-      clearToken();
       if (!isRedirectingToLogin && window.location.pathname !== "/login" && window.location.pathname !== "/") {
         isRedirectingToLogin = true;
         window.location.href = "/login";
@@ -41,15 +38,10 @@ async function request<T>(method: string, path: string, body?: unknown, options?
   return json.data ?? json;
 }
 
-export function setToken(t: string) {
-  token = t;
-  localStorage.setItem("token", t);
-}
-
-export function clearToken() {
-  token = null;
-  localStorage.removeItem("token");
-}
+// H8: token is no longer stored client-side. Kept as no-op exports so existing
+// call sites don't break; the server cookie is the single source of truth.
+export function setToken(_t: string) {}
+export function clearToken() {}
 
 export const api = {
   get: <T>(path: string, options?: RequestOptions) => request<T>("GET", path, undefined, options),

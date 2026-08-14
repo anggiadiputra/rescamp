@@ -6,7 +6,10 @@ import { Lock, Key, CheckCircle2 } from "lucide-react";
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
-  const initialToken = searchParams.get("token") || searchParams.get("code") || "";
+  // H9: reset token now arrives in the URL fragment (#token=...) so it never
+  // hits Referer headers or proxy access logs. Query params kept for legacy links.
+  const hashToken = new URLSearchParams(window.location.hash.slice(1)).get("token") || "";
+  const initialToken = searchParams.get("token") || searchParams.get("code") || hashToken;
 
   const [inputToken, setInputToken] = useState(initialToken);
   const [password, setPassword] = useState("");
@@ -21,7 +24,7 @@ export default function ResetPasswordPage() {
     const finalToken = (inputToken || "").trim();
     if (!finalToken) { setError("Masukkan Kode Reset atau Token"); return; }
     if (password !== confirm) { setError("Password tidak cocok"); return; }
-    if (password.length < 6) { setError("Password minimal 6 karakter"); return; }
+    if (!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(password)) { setError("Password minimal 8 karakter dan harus mengandung huruf & angka"); return; }
     setError("");
     setLoading(true);
     try {
@@ -67,13 +70,13 @@ export default function ResetPasswordPage() {
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1">
               <Lock className="w-3.5 h-3.5" /> Password Baru
             </label>
-            <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+            <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
           </div>
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1">
               <Lock className="w-3.5 h-3.5" /> Konfirmasi Password
             </label>
-            <PasswordInput value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={6} />
+            <PasswordInput value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} />
           </div>
           <Button type="submit" disabled={loading} className="w-full">
             {loading ? "Memproses..." : "Reset Password"}

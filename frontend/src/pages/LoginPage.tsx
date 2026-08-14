@@ -1,14 +1,18 @@
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Card, Button, InfoBanner, TurnstileWidget, PasswordInput } from "../components/ui";
-import { api, setToken } from "../lib/api";
+import { api } from "../lib/api";
 import { useSettings } from "../contexts/SettingsContext";
 import { Mail, Lock, KeyRound } from "lucide-react";
 
 export default function LoginPage() {
   const { settings } = useSettings();
   const [searchParams] = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/domains";
+  // Open-redirect guard: only allow internal paths
+  const redirect = (() => {
+    const r = searchParams.get("redirect");
+    return r && r.startsWith("/") && !r.startsWith("//") ? r : "/domains";
+  })();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -53,8 +57,8 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      const res = await api.post<{ user: any; token: string }>("/auth/verify-otp", { email, code: otp });
-      setToken(res.token);
+      await api.post<{ user: any; token: string }>("/auth/verify-otp", { email, code: otp });
+      // H8: session cookie is set by the backend response — no client-side token storage
       window.location.href = redirect;
     } catch (err: any) {
       setError(err.message || "OTP tidak valid");

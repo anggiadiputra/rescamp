@@ -7,6 +7,7 @@ import {
 import { api } from "../lib/api";
 import { Modal } from "../components/ui";
 import { useSettings } from "../contexts/SettingsContext";
+import { useAuth } from "../contexts/AuthContext";
 import { Navbar } from "../components/layout/Navbar";
 
 const POPULAR_DOMAINS = [
@@ -86,6 +87,7 @@ function fmtPrice(amount: any, currency: string = "IDR"): string {
 export default function LandingPage() {
   const nav = useNavigate();
   const { settings } = useSettings();
+  const { user } = useAuth();
   const brand = settings.brand_name || "Ekstensi.id";
   const [keyword, setKeyword] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -191,8 +193,8 @@ export default function LandingPage() {
 
   function handleTransferClick(domainName?: string, transferPriceStr?: string) {
     const query = domainName || keyword;
-    const token = localStorage.getItem("token");
-    if (!token) {
+    // H8: auth state lives in the httpOnly session cookie — no localStorage check
+    if (!user) {
       setAuthModal({
         domain: query,
         transferPrice: transferPriceStr || "Rp 209.000",
