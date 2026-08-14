@@ -69,11 +69,12 @@ export async function listRemote(ctx: any) {
 
   let customerLiquidId: string | null = null;
   if (u.role === "customer") {
-    const [c] = await db
-      .select({ liquidCustomerId: customers.liquidCustomerId })
-      .from(customers)
-      .where(eq(customers.email, u.email));
-    customerLiquidId = c?.liquidCustomerId || null;
+    ctx.set.status = 200;
+    return {
+      data: [],
+      meta: { total: 0, page: 1, perPage: 20, reachedEnd: true },
+      source: "liquid",
+    };
   }
 
   const page = Math.max(1, parseInt(String(ctx.query.page || "1"), 10) || 1);

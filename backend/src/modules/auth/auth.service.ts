@@ -115,28 +115,26 @@ export async function register(data: {
     if (!user) throw new AppError("Registration failed", 500);
 
     // Auto-create LIQUID customer for customer role (so they appear in resellercamp immediately)
-    let liquidCustomerId = "";
+    let liquidCustomerId: string | null = null;
     if (role === "customer") {
-      (async () => {
-        try {
-          const creds = await resolveCredsFromUser(resellerObj);
-          if (!creds.resellerId || !creds.apiKey) return;
+      try {
+        const creds = resellerObj ? await resolveCredsFromUser(resellerObj) : await resolveResellerCreds(parentResellerId || undefined);
+        if (creds.resellerId && creds.apiKey) {
           const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
-          const liqCust = await liquid.createCustomer({
+          const liqCust: any = await liquid.createCustomer({
             name: data.name, email: data.email,
             company: data.company || "", address: data.address || "",
             city: data.city || "", state: data.state || "",
             country: data.country || "ID", zipcode: data.zipcode || "",
             tel_cc_no: data.phone_cc || "62", phone: data.phone || "",
           });
-          const lCustId = String(liqCust?.customer_id || liqCust?.id || "");
-          if (lCustId) {
-            // N2: CAS — only backfill if not already set (e.g. by an in-flight order path)
-            await db.update(customers).set({ liquidCustomerId: lCustId })
-              .where(and(eq(customers.email, data.email), sql`${customers.liquidCustomerId} IS NULL`));
+          const lCustId = String(liqCust?.data?.customer_id || liqCust?.customer_id || liqCust?.id || liqCust?.data?.id || "").trim();
+          if (lCustId && lCustId !== "null" && lCustId !== "undefined") {
+            liquidCustomerId = lCustId;
+            console.log(`[auth] Successfully created LIQUID customer ${lCustId} for ${data.email}`);
           }
-        } catch (e) { console.error("[auth] LIQUID customer auto-create failed:", e); }
-      })();
+        }
+      } catch (e: any) { console.error("[auth] LIQUID customer auto-create failed:", e?.message || e); }
     }
 
     // Always insert local customer record for customers
@@ -144,8 +142,8 @@ export async function register(data: {
     if (role === "customer") {
       try {
         await db.insert(customers).values({
-          userId: parentResellerId!,
-          liquidCustomerId: null,
+          userId: parentResellerId,
+          liquidCustomerId: liquidCustomerId || null,
           name: data.name, email: data.email,
           company: data.company || "", address: data.address || "",
           city: data.city || "", state: data.state || "",

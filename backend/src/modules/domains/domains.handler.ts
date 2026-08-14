@@ -272,6 +272,14 @@ export async function listRemote(ctx: any) {
         .from(customers)
         .where(eq(customers.email, u.email));
       customerLiquidId = c?.liquidCustomerId || null;
+      if (!customerLiquidId) {
+        ctx.set.status = 200;
+        return {
+          data: [],
+          meta: { total: 0, page, perPage, reachedEnd: true },
+          source: "liquid",
+        };
+      }
     }
 
     const result = await svc.listDomainsFromLiquid(creds, customerLiquidId, page, perPage);
