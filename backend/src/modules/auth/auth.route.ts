@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { loginSchema, registerSchema, customerRegisterSchema, sendRegisterOtpSchema } from "./auth.schema";
+import { loginSchema, registerSchema, customerRegisterSchema, sendRegisterOtpSchema, sendOtpSchema } from "./auth.schema";
 import * as h from "./auth.handler";
 import { authGuard } from "../../middleware/auth";
 import { otpRateLimiter, authRateLimiter, getClientIP } from "../../lib/rate-limit";
@@ -25,6 +25,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
     detail: { tags: ["Auth"], summary: "Send OTP code for registration" },
   })
   .post("/send-otp", h.sendOtp, {
+    body: sendOtpSchema,
     beforeHandle: rateLimit(otpRateLimiter, "Terlalu banyak permintaan OTP. Silakan coba lagi dalam 1 menit."),
     detail: { tags: ["Auth"], summary: "Send OTP code for login" },
   })

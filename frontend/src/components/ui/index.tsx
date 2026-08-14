@@ -848,13 +848,8 @@ export function WaBadge({ phone }: { phone: string }) {
     const timer = setTimeout(async () => {
       setChecking(true);
       try {
-        const res = await fetch("/api/auth/check-whatsapp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone }),
-        });
-        const data = await res.json();
-        setVerified(data.data?.registered === true);
+        const res: any = await api.post("/auth/check-whatsapp", { phone });
+        setVerified(res?.registered === true || res?.data?.registered === true);
       } catch { setVerified(null); }
       setChecking(false);
     }, 1000);

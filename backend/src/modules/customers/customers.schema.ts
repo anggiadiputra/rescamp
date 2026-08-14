@@ -10,6 +10,7 @@ export const customerSchema = t.Object({
   country: t.String({ minLength: 2, maxLength: 2 }),
   zipcode: t.Optional(t.String()),
   phone: t.Optional(t.String()),
+  cfTurnstileResponse: t.Optional(t.String()),
 });
 
 export const completeProfileSchema = t.Object({

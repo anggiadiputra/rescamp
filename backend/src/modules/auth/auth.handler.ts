@@ -49,6 +49,7 @@ export async function resellerData(ctx: any) {
 }
 
 export async function sendOtp(ctx: any) {
+  await verifyTurnstileToken(ctx.body?.cfTurnstileResponse || ctx.headers?.["cf-turnstile-response"]);
   const { email, password } = ctx.body;
   const result = await svc.sendLoginOtp(email, password);
   return { data: result };

@@ -6,6 +6,16 @@ export const sendRegisterOtpSchema = t.Object({
     format: "email",
     transform: (v: string) => (v || "").trim().toLowerCase(),
   }),
+  cfTurnstileResponse: t.Optional(t.String()),
+});
+
+export const sendOtpSchema = t.Object({
+  email: t.String({ 
+    format: "email",
+    transform: (v: string) => (v || "").trim().toLowerCase(),
+  }),
+  password: t.String({ minLength: 6 }),
+  cfTurnstileResponse: t.Optional(t.String()),
 });
 
 export const registerSchema = t.Object({
