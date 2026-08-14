@@ -14,7 +14,7 @@ async function getKirisanConfig() {
     loginOtpTemplateId: map.kirisan_login_otp_template_id || map.kirisan_template_id || "",
     registerOtpTemplateId: map.kirisan_register_otp_template_id || map.kirisan_template_id || "",
     resetPasswordTemplateId: map.kirisan_reset_password_template_id || map.kirisan_template_id || "",
-    registerSuccessTemplateId: map.kirisan_register_success_template_id || map.kirisan_template_id || "",
+    registerSuccessTemplateId: map.kirisan_register_success_template_id || map.kirisan_register_otp_template_id || map.kirisan_template_id || "",
   };
 }
 
