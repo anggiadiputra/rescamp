@@ -78,9 +78,9 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
             <a href="/#features" className="text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-black transition-colors">
               Fitur Utama
             </a>
-            <Link to="/prices" className={`text-xs font-bold uppercase tracking-wider transition-colors ${location.pathname === "/prices" ? "text-black border-b-2 border-black py-1" : "text-gray-500 hover:text-black"}`}>
+            <a href="/#harga" className="text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-black transition-colors">
               Daftar Harga
-            </Link>
+            </a>
           </nav>
         )}
 
@@ -242,15 +242,13 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
             >
               Fitur Utama
             </a>
-            <Link
-              to="/prices"
+            <a
+              href="/#harga"
               onClick={() => setGuestMenuOpen(false)}
-              className={`block px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors ${
-                location.pathname === "/prices" ? "bg-gray-100 text-black font-black" : "text-gray-600 hover:bg-gray-50 hover:text-black"
-              }`}
+              className="block px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-50 hover:text-black transition-colors"
             >
               Daftar Harga
-            </Link>
+            </a>
           </div>
           {!user && (
             <div className="grid grid-cols-2 gap-2 pt-1">

@@ -401,7 +401,7 @@ export default function LandingPage() {
             ]) as [string, any][];
 
         return (
-          <section className="py-20 bg-gray-50/80 border-y border-gray-100">
+          <section id="harga" className="py-20 bg-gray-50/80 border-y border-gray-100">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="mb-8 text-center">
                 <h3 className="text-xl sm:text-3xl font-black text-gray-900 tracking-tight">Harga Domain</h3>
@@ -511,7 +511,7 @@ export default function LandingPage() {
             <ul className="space-y-2.5 text-xs sm:text-sm font-semibold">
               <li><a href="#why-us" className="text-gray-400 hover:text-white transition-colors">Why Us</a></li>
               <li><a href="#features" className="text-gray-400 hover:text-white transition-colors">Features</a></li>
-              <li><Link to="/prices" className="text-gray-400 hover:text-white transition-colors">Price List</Link></li>
+              <li><a href="#harga" className="text-gray-400 hover:text-white transition-colors">Price List</a></li>
             </ul>
           </div>
           <div>
@@ -519,7 +519,7 @@ export default function LandingPage() {
             <ul className="space-y-2.5 text-xs sm:text-sm font-semibold">
               <li><Link to="/domains/register" className="text-gray-400 hover:text-white transition-colors">Registrasi Domain</Link></li>
               <li><Link to="/domains/transfer" className="text-gray-400 hover:text-white transition-colors">Transfer Domain</Link></li>
-              <li><Link to="/prices" className="text-gray-400 hover:text-white transition-colors">Harga Domain .ID &amp; Global</Link></li>
+              <li><a href="#harga" className="text-gray-400 hover:text-white transition-colors">Harga Domain .ID &amp; Global</a></li>
             </ul>
           </div>
           <div>
