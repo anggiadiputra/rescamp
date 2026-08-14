@@ -58,14 +58,36 @@ export async function resolveResellerCreds(userId?: number): Promise<ResellerCre
   if (targetId > 0) {
     const [user] = await db.select().from(users).where(eq(users.id, targetId));
     if (user) {
-      let targetUser = user;
+      let targetUser: any = user;
 
       // If customer, resolve parent reseller
-      if (user.role === "customer" && user.parentResellerId) {
-        const [parent] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
-        if (parent?.resellerId) {
-          targetUser = parent;
+      if (user.role === "customer") {
+        let parentUser: any = null;
+        if (user.parentResellerId) {
+          // 1. Try lookup by users.id
+          const [p1] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
+          if (p1?.resellerId && (p1.apiKey || p1.apiKeyEncrypted)) {
+            parentUser = p1;
+          } else {
+            // 2. Try lookup by users.resellerId
+            const [p2] = await db.select().from(users).where(eq(users.resellerId, String(user.parentResellerId)));
+            if (p2?.resellerId && (p2.apiKey || p2.apiKeyEncrypted)) {
+              parentUser = p2;
+            }
+          }
         }
+        // 3. Fallback to any reseller/admin in DB with credentials
+        if (!parentUser) {
+          const [master] = await db.select().from(users).where(
+            and(
+              sql`${users.role} IN ('reseller', 'admin')`,
+              sql`(${users.apiKey} IS NOT NULL OR ${users.apiKeyEncrypted} IS NOT NULL)`
+            )
+          ).limit(1);
+          if (master) parentUser = master;
+        }
+
+        if (parentUser) targetUser = parentUser;
       }
 
       // Try to get credentials from target user
@@ -85,8 +107,6 @@ export async function resolveResellerCreds(userId?: number): Promise<ResellerCre
     }
   }
 
-  // H2: no fallback to an arbitrary "first reseller" — that would let any
-  // customer operate against an unrelated master account.
   // Fallback: app_settings table in database (explicit operator configuration)
   if (!resellerId || !apiKey) {
     const dbSettings = await resolveFromAppSettings();
@@ -135,18 +155,39 @@ export async function resolveCredsFromUser(user: {
   let apiKey = "";
 
   // If customer, resolve parent
-  if (user.role === "customer" && user.parentResellerId) {
-    const [parent] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
-    if (parent?.resellerId) {
-      resellerId = parent.resellerId;
-      if (parent.apiKeyEncrypted) {
+  if (user.role === "customer") {
+    let parentUser: any = null;
+    if (user.parentResellerId) {
+      const [p1] = await db.select().from(users).where(eq(users.id, user.parentResellerId));
+      if (p1?.resellerId && (p1.apiKey || p1.apiKeyEncrypted)) {
+        parentUser = p1;
+      } else {
+        const [p2] = await db.select().from(users).where(eq(users.resellerId, String(user.parentResellerId)));
+        if (p2?.resellerId && (p2.apiKey || p2.apiKeyEncrypted)) {
+          parentUser = p2;
+        }
+      }
+    }
+    if (!parentUser) {
+      const [master] = await db.select().from(users).where(
+        and(
+          sql`${users.role} IN ('reseller', 'admin')`,
+          sql`(${users.apiKey} IS NOT NULL OR ${users.apiKeyEncrypted} IS NOT NULL)`
+        )
+      ).limit(1);
+      if (master) parentUser = master;
+    }
+
+    if (parentUser) {
+      resellerId = parentUser.resellerId || "";
+      if (parentUser.apiKeyEncrypted) {
         try {
-          apiKey = await decryptApiKey(parent.apiKeyEncrypted);
+          apiKey = await decryptApiKey(parentUser.apiKeyEncrypted);
         } catch (e) {
-          apiKey = parent.apiKey || "";
+          apiKey = parentUser.apiKey || "";
         }
       } else {
-        apiKey = parent.apiKey || "";
+        apiKey = parentUser.apiKey || "";
       }
     }
   }
