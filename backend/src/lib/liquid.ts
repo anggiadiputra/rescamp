@@ -18,6 +18,14 @@ export class LiquidClient {
     const timeout = setTimeout(() => controller.abort(), 30_000); // 30s timeout
     const url = `${this.baseURL}${path}`;
 
+    // Debug logging for POST /customers
+    if (method === "POST" && path === "/customers") {
+      console.log(`[Resellercamp DEBUG] ===== POST /customers REQUEST =====`);
+      console.log(`[Resellercamp DEBUG] URL: ${url}`);
+      console.log(`[Resellercamp DEBUG] Body:`, JSON.stringify(body, null, 2));
+      console.log(`[Resellercamp DEBUG] Auth header present: ${!!this.authHeader}`);
+    }
+
     try {
       const res = await fetch(url, {
         method,
@@ -31,6 +39,13 @@ export class LiquidClient {
       const text = await res.text();
       let data: any;
       try { data = JSON.parse(text); } catch { data = { message: text }; }
+
+      // Debug logging for POST /customers response
+      if (method === "POST" && path === "/customers") {
+        console.log(`[Resellercamp DEBUG] ===== POST /customers RESPONSE =====`);
+        console.log(`[Resellercamp DEBUG] HTTP Status: ${res.status}`);
+        console.log(`[Resellercamp DEBUG] Response body:`, typeof data === "object" ? JSON.stringify(data, null, 2) : text);
+      }
 
       if (!res.ok) {
         const errMsg = data.message || data.error || data.error_message || data.description || text || "LIQUID API error";

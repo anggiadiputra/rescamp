@@ -117,24 +117,40 @@ export async function register(data: {
     // Auto-create LIQUID customer for customer role (so they appear in resellercamp immediately)
     let liquidCustomerId: string | null = null;
     if (role === "customer") {
+      console.log(`[auth.register DEBUG] ===== LIQUID CUSTOMER CREATION START =====`);
+      console.log(`[auth.register DEBUG] email=${data.email}, role=${role}`);
+      console.log(`[auth.register DEBUG] resellerObj present: ${!!resellerObj}, parentResellerId: ${parentResellerId}`);
       try {
         const creds = resellerObj ? await resolveCredsFromUser(resellerObj) : await resolveResellerCreds(parentResellerId || undefined);
+        console.log(`[auth.register DEBUG] Resolved creds: resellerId=${creds.resellerId ? creds.resellerId.substring(0, 6) + "..." : "EMPTY"}, apiKey=${creds.apiKey ? creds.apiKey.substring(0, 6) + "..." : "EMPTY"}`);
         if (creds.resellerId && creds.apiKey) {
           const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
-          const liqCust: any = await liquid.createCustomer({
+          const createPayload = {
             name: data.name, email: data.email,
             company: data.company || "", address: data.address || "",
             city: data.city || "", state: data.state || "",
             country: data.country || "ID", zipcode: data.zipcode || "",
             tel_cc_no: data.phone_cc || "62", phone: data.phone || "",
-          });
+          };
+          console.log(`[auth.register DEBUG] createCustomer payload:`, JSON.stringify(createPayload));
+          const liqCust: any = await liquid.createCustomer(createPayload);
+          console.log(`[auth.register DEBUG] createCustomer raw response:`, JSON.stringify(liqCust));
           const lCustId = String(liqCust?.data?.customer_id || liqCust?.customer_id || liqCust?.id || liqCust?.data?.id || "").trim();
+          console.log(`[auth.register DEBUG] Extracted liquidCustomerId: "${lCustId}"`);
           if (lCustId && lCustId !== "null" && lCustId !== "undefined") {
             liquidCustomerId = lCustId;
-            console.log(`[auth] Successfully created LIQUID customer ${lCustId} for ${data.email}`);
+            console.log(`[auth.register DEBUG] ✅ Successfully created LIQUID customer ${lCustId} for ${data.email}`);
+          } else {
+            console.warn(`[auth.register DEBUG] ⚠️ createCustomer returned OK but no valid customer_id extracted`);
           }
+        } else {
+          console.warn(`[auth.register DEBUG] ⚠️ SKIPPED: No valid reseller credentials found (resellerId or apiKey is empty)`);
         }
-      } catch (e: any) { console.error("[auth] LIQUID customer auto-create failed:", e?.message || e); }
+      } catch (e: any) {
+        console.error(`[auth.register DEBUG] ❌ LIQUID customer auto-create FAILED:`, e?.message || e);
+        console.error(`[auth.register DEBUG] ❌ Full error:`, e);
+      }
+      console.log(`[auth.register DEBUG] ===== LIQUID CUSTOMER CREATION END (liquidCustomerId=${liquidCustomerId}) =====`);
     }
 
     // Always insert local customer record for customers
