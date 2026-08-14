@@ -25,12 +25,17 @@ const allowedOrigins = (env.CORS_ORIGIN || "*")
 const app = new Elysia()
   .use(
     cors({
-      origin: (request: Request) => {
+      origin: (request: Request): boolean => {
         const origin = request.headers.get("origin");
-        if (!origin) return true;
+        if (!origin) return true; // same-origin or non-browser clients
+        // Exact match from CORS_ORIGIN env var
         if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) return true;
-        if (origin.endsWith(".ekstensi.id") || origin.includes("localhost") || origin.includes("127.0.0.1")) return true;
-        return true;
+        // Wildcard subdomain match for ekstensi.id
+        if (origin.endsWith(".ekstensi.id")) return true;
+        // Local development
+        if (origin.includes("localhost") || origin.includes("127.0.0.1")) return true;
+        console.warn(`[CORS] Rejected origin: ${origin}`);
+        return false;
       },
       credentials: true,
       allowedHeaders: [
