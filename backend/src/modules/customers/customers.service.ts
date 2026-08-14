@@ -260,7 +260,57 @@ export async function listCustomersFromLiquid(
     .filter(Boolean);
 
   const reachedEnd = list.length < perPage;
-  const total = reachedEnd ? (page - 1) * perPage + list.length : page * perPage + 1;
+
+  // Merge any local DB customers not present in remote list (e.g. newly registered users)
+  if (page === 1 && !customerLiquidId) {
+    try {
+      const remoteEmails = new Set(items.map((it: any) => (it.email || "").toLowerCase()));
+      const localCusts = await db.select().from(customers);
+      for (const lc of localCusts) {
+        if (!lc.email || remoteEmails.has(lc.email.toLowerCase())) continue;
+        items.unshift({
+          id: lc.id as any,
+          liquidCustomerId: lc.liquidCustomerId || null,
+          name: lc.name || lc.email.split("@")[0],
+          email: lc.email,
+          company: lc.company || "",
+          address: lc.address || "",
+          city: lc.city || "",
+          state: lc.state || "",
+          country: lc.country || "ID",
+          zipcode: lc.zipcode || "",
+          phone: lc.phone || "",
+          phone_cc: lc.phone_cc || "62",
+          createdAt: lc.createdAt ? new Date(lc.createdAt).toISOString() : "",
+        });
+        remoteEmails.add(lc.email.toLowerCase());
+
+        // Attempt background auto-creation on Resellercamp for un-linked customers
+        if (!lc.liquidCustomerId && creds.resellerId && creds.apiKey) {
+          (async () => {
+            try {
+              const liq = new LiquidClient(creds.resellerId, creds.apiKey);
+              const created: any = await liq.createCustomer({
+                name: lc.name, email: lc.email,
+                company: lc.company || "", address: lc.address || "",
+                city: lc.city || "", state: lc.state || "",
+                country: lc.country || "ID", zipcode: lc.zipcode || "",
+                tel_cc_no: lc.phone_cc || "62", phone: lc.phone || "",
+              });
+              const cid = String(created?.data?.customer_id || created?.customer_id || created?.id || "").trim();
+              if (cid && cid !== "null" && cid !== "undefined") {
+                await db.update(customers).set({ liquidCustomerId: cid }).where(eq(customers.id, lc.id));
+              }
+            } catch {}
+          })();
+        }
+      }
+    } catch (e) {
+      console.warn("[customers.service] Local customer merge error:", e);
+    }
+  }
+
+  const total = reachedEnd ? items.length : Math.max(items.length, page * perPage + 1);
 
   return { items, total, reachedEnd };
 }
