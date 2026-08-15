@@ -87,7 +87,7 @@ export class LiquidClient {
   checkBulkAvailability(domains: string[]) {
     if (!domains || domains.length === 0) return Promise.resolve([]);
     if (domains.length === 1 && domains[0]) return this.checkAvailability(domains[0]);
-    const qs = domains.filter((d): d is string => Boolean(d)).map((d) => `domain=${encodeURIComponent(d)}`).join("&");
+    const qs = domains.filter((d): d is string => Boolean(d)).map((d) => `domain=${encodeURIComponent(d)}&domain-name=${encodeURIComponent(d)}`).join("&");
     return this.request<any>("GET", `/domains/availability?${qs}`);
   }
 

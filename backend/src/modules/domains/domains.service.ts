@@ -1233,22 +1233,37 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
   // 3. Single-Batch HTTP Request: Query availability for supported Resellercamp domains
   try {
     const rawAvailability = await liquid.checkBulkAvailability(domainsToQuery);
-    if (Array.isArray(rawAvailability)) {
-      for (const item of rawAvailability) {
-        if (item && typeof item === "object") {
-          for (const [d, val] of Object.entries(item)) {
-            const st = typeof val === "string" ? val : (val as any)?.status || (val as any)?.classkey || "error";
-            availabilityMap.set(d.toLowerCase(), String(st).toLowerCase());
+    
+    function parseAvailability(raw: any) {
+      if (!raw) return;
+      if (Array.isArray(raw)) {
+        for (const item of raw) {
+          if (item && typeof item === "object") parseAvailability(item);
+        }
+      } else if (typeof raw === "object") {
+        const source = raw.data || raw.result || raw.availability || raw;
+        if (source !== raw) {
+          parseAvailability(source);
+          return;
+        }
+        for (const [key, val] of Object.entries(raw)) {
+          const keyLower = key.toLowerCase();
+          if (keyLower.includes(".")) {
+            let st = "";
+            if (typeof val === "string") {
+              st = val.toLowerCase();
+            } else if (val && typeof val === "object") {
+              st = String((val as any).status || (val as any).classkey || "").toLowerCase();
+            }
+            if (st) availabilityMap.set(keyLower, st);
+          } else if (val && typeof val === "object") {
+            parseAvailability(val);
           }
         }
       }
-    } else if (rawAvailability && typeof rawAvailability === "object") {
-      const sourceObj = rawAvailability.data || rawAvailability.result || rawAvailability;
-      for (const [d, val] of Object.entries(sourceObj)) {
-        const st = typeof val === "string" ? val : (val as any)?.status || (val as any)?.classkey || "error";
-        availabilityMap.set(d.toLowerCase(), String(st).toLowerCase());
-      }
     }
+
+    parseAvailability(rawAvailability);
   } catch (e: any) {
     console.warn("[bulkAvailability] checkBulkAvailability batched call warning:", e?.message);
   }
@@ -1259,19 +1274,24 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
       const fullDomain = `${baseKeyword}.${tld}`;
       let status = availabilityMap.get(fullDomain.toLowerCase());
 
-      // Only perform single-domain HTTP check if status is missing AND user specifically searched 1 TLD
+      // Perform single-domain fallback check if status is missing AND user specifically searched 1 TLD
       if ((!status || status === "error") && tldsToQuery.length <= 2) {
         try {
           const res = await liquid.checkAvailability(fullDomain);
-          const arr = Array.isArray(res) ? res : [];
-          const first = arr[0];
-          status = first ? (Object.values(first)[0] as any)?.status : "error";
+          if (Array.isArray(res) && res[0]) {
+            const val = Object.values(res[0])[0];
+            status = typeof val === "string" ? val : (val as any)?.status;
+          } else if (res && typeof res === "object") {
+            const val = Object.values(res)[0];
+            status = typeof val === "string" ? val : (val as any)?.status || (res as any)?.status;
+          }
         } catch {
-          status = "error";
+          status = "unavailable";
         }
       }
 
-      const isAvailable = status === "available";
+      const cleanStatus = (status || "unavailable").toLowerCase();
+      const isAvailable = cleanStatus === "available" || cleanStatus === "free" || cleanStatus === "available_for_registration";
       const finalStatus = isAvailable ? "available" : "unavailable";
       const tldPrice = prices[tld] || {};
 
