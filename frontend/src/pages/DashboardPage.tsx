@@ -3,7 +3,6 @@ import { StatCard, Card, StatCardSkeleton, CardSkeleton } from "../components/ui
 import { api } from "../lib/api";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { useSettings } from "../contexts/SettingsContext";
 import { useCachedFetch } from "../contexts/DataCacheContext";
 import type { Domain, PaginatedResponse } from "../lib/types";
 
@@ -14,9 +13,14 @@ function fmtBalance(amount: any, currency: string = "IDR"): string {
   return `${currency} ${Math.round(actual).toLocaleString("id-ID")}`;
 }
 
+function formatDateOnly(dateStr?: string | null): string {
+  if (!dateStr) return "-";
+  const clean = String(dateStr).trim().split(" ")[0]?.split("T")[0];
+  return clean || "-";
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { settings } = useSettings();
   const isCustomer = user?.role === "customer";
 
   const { data, loading } = useCachedFetch<{ domains: Domain[]; balance: any }>(
@@ -110,7 +114,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {domainsLoading ? (
+          {loading ? (
             <CardSkeleton />
           ) : domains.length === 0 ? (
             <div className="py-8 text-center text-xs text-gray-400">Belum ada domain yang terdaftar.</div>
