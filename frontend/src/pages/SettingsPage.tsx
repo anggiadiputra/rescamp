@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, Button, InfoBanner, LoadingSpinner, toast, SecretInput } from "../components/ui";
 import { api } from "../lib/api";
 import {
-  Globe, Mail, Palette, MessageSquare, CreditCard, HardDrive, Send, Save, Key, RefreshCw, ShieldCheck, Receipt, Percent, SlidersHorizontal, X
+  Globe, Mail, Palette, MessageSquare, CreditCard, HardDrive, Send, Save, Key, RefreshCw, ShieldCheck, Receipt, Percent, SlidersHorizontal, X, Check
 } from "lucide-react";
 
 import { useSettings } from "../contexts/SettingsContext";
@@ -1073,16 +1073,25 @@ export default function SettingsPage() {
               {!editingSections.sumopod ? (
                 /* READ-ONLY VIEW */
                 <div className="space-y-3.5 text-xs">
-                  <div>
-                    <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-0.5 block">Sumopod API Key</label>
-                    <p className="text-xs font-mono text-gray-800 bg-gray-50 px-2.5 py-1.5 rounded border border-gray-100">
-                      {maskSecret(form.sumopod_api_key)}
-                    </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-0.5 block">Environment Mode</label>
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold ${form.sumopod_base_url?.includes("sandbox") ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
+                        <span className={`w-2 h-2 rounded-full ${form.sumopod_base_url?.includes("sandbox") ? "bg-amber-500" : "bg-emerald-500"}`}></span>
+                        {form.sumopod_base_url?.includes("sandbox") ? "Sandbox (Testing)" : "Live (Production)"}
+                      </span>
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-0.5 block">Sumopod API Key</label>
+                      <p className="text-xs font-mono text-gray-800 bg-gray-50 px-2.5 py-1.5 rounded border border-gray-100">
+                        {maskSecret(form.sumopod_api_key)}
+                      </p>
+                    </div>
                   </div>
                   <div>
                     <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-0.5 block">API Base URL</label>
                     <p className="text-xs font-mono text-gray-800 bg-gray-50 px-2.5 py-1.5 rounded border border-gray-100">
-                      {form.sumopod_base_url || "https://api.sumopod.com/v1"}
+                      {form.sumopod_base_url || "https://api-pay.sumopod.com/api/v1"}
                     </p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1102,7 +1111,50 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 /* EDIT FORM */
-                <div className="space-y-3.5">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">Pilih Environment Mode</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, sumopod_base_url: "https://api-pay.sumopod.com/api/v1" })}
+                        className={`p-3 border rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
+                          !form.sumopod_base_url?.includes("sandbox")
+                            ? "border-emerald-500 bg-emerald-50/50 ring-2 ring-emerald-500/20"
+                            : "border-gray-200 hover:border-gray-300 bg-white"
+                        }`}
+                      >
+                        <div>
+                          <div className="font-bold text-xs text-gray-900 flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                            Live (Production)
+                          </div>
+                          <div className="text-[10px] text-gray-500 font-mono mt-1">https://api-pay.sumopod.com/api/v1</div>
+                        </div>
+                        {!form.sumopod_base_url?.includes("sandbox") && <Check className="w-4 h-4 text-emerald-600 shrink-0" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, sumopod_base_url: "https://api-pay-sandbox.sumopod.com/api/v1" })}
+                        className={`p-3 border rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
+                          form.sumopod_base_url?.includes("sandbox")
+                            ? "border-amber-500 bg-amber-50/50 ring-2 ring-amber-500/20"
+                            : "border-gray-200 hover:border-gray-300 bg-white"
+                        }`}
+                      >
+                        <div>
+                          <div className="font-bold text-xs text-gray-900 flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                            Sandbox (Testing)
+                          </div>
+                          <div className="text-[10px] text-gray-500 font-mono mt-1">https://api-pay-sandbox.sumopod.com/api/v1</div>
+                        </div>
+                        {form.sumopod_base_url?.includes("sandbox") && <Check className="w-4 h-4 text-amber-600 shrink-0" />}
+                      </button>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Sumopod API Key</label>
                     <SecretInput
@@ -1112,11 +1164,12 @@ export default function SettingsPage() {
                       placeholder="API Key dari Sumopod Dashboard"
                     />
                   </div>
+
                   <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Sumopod API Base URL</label>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Sumopod API Base URL (Custom)</label>
                     <input
                       type="text"
-                      value={form.sumopod_base_url || "https://api.sumopod.com/v1"}
+                      value={form.sumopod_base_url || "https://api-pay.sumopod.com/api/v1"}
                       onChange={(e) => setForm({ ...form, sumopod_base_url: e.target.value })}
                       className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white font-mono text-xs"
                     />

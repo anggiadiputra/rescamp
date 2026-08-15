@@ -118,7 +118,8 @@ export class SumopodClient {
       for (const att of uniqueAttempts) {
         if (!att.key || !att.url) continue;
         try {
-          const response = await fetch(`${att.url.replace(/\/$/, "")}/payments`, {
+          const cleanUrl = att.url.trim().replace(/\/payments$/, "").replace(/\/$/, "");
+          const response = await fetch(`${cleanUrl}/payments`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
