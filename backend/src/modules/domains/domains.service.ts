@@ -1209,37 +1209,28 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     } catch {}
   }
 
-  // 3. Query GET /v1/tlds from Resellercamp (uses 15-min in-memory cache)
-  try {
-    const tldRes = await liquid.getTlds().catch(() => null);
-    const arr = Array.isArray(tldRes) ? tldRes : tldRes?.data || tldRes?.tlds || [];
-    for (const item of arr) {
-      const name = String(typeof item === "string" ? item : item?.tld || item?.name || item?.extension || "").replace(/^\./, "").toLowerCase();
-      if (name) tldSet.add(name);
-    }
-  } catch {}
-
-  // Fallback default TLDs if still empty
+  // Fallback default supported Resellercamp TLDs if still empty
   if (tldSet.size === 0) {
-    const defaultTlds = ["com", "id", "co.id", "my.id", "or.id", "web.id", "ac.id", "sch.id", "biz", "info", "xyz"];
+    const defaultTlds = ["com", "id", "co.id", "my.id", "or.id", "web.id", "ac.id", "sch.id", "biz", "info", "xyz", "net", "org"];
     for (const t of defaultTlds) tldSet.add(t);
   }
 
   let tldsToQuery = Array.from(tldSet);
 
-  // If user searched for a specific TLD (e.g. "web.id"), ensure it is in the list and placed first
+  // If user searched for a specific TLD (e.g. "web.id"), ensure it is placed first if supported
   if (requestedTld) {
-    if (!tldsToQuery.includes(requestedTld)) {
-      tldsToQuery.unshift(requestedTld);
-    } else {
+    if (tldSet.has(requestedTld)) {
       tldsToQuery = [requestedTld, ...tldsToQuery.filter(t => t !== requestedTld)];
+    } else {
+      // If user specifically searched a supported/valid TLD not in prices, include it as primary
+      tldsToQuery.unshift(requestedTld);
     }
   }
 
   const domainsToQuery = tldsToQuery.map(tld => `${baseKeyword}.${tld}`);
   const availabilityMap = new Map<string, string>();
 
-  // 4. Single-Batch HTTP Request: Query availability for ALL domains in 1 single HTTP call!
+  // 3. Single-Batch HTTP Request: Query availability for supported Resellercamp domains
   try {
     const rawAvailability = await liquid.checkBulkAvailability(domainsToQuery);
     if (Array.isArray(rawAvailability)) {
@@ -1259,16 +1250,17 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
       }
     }
   } catch (e: any) {
-    console.warn("[bulkAvailability] checkBulkAvailability batched call warning, falling back to individual calls:", e?.message);
+    console.warn("[bulkAvailability] checkBulkAvailability batched call warning:", e?.message);
   }
 
-  // Fallback fallback: if batched call failed to return status for some domains, populate using individual check
+  // 4. Map results — only do individual check fallback if user searched for a single specific TLD
   const results = await Promise.all(
     tldsToQuery.map(async (tld) => {
       const fullDomain = `${baseKeyword}.${tld}`;
       let status = availabilityMap.get(fullDomain.toLowerCase());
 
-      if (!status || status === "error") {
+      // Only perform single-domain HTTP check if status is missing AND user specifically searched 1 TLD
+      if ((!status || status === "error") && tldsToQuery.length <= 2) {
         try {
           const res = await liquid.checkAvailability(fullDomain);
           const arr = Array.isArray(res) ? res : [];
@@ -1284,7 +1276,7 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
         domain: fullDomain,
         tld,
         available: status === "available",
-        status: status || "error",
+        status: status || "unknown",
         price: tldPrice.price_new || tldPrice.price_register || null,
         renew_price: tldPrice.price_renew || null,
         transfer_price: tldPrice.price_transfer || tldPrice.price_renew || null,
@@ -1296,7 +1288,7 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     })
   );
 
-  const filteredResults = results.filter(r => r.status !== "error");
+  const filteredResults = results.filter(r => r.status !== "error" && r.status !== "unknown");
   
   // Cache successful search results for 60s
   if (filteredResults.length > 0) {
