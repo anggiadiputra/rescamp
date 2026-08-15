@@ -196,11 +196,12 @@ const URL_FIELD_ALLOWED_HOSTS: Record<string, string[]> = {
   kirisan_api_url: ["api.kirisan.com"],
   fonnte_api_url: ["api.fonnte.com"],
   turnstile_verify_url: ["challenges.cloudflare.com"],
-  sumopod_base_url: ["api-pay.sumopod.com", "api-pay-sandbox.sumopod.com"],
+  sumopod_base_url: ["api-pay.sumopod.com", "api-pay-sandbox.sumopod.com", "api.sumopod.com"],
 };
 
 function validateSettingUrl(key: string, value: string) {
   if (!key.endsWith("_url")) return; // non-URL fields unchecked
+  if (!value || value.trim() === "") return; // allow empty optional URL fields
   let parsed: URL;
   try {
     parsed = new URL(value);
