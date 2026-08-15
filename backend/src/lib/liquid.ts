@@ -571,14 +571,34 @@ export class LiquidClient {
    * Uses crypto.getRandomValues() for cryptographic security
    */
   private generateSecurePassword(): string {
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%";
-    const array = new Uint32Array(12);
+    const lower = "abcdefghijklmnopqrstuvwxyz";
+    const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const digits = "0123456789";
+    const all = lower + upper + digits + "!@#$%";
+    const array = new Uint32Array(16);
     crypto.getRandomValues(array);
-    let password = "";
-    for (let i = 0; i < 12; i++) {
-      password += chars[(array[i] ?? 0) % chars.length];
+
+    // Guarantee at least 1 lowercase, 1 uppercase, 1 digit
+    const guaranteed = [
+      lower[(array[0] ?? 0) % lower.length],
+      upper[(array[1] ?? 0) % upper.length],
+      digits[(array[2] ?? 0) % digits.length],
+    ];
+
+    // Fill remaining 9 chars from full charset
+    const rest: string[] = [];
+    for (let i = 3; i < 12; i++) {
+      rest.push(all[(array[i] ?? 0) % all.length]!);
     }
-    return password;
+
+    // Shuffle all 12 chars using remaining random values
+    const combined = [...guaranteed, ...rest];
+    for (let i = combined.length - 1; i > 0; i--) {
+      const j = (array[12 + (i % 4)] ?? 0) % (i + 1);
+      [combined[i], combined[j]] = [combined[j]!, combined[i]!];
+    }
+
+    return combined.join("");
   }
 
   createCustomer(data: Record<string, any>) {
