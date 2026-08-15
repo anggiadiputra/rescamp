@@ -1253,7 +1253,7 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     console.warn("[bulkAvailability] checkBulkAvailability batched call warning:", e?.message);
   }
 
-  // 4. Map results — only do individual check fallback if user searched for a single specific TLD
+  // 4. Map results — include both available and unavailable (taken) domains
   const results = await Promise.all(
     tldsToQuery.map(async (tld) => {
       const fullDomain = `${baseKeyword}.${tld}`;
@@ -1271,12 +1271,15 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
         }
       }
 
+      const isAvailable = status === "available";
+      const finalStatus = isAvailable ? "available" : "unavailable";
       const tldPrice = prices[tld] || {};
+
       return {
         domain: fullDomain,
         tld,
-        available: status === "available",
-        status: status || "unknown",
+        available: isAvailable,
+        status: finalStatus,
         price: tldPrice.price_new || tldPrice.price_register || null,
         renew_price: tldPrice.price_renew || null,
         transfer_price: tldPrice.price_transfer || tldPrice.price_renew || null,
@@ -1288,14 +1291,12 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     })
   );
 
-  const filteredResults = results.filter(r => r.status !== "error" && r.status !== "unknown");
-  
-  // Cache successful search results for 60s
-  if (filteredResults.length > 0) {
-    searchResultCache.set(cacheKey, { results: filteredResults, expiresAt: Date.now() + SEARCH_CACHE_TTL_MS });
+  // Cache search results for 60s
+  if (results.length > 0) {
+    searchResultCache.set(cacheKey, { results, expiresAt: Date.now() + SEARCH_CACHE_TTL_MS });
   }
 
-  return filteredResults;
+  return results;
 }
 
 export async function syncDomainsFromLiquid(userParam: { id: number; role?: string | null; resellerId?: string | null; apiKey?: string | null }) {
