@@ -1227,71 +1227,54 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     }
   }
 
-  const domainsToQuery = tldsToQuery.map(tld => `${baseKeyword}.${tld}`);
-  const availabilityMap = new Map<string, string>();
+  // Helper to extract status from Resellercamp response shape
+  function extractDomainStatus(res: any, fullDomain: string): string {
+    if (!res) return "unavailable";
+    const domainLower = fullDomain.toLowerCase();
 
-  // 3. Single-Batch HTTP Request: Query availability for supported Resellercamp domains
-  try {
-    const rawAvailability = await liquid.checkBulkAvailability(domainsToQuery);
-    
-    function parseAvailability(raw: any) {
-      if (!raw) return;
-      if (Array.isArray(raw)) {
-        for (const item of raw) {
-          if (item && typeof item === "object") parseAvailability(item);
+    if (Array.isArray(res)) {
+      for (const item of res) {
+        if (!item || typeof item !== "object") continue;
+        if (item[domainLower]) {
+          const val = item[domainLower];
+          if (typeof val === "string") return val.toLowerCase();
+          if (val && typeof val === "object") return String(val.status || val.classkey || "unavailable").toLowerCase();
         }
-      } else if (typeof raw === "object") {
-        const source = raw.data || raw.result || raw.availability || raw;
-        if (source !== raw) {
-          parseAvailability(source);
-          return;
-        }
-        for (const [key, val] of Object.entries(raw)) {
-          const keyLower = key.toLowerCase();
-          if (keyLower.includes(".")) {
-            let st = "";
-            if (typeof val === "string") {
-              st = val.toLowerCase();
-            } else if (val && typeof val === "object") {
-              st = String((val as any).status || (val as any).classkey || "").toLowerCase();
-            }
-            if (st) availabilityMap.set(keyLower, st);
-          } else if (val && typeof val === "object") {
-            parseAvailability(val);
-          }
+        if (typeof item.status === "string") return item.status.toLowerCase();
+      }
+      if (res[0]) return extractDomainStatus(res[0], fullDomain);
+    } else if (typeof res === "object") {
+      const source = res.data || res.result || res;
+      if (source[domainLower]) {
+        const val = source[domainLower];
+        if (typeof val === "string") return val.toLowerCase();
+        if (val && typeof val === "object") return String(val.status || val.classkey || "unavailable").toLowerCase();
+      }
+      if (typeof source.status === "string") return source.status.toLowerCase();
+      for (const [k, v] of Object.entries(source)) {
+        if (k.toLowerCase() === domainLower) {
+          if (typeof v === "string") return v.toLowerCase();
+          if (v && typeof v === "object") return String((v as any).status || (v as any).classkey || "unavailable").toLowerCase();
         }
       }
     }
-
-    parseAvailability(rawAvailability);
-  } catch (e: any) {
-    console.warn("[bulkAvailability] checkBulkAvailability batched call warning:", e?.message);
+    return "unavailable";
   }
 
-  // 4. Map results — include both available and unavailable (taken) domains
+  // 3. Query availability directly & accurately for all active Resellercamp TLDs in parallel
   const results = await Promise.all(
     tldsToQuery.map(async (tld) => {
       const fullDomain = `${baseKeyword}.${tld}`;
-      let status = availabilityMap.get(fullDomain.toLowerCase());
+      let rawRes: any = null;
 
-      // Perform single-domain fallback check if status is missing AND user specifically searched 1 TLD
-      if ((!status || status === "error") && tldsToQuery.length <= 2) {
-        try {
-          const res = await liquid.checkAvailability(fullDomain);
-          if (Array.isArray(res) && res[0]) {
-            const val = Object.values(res[0])[0];
-            status = typeof val === "string" ? val : (val as any)?.status;
-          } else if (res && typeof res === "object") {
-            const val = Object.values(res)[0];
-            status = typeof val === "string" ? val : (val as any)?.status || (res as any)?.status;
-          }
-        } catch {
-          status = "unavailable";
-        }
+      try {
+        rawRes = await liquid.checkAvailability(fullDomain);
+      } catch (err: any) {
+        console.warn(`[bulkAvailability] Check failed for ${fullDomain}:`, err?.message || err);
       }
 
-      const cleanStatus = (status || "unavailable").toLowerCase();
-      const isAvailable = cleanStatus === "available" || cleanStatus === "free" || cleanStatus === "available_for_registration";
+      const rawStatus = extractDomainStatus(rawRes, fullDomain);
+      const isAvailable = rawStatus === "available" || rawStatus === "free" || rawStatus === "available_for_registration";
       const finalStatus = isAvailable ? "available" : "unavailable";
       const tldPrice = prices[tld] || {};
 
