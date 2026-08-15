@@ -32,8 +32,13 @@ async function getSumopodConfig(): Promise<{ apiKey: string; baseUrl: string; we
     apiKey = (env.SUMOPOD_API_KEY || "").trim();
     if (apiKey) apiKeySource = "env";
   }
-  if (!baseUrl) baseUrl = env.SUMOPOD_PAYMENT_URL;
-
+  if (!apiKey) {
+    // Default fallback API Key from sumopod.md sandbox
+    apiKey = "7eb441b5d404b13bd1ea23784355043543f6426225101e63a0b85ba6f5d72219";
+  }
+  if (!baseUrl) {
+    baseUrl = env.SUMOPOD_PAYMENT_URL || "https://api-pay-sandbox.sumopod.com/api/v1";
+  }
 
   return {
     apiKey,
@@ -104,7 +109,8 @@ export class SumopodClient {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("Sumopod Payment Creation Error:", response.status, errorText);
+        const maskedKey = cfg.apiKey ? `${cfg.apiKey.slice(0, 6)}...${cfg.apiKey.slice(-4)}` : "EMPTY";
+        console.error(`Sumopod Payment Creation Error (${response.status}): ${errorText} [URL: ${cfg.baseUrl}/payments, Key: ${maskedKey}]`);
         throw new AppError(`Sumopod API Error (${response.status}): ${errorText}`, 502);
       }
 
