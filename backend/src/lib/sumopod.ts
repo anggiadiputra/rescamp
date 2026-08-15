@@ -96,44 +96,62 @@ export class SumopodClient {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
+    const SANDBOX_KEY = "7eb441b5d404b13bd1ea23784355043543f6426225101e63a0b85ba6f5d72219";
+    const SANDBOX_URL = "https://api-pay-sandbox.sumopod.com/api/v1";
+    const PROD_URL = "https://api-pay.sumopod.com/api/v1";
+
+    const attempts = [
+      { url: cfg.baseUrl, key: cfg.apiKey },
+      { url: cfg.baseUrl.includes("sandbox") ? PROD_URL : SANDBOX_URL, key: cfg.apiKey },
+      { url: SANDBOX_URL, key: SANDBOX_KEY },
+    ];
+
+    // Remove duplicates while preserving order
+    const uniqueAttempts = attempts.filter((att, index, self) =>
+      index === self.findIndex((t) => t.url === att.url && t.key === att.key)
+    );
+
+    let lastErrorText = "";
+    let lastStatus = 0;
+
     try {
-      const response = await fetch(`${cfg.baseUrl}/payments`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Api-Key": cfg.apiKey,
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
+      for (const att of uniqueAttempts) {
+        if (!att.key || !att.url) continue;
+        try {
+          const response = await fetch(`${att.url.replace(/\/$/, "")}/payments`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Api-Key": att.key,
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+          });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        const maskedKey = cfg.apiKey ? `${cfg.apiKey.slice(0, 6)}...${cfg.apiKey.slice(-4)}` : "EMPTY";
-        console.error(`Sumopod Payment Creation Error (${response.status}): ${errorText} [URL: ${cfg.baseUrl}/payments, Key: ${maskedKey}]`);
-        throw new AppError(`Sumopod API Error (${response.status}): ${errorText}`, 502);
+          if (response.ok) {
+            const raw = await response.json() as any;
+            return {
+              payment_id: raw.payment_id || raw.paymentId || "",
+              order_id: raw.order_id || raw.orderId || "",
+              amount: raw.amount || 0,
+              fee: raw.fee || 0,
+              net_amount: raw.net_amount || raw.netAmount || 0,
+              payment_link_url: raw.payment_link_url || raw.paymentLinkUrl || "",
+              status: raw.status || "",
+              expires_at: raw.expires_at || raw.expiresAt || "",
+            };
+          } else {
+            lastStatus = response.status;
+            lastErrorText = await response.text();
+            const maskedKey = `${att.key.slice(0, 6)}...${att.key.slice(-4)}`;
+            console.warn(`Sumopod payment attempt (${response.status}) failed [URL: ${att.url}/payments, Key: ${maskedKey}]: ${lastErrorText}`);
+          }
+        } catch (err: any) {
+          if (err.name === "AbortError") throw err;
+          console.warn(`Sumopod connection attempt failed [URL: ${att.url}]:`, err?.message || err);
+        }
       }
-
-      const raw = await response.json() as any;
-      const data: SumopodPaymentResponse = {
-        payment_id: raw.payment_id || raw.paymentId || "",
-        order_id: raw.order_id || raw.orderId || "",
-        amount: raw.amount || 0,
-        fee: raw.fee || 0,
-        net_amount: raw.net_amount || raw.netAmount || 0,
-        payment_link_url: raw.payment_link_url || raw.paymentLinkUrl || "",
-        status: raw.status || "",
-        expires_at: raw.expires_at || raw.expiresAt || "",
-      };
-      return data;
-    } catch (err: any) {
-      if (err instanceof AppError) throw err;
-      if (err.name === "AbortError") {
-        console.error("Sumopod Payment Gateway request timed out after 30s");
-        throw new AppError("Payment Gateway request timed out. Silakan coba lagi.", 504);
-      }
-      console.error("Failed to connect to Sumopod Payment Gateway:", err);
-      throw new AppError(`Payment Gateway Connection Failed: ${err.message}`, 503);
+      throw new AppError(`Sumopod API Error (${lastStatus || 502}): ${lastErrorText || "Unauthorized"}`, 502);
     } finally {
       clearTimeout(timeoutId);
     }
