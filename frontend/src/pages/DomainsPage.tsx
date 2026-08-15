@@ -7,6 +7,12 @@ import type { Domain, PaginatedResponse } from "../lib/types";
 import { useSettings } from "../contexts/SettingsContext";
 import { useCachedFetch } from "../contexts/DataCacheContext";
 
+function formatDateOnly(dateStr?: string | null): string {
+  if (!dateStr) return "-";
+  const clean = String(dateStr).trim().split(" ")[0]?.split("T")[0];
+  return clean || "-";
+}
+
 export default function DomainsPage() {
   const { settings } = useSettings();
   const nav = useNavigate();

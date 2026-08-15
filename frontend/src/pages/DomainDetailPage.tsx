@@ -18,6 +18,12 @@ function fmtPrice(amount: any): string {
   return `Rp ${Math.round(actual).toLocaleString("id-ID")}`;
 }
 
+function formatDateOnly(dateStr?: string | null): string {
+  if (!dateStr) return "-";
+  const clean = String(dateStr).trim().split(" ")[0]?.split("T")[0];
+  return clean || "-";
+}
+
 export default function DomainDetailPage() {
   const nav = useNavigate();
   const { settings } = useSettings();
@@ -468,11 +474,11 @@ export default function DomainDetailPage() {
 
             <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
               <span className="text-gray-500 block text-xs font-medium">Tanggal Registrasi</span>
-              <span className="font-semibold text-gray-900">{domain.registrationDate || "-"}</span>
+              <span className="font-semibold text-gray-900">{formatDateOnly(domain.registrationDate)}</span>
             </div>
             <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
               <span className="text-gray-500 block text-xs font-medium">Tanggal Kadaluarsa</span>
-              <span className="font-semibold text-gray-900">{domain.expiryDate || "-"}</span>
+              <span className="font-semibold text-gray-900">{formatDateOnly(domain.expiryDate)}</span>
             </div>
             <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
               <span className="text-gray-500 block text-xs font-medium">Durasi Kontrak</span>

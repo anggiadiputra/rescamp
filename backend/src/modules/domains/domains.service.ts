@@ -17,6 +17,14 @@ function assertNotSuspended(domain: { status: string | null }) {
   }
 }
 
+export function cleanDateOnly(val?: any): string | null {
+  if (!val) return null;
+  const str = String(val).trim();
+  if (!str) return null;
+  const clean = str.split(" ")[0]?.split("T")[0];
+  return clean || null;
+}
+
 async function getLiquid(user?: { id?: number; resellerId?: string | null; apiKey?: string | null; role?: string | null }): Promise<LiquidClient> {
   if (user?.id) {
     const creds = await resolveResellerCreds(user.id);
@@ -829,14 +837,16 @@ export async function getDomain(userParam: any, lookup: string | number) {
   const billingContact = parseDomainContact(liquidItem.billing_contact ?? liquidItem.billing ?? liquidItem.billing_contact_details ?? liquidItem.billingcontact ?? liquidItem.contacts?.billing) || registrantContact;
   const raaVerification = parseRaaVerification(liquidItem.raa_verification ?? liquidItem.raa_status ?? liquidItem.raa_verification_status);
 
+
+
   return {
     _local: false,
     id: Number(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || lookupNum) || 0,
     domainId: Number(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || lookupNum) || 0,
     domainName,
     tld: domainName.split(".").slice(1).join("."),
-    registrationDate: liquidItem.creation_time || liquidItem.creation_date || null,
-    expiryDate: liquidItem.expiry_date || null,
+    registrationDate: cleanDateOnly(liquidItem.creation_time || liquidItem.creation_date),
+    expiryDate: cleanDateOnly(liquidItem.expiry_date),
     years: Number(liquidItem.no_of_years || 1),
     status: mappedStatusFinal,
     suspendReason,
@@ -1084,8 +1094,8 @@ export async function toggleSuspend(user: { id?: number; resellerId: string | nu
             status: "active",
             locked: liquidItem.locked === "true" || liquidItem.locked === true ? 1 : 0,
             liquidOrderId: orderIdStr || null,
-            registrationDate: liquidItem.creation_time || null,
-            expiryDate: liquidItem.expiry_date || null,
+            registrationDate: cleanDateOnly(liquidItem.creation_time),
+            expiryDate: cleanDateOnly(liquidItem.expiry_date),
           } as any).onDuplicateKeyUpdate({ set: { domainName: sql`${domains.domainName}` } });
           domain = await getDomain(userParam, domainId);
         }
@@ -1523,8 +1533,8 @@ export async function listDomainsFromLiquid(
         status,
         suspendReason,
         suspendedAt,
-        registrationDate: item.creation_time || item.creation_date || null,
-        expiryDate: item.expiry_date || null,
+        registrationDate: cleanDateOnly(item.creation_time || item.creation_date),
+        expiryDate: cleanDateOnly(item.expiry_date),
         autoRenew: item.renewal_mode === "auto" || item.renewal_mode === "auto_renew" ? 1 : 0,
         locked: item.status === "transferlock" || item.locked === "true" || item.locked === true ? 1 : 0,
         theftProtection: item.theft_protection === "true" || item.theft_protection === true ? 1 : 0,

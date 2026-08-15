@@ -109,13 +109,11 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
-          {domains.length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="text-xs text-gray-400">No domains registered yet.</p>
-              <Link to="/domains/register" style={{ backgroundColor: settings.primary_color || "#000000" }} className="inline-block mt-3 px-4 py-2 text-white rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity">
-                Register Your First Domain
-              </Link>
-            </div>
+
+          {domainsLoading ? (
+            <CardSkeleton />
+          ) : domains.length === 0 ? (
+            <div className="py-8 text-center text-xs text-gray-400">Belum ada domain yang terdaftar.</div>
           ) : (
             <div className="divide-y divide-gray-100">
               {domains.slice(0, 5).map((d) => (
@@ -124,7 +122,7 @@ export default function DashboardPage() {
                     <Link to={`/domains/${d.liquidOrderId || d.id}`} className="text-sm font-mono font-bold text-gray-900 hover:text-black">
                       {d.domainName}
                     </Link>
-                    <p className="text-[11px] text-gray-400 mt-0.5">Expires: {d.expiryDate || "-"}</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Expires: {formatDateOnly(d.expiryDate)}</p>
                     {d.status === "suspended" && d.suspendReason && (
                       <p className="text-[11px] text-rose-700 mt-0.5 truncate" title={d.suspendReason}>
                         Alasan: {d.suspendReason}
