@@ -435,9 +435,13 @@ export class LiquidClient {
     });
     return this.request<any>("PUT", `/domains/${domainId}/ns`, payload);
   }
-  getDomainSuggestions(keyword: string, tld?: string) {
-    const qs = new URLSearchParams({ keyword });
-    if (tld) qs.set("tld", tld);
+  getDomainSuggestions(keyword: string, tld?: string, limit: number = 10) {
+    const tldList = tld ? tld.replace(/^\.+/, "") : "com,id,co.id,xyz,net,org";
+    const qs = new URLSearchParams({
+      keyword,
+      tlds: tldList,
+      limit: String(limit),
+    });
     return this.request<any>("GET", `/domains/suggestion?${qs.toString()}`);
   }
   restoreDomain(domainId: string, invoiceOption: string = "keep_invoice") {

@@ -1285,8 +1285,8 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
   }
 
   // Helper to extract status from Resellercamp response shape
-  function extractDomainStatus(res: any, fullDomain: string): string {
-    if (!res) return "unavailable";
+  function extractDomainStatus(res: any, fullDomain: string): string | null {
+    if (!res) return null;
     const targetDomain = fullDomain.trim().toLowerCase();
 
     // If response is wrapped in { data: ... } or { result: ... }
@@ -1299,7 +1299,7 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
         for (const [k, v] of Object.entries(item)) {
           if (k.toLowerCase() === targetDomain) {
             if (typeof v === "string") return v.toLowerCase();
-            if (v && typeof v === "object") return String((v as any).status || (v as any).classkey || "unavailable").toLowerCase();
+            if (v && typeof v === "object") return String((v as any).status || (v as any).classkey || "").toLowerCase() || null;
           }
         }
         const itemDomain = String(item.domain || item.domain_name || item.name || "").toLowerCase();
@@ -1317,7 +1317,7 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
       for (const [k, v] of Object.entries(data)) {
         if (k.toLowerCase() === targetDomain) {
           if (typeof v === "string") return v.toLowerCase();
-          if (v && typeof v === "object") return String((v as any).status || (v as any).classkey || "unavailable").toLowerCase();
+          if (v && typeof v === "object") return String((v as any).status || (v as any).classkey || "").toLowerCase() || null;
         }
       }
       if (typeof data.status === "string" && !data.domain && Object.keys(data).length <= 3) {
@@ -1325,24 +1325,25 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
       }
     }
 
-    return "unavailable";
+    return null;
   }
 
-  // 3. Query availability directly from Resellercamp using fast single batch API
-  const allFullDomains = tldsToQuery.map((tld) => `${baseKeyword}.${tld}`);
-  let batchRes: any = null;
-  let batchSucceeded = false;
+  // 3. Separate TLDs into Primary and Secondary groups for fast & resilient batch queries
+  const primaryTldKeys = new Set(["com", "id", "co.id", "my.id", "web.id", "biz.id", "xyz", "net", "org"]);
+  const primaryTlds = tldsToQuery.filter(t => primaryTldKeys.has(t));
+  const secondaryTlds = tldsToQuery.filter(t => !primaryTldKeys.has(t));
 
-  if (liquid) {
-    try {
-      batchRes = await liquid.checkBulkAvailability(allFullDomains, 3_500);
-      if (batchRes && (typeof batchRes === "object" || Array.isArray(batchRes))) {
-        batchSucceeded = true;
-      }
-    } catch (err: any) {
-      // batch timed out or failed; fallback to DNS probe for each domain
-    }
-  }
+  const [primaryRes, secondaryRes] = await Promise.allSettled([
+    liquid && primaryTlds.length > 0
+      ? liquid.checkBulkAvailability(primaryTlds.map(t => `${baseKeyword}.${t}`), 3_000)
+      : Promise.resolve(null),
+    liquid && secondaryTlds.length > 0
+      ? liquid.checkBulkAvailability(secondaryTlds.map(t => `${baseKeyword}.${t}`), 3_000)
+      : Promise.resolve(null),
+  ]);
+
+  const primaryData = primaryRes.status === "fulfilled" ? primaryRes.value : null;
+  const secondaryData = secondaryRes.status === "fulfilled" ? secondaryRes.value : null;
 
   // 4. Resolve each TLD status with DNS probe fallback
   const results = await Promise.all(
@@ -1351,8 +1352,9 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
       let isAvailable = false;
       let statusResolved = false;
 
-      if (batchSucceeded && batchRes) {
-        const rawStatus = extractDomainStatus(batchRes, fullDomain);
+      const batchPayload = primaryTldKeys.has(tld) ? primaryData : secondaryData;
+      if (batchPayload) {
+        const rawStatus = extractDomainStatus(batchPayload, fullDomain);
         if (rawStatus === "available" || rawStatus === "free" || rawStatus === "available_for_registration") {
           isAvailable = true;
           statusResolved = true;
@@ -1362,7 +1364,7 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
         }
       }
 
-      // If status could not be resolved from batch, check via DNS probe
+      // If status could not be resolved from API payload, check via DNS probe
       if (!statusResolved) {
         try {
           isAvailable = await checkDnsAvailability(fullDomain);
