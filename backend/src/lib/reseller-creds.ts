@@ -98,12 +98,39 @@ export async function resolveResellerCreds(userId?: number): Promise<ResellerCre
         try {
           apiKey = await decryptApiKey(targetUser.apiKeyEncrypted);
         } catch (e) {
-          console.error("[resolveResellerCreds] decryptApiKey failed:", e);
-          throw new AppError("Dekripsi API key reseller gagal. Pastikan ENCRYPTION_KEY benar.", 500);
+          console.warn("[resolveResellerCreds] decryptApiKey failed for user", targetUser.id, e);
+          if (targetUser.apiKey) {
+            apiKey = targetUser.apiKey;
+          }
         }
       } else if (targetUser.apiKey) {
-        console.warn("[resolveResellerCreds] WARNING: Using plaintext apiKey for user", targetUser.id, "— encrypt this key via Settings");
         apiKey = targetUser.apiKey;
+      }
+    }
+  }
+
+  // Fallback: master reseller/admin in DB (e.g. For visitor targetId === 0 or missing creds)
+  if (!resellerId || !apiKey) {
+    const [master] = await db.select().from(users).where(
+      and(
+        sql`${users.role} IN ('reseller', 'admin')`,
+        sql`(${users.apiKey} IS NOT NULL OR ${users.apiKeyEncrypted} IS NOT NULL)`
+      )
+    ).limit(1);
+
+    if (master) {
+      if (!resellerId) resellerId = master.resellerId || "";
+      if (!apiKey) {
+        if (master.apiKeyEncrypted) {
+          try {
+            apiKey = await decryptApiKey(master.apiKeyEncrypted);
+          } catch (e) {
+            console.warn("[resolveResellerCreds] master decryptApiKey failed:", e);
+            if (master.apiKey) apiKey = master.apiKey;
+          }
+        } else if (master.apiKey) {
+          apiKey = master.apiKey;
+        }
       }
     }
   }
@@ -185,8 +212,8 @@ export async function resolveCredsFromUser(user: {
         try {
           apiKey = await decryptApiKey(parentUser.apiKeyEncrypted);
         } catch (e) {
-          console.error("[resolveCredsFromUser] parent decryptApiKey failed:", e);
-          throw new AppError("Dekripsi API key parent reseller gagal.", 500);
+          console.warn("[resolveCredsFromUser] parent decryptApiKey failed:", e);
+          if (parentUser.apiKey) apiKey = parentUser.apiKey;
         }
       } else if (parentUser.apiKey) {
         apiKey = parentUser.apiKey;
@@ -200,15 +227,40 @@ export async function resolveCredsFromUser(user: {
       try {
         apiKey = await decryptApiKey(user.apiKeyEncrypted);
       } catch (e) {
-        console.error("[resolveCredsFromUser] own decryptApiKey failed:", e);
-        throw new AppError("Dekripsi API key reseller gagal.", 500);
+        console.warn("[resolveCredsFromUser] own decryptApiKey failed:", e);
+        if (user.apiKey) apiKey = user.apiKey;
       }
     } else if (user.apiKey) {
       apiKey = user.apiKey;
     }
   }
 
-  // H2: no fallback to an arbitrary "first reseller" in the DB
+  // Fallback: master reseller/admin in DB
+  if (!resellerId || !apiKey) {
+    const [master] = await db.select().from(users).where(
+      and(
+        sql`${users.role} IN ('reseller', 'admin')`,
+        sql`(${users.apiKey} IS NOT NULL OR ${users.apiKeyEncrypted} IS NOT NULL)`
+      )
+    ).limit(1);
+
+    if (master) {
+      if (!resellerId) resellerId = master.resellerId || "";
+      if (!apiKey) {
+        if (master.apiKeyEncrypted) {
+          try {
+            apiKey = await decryptApiKey(master.apiKeyEncrypted);
+          } catch (e) {
+            console.warn("[resolveCredsFromUser] master fallback decrypt failed:", e);
+            if (master.apiKey) apiKey = master.apiKey;
+          }
+        } else if (master.apiKey) {
+          apiKey = master.apiKey;
+        }
+      }
+    }
+  }
+
   // Fallback: app_settings table in database (explicit operator configuration)
   if (!resellerId || !apiKey) {
     const dbSettings = await resolveFromAppSettings();

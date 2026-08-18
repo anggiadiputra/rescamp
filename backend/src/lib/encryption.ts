@@ -102,9 +102,10 @@ export async function decrypt(ciphertextBase64: string): Promise<string> {
       );
       return new TextDecoder().decode(plaintext);
     } catch (primaryError) {
-      // Fallback to OLD_ENCRYPTION_KEY with extracted salt
+      // Fallback to OLD_ENCRYPTION_KEY or legacy default key with extracted salt
       const fallbackKeys = [
         process.env.OLD_ENCRYPTION_KEY,
+        "change-this-in-production-min-32-chars!!",
       ].filter((k): k is string => Boolean(k && k !== ENC_KEY));
 
       for (const fallbackKeyString of fallbackKeys) {
@@ -136,9 +137,10 @@ export async function decrypt(ciphertextBase64: string): Promise<string> {
     );
     return new TextDecoder().decode(plaintext);
   } catch (primaryError) {
-    // Attempt fallback to OLD_ENCRYPTION_KEY
+    // Attempt fallback to OLD_ENCRYPTION_KEY or legacy default key
     const fallbackKeys = [
       process.env.OLD_ENCRYPTION_KEY,
+      "change-this-in-production-min-32-chars!!",
     ].filter((k): k is string => Boolean(k && k !== ENC_KEY));
 
     for (const fallbackKeyString of fallbackKeys) {

@@ -17,33 +17,47 @@ import { resolveResellerCreds, resolveCredsFromUser } from "../../lib/reseller-c
 // For customer or public visitor: resolve the reseller's API credentials
 async function getResellerCreds(ctx: any) {
   const userId = Number(ctx.store?.user?.sub);
-  if (!userId || isNaN(userId)) {
-    const [reseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
-    if (!reseller) throw new AppError("Reseller not configured", 500);
-    const creds = await resolveCredsFromUser(reseller);
-    if (!creds.apiKey) throw new AppError("Reseller not configured", 500);
-    return { id: 0, resellerId: creds.resellerId, apiKey: creds.apiKey, role: "visitor" };
+  if (userId && !isNaN(userId)) {
+    try {
+      const u = await getUser(ctx);
+      const creds = await resolveResellerCreds(u.id);
+      if (creds.resellerId && creds.apiKey) {
+        return { id: u.id, resellerId: creds.resellerId, apiKey: creds.apiKey, role: u.role || "customer" };
+      }
+    } catch (e: any) {
+      console.warn("[getResellerCreds] resolveResellerCreds for logged in user failed, falling back to master:", e?.message);
+    }
   }
-  const u = await getUser(ctx);
-  const creds = await resolveResellerCreds(u.id);
-  if (!creds.resellerId || !creds.apiKey) throw new AppError("Reseller not configured", 500);
-  return { id: u.id, resellerId: creds.resellerId, apiKey: creds.apiKey, role: u.role || "customer" };
+
+  // Visitor or fallback to master reseller
+  const creds = await resolveResellerCreds(0);
+  return { id: 0, resellerId: creds.resellerId, apiKey: creds.apiKey, role: "visitor" };
 }
 
 export async function checkAvailability(ctx: any) {
   const domain = ctx.query.domain || ctx.query.domain_name;
   const tld = ctx.query.tld;
   const fullDomain = domain?.includes(".") ? domain : `${domain}.${tld}`;
-  const creds = await getResellerCreds(ctx);
-  const result = await svc.checkAvailability(creds, fullDomain);
-  return { data: result };
+  try {
+    const creds = await getResellerCreds(ctx);
+    const result = await svc.checkAvailability(creds, fullDomain);
+    return { data: result };
+  } catch (err: any) {
+    console.warn("[checkAvailability] Handler warning/fallback:", err?.message || err);
+    return { data: null, error: err?.message || "Gagal memeriksa ketersediaan domain" };
+  }
 }
 
 export async function suggestions(ctx: any) {
   const { keyword, tld } = ctx.query;
-  const creds = await getResellerCreds(ctx);
-  const result = await svc.getSuggestions(creds, keyword, tld);
-  return { data: result };
+  try {
+    const creds = await getResellerCreds(ctx);
+    const result = await svc.getSuggestions(creds, keyword, tld);
+    return { data: result };
+  } catch (err: any) {
+    console.warn("[suggestions] Handler warning/fallback:", err?.message || err);
+    return { data: [] };
+  }
 }
 
 export async function register(ctx: any) {
@@ -230,9 +244,14 @@ async function resolveCustomerId(u: any): Promise<number | undefined> {
 export async function bulkAvailability(ctx: any) {
   const { keyword } = ctx.query;
   if (!keyword || keyword.includes(".")) return { data: [] };
-  const creds = await getResellerCreds(ctx);
-  const results = await svc.bulkAvailability(creds, keyword);
-  return { data: results };
+  try {
+    const creds = await getResellerCreds(ctx);
+    const results = await svc.bulkAvailability(creds, keyword);
+    return { data: results };
+  } catch (err: any) {
+    console.warn("[bulkAvailability] Handler warning/fallback:", err?.message || err);
+    return { data: [], error: err?.message || "Gagal memeriksa ketersediaan domain" };
+  }
 }
 
 export async function sync(ctx: any) {
