@@ -239,7 +239,7 @@ export async function checkAvailability(user: { id?: number; resellerId: string 
   const liquid = await getLiquid(user);
   let res: any = null;
   try {
-    res = await liquid.checkAvailability(domain, 3_500);
+    res = await liquid.checkAvailability(domain, 5_000);
   } catch (err: any) {
     const isAvail = await checkDnsAvailability(domain).catch(() => false);
     res = { [domain]: { status: isAvail ? "available" : "unavailable" } };
@@ -1335,10 +1335,10 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
 
   const [primaryRes, secondaryRes] = await Promise.allSettled([
     liquid && primaryTlds.length > 0
-      ? liquid.checkBulkAvailability(primaryTlds.map(t => `${baseKeyword}.${t}`), 3_000)
+      ? liquid.checkBulkAvailability(primaryTlds.map(t => `${baseKeyword}.${t}`), 5_000)
       : Promise.resolve(null),
     liquid && secondaryTlds.length > 0
-      ? liquid.checkBulkAvailability(secondaryTlds.map(t => `${baseKeyword}.${t}`), 3_000)
+      ? liquid.checkBulkAvailability(secondaryTlds.map(t => `${baseKeyword}.${t}`), 5_000)
       : Promise.resolve(null),
   ]);
 
