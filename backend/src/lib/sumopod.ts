@@ -33,8 +33,7 @@ async function getSumopodConfig(): Promise<{ apiKey: string; baseUrl: string; we
     if (apiKey) apiKeySource = "env";
   }
   if (!apiKey) {
-    // Default fallback API Key from sumopod.md sandbox
-    apiKey = "7eb441b5d404b13bd1ea23784355043543f6426225101e63a0b85ba6f5d72219";
+    throw new AppError("SUMOPOD_API_KEY harus dikonfigurasi di Settings atau .env", 500);
   }
   if (!baseUrl) {
     baseUrl = env.SUMOPOD_PAYMENT_URL || "https://api-pay-sandbox.sumopod.com/api/v1";
@@ -96,63 +95,43 @@ export class SumopodClient {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    const SANDBOX_KEY = "7eb441b5d404b13bd1ea23784355043543f6426225101e63a0b85ba6f5d72219";
-    const SANDBOX_URL = "https://api-pay-sandbox.sumopod.com/api/v1";
-    const PROD_URL = "https://api-pay.sumopod.com/api/v1";
-
-    const attempts = [
-      { url: cfg.baseUrl, key: cfg.apiKey },
-      { url: cfg.baseUrl.includes("sandbox") ? PROD_URL : SANDBOX_URL, key: cfg.apiKey },
-      { url: SANDBOX_URL, key: SANDBOX_KEY },
-    ];
-
-    // Remove duplicates while preserving order
-    const uniqueAttempts = attempts.filter((att, index, self) =>
-      index === self.findIndex((t) => t.url === att.url && t.key === att.key)
-    );
-
-    let lastErrorText = "";
-    let lastStatus = 0;
+    const cleanUrl = cfg.baseUrl.trim().replace(/\/payments$/, "").replace(/\/$/, "");
 
     try {
-      for (const att of uniqueAttempts) {
-        if (!att.key || !att.url) continue;
-        try {
-          const cleanUrl = att.url.trim().replace(/\/payments$/, "").replace(/\/$/, "");
-          const response = await fetch(`${cleanUrl}/payments`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Api-Key": att.key,
-            },
-            body: JSON.stringify(payload),
-            signal: controller.signal,
-          });
+      const response = await fetch(`${cleanUrl}/payments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Api-Key": cfg.apiKey,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
 
-          if (response.ok) {
-            const raw = await response.json() as any;
-            return {
-              payment_id: raw.payment_id || raw.paymentId || "",
-              order_id: raw.order_id || raw.orderId || "",
-              amount: raw.amount || 0,
-              fee: raw.fee || 0,
-              net_amount: raw.net_amount || raw.netAmount || 0,
-              payment_link_url: raw.payment_link_url || raw.paymentLinkUrl || "",
-              status: raw.status || "",
-              expires_at: raw.expires_at || raw.expiresAt || "",
-            };
-          } else {
-            lastStatus = response.status;
-            lastErrorText = await response.text();
-            const maskedKey = `${att.key.slice(0, 6)}...${att.key.slice(-4)}`;
-            console.warn(`Sumopod payment attempt (${response.status}) failed [URL: ${att.url}/payments, Key: ${maskedKey}]: ${lastErrorText}`);
-          }
-        } catch (err: any) {
-          if (err.name === "AbortError") throw err;
-          console.warn(`Sumopod connection attempt failed [URL: ${att.url}]:`, err?.message || err);
-        }
+      if (response.ok) {
+        const raw = await response.json() as any;
+        return {
+          payment_id: raw.payment_id || raw.paymentId || "",
+          order_id: raw.order_id || raw.orderId || "",
+          amount: raw.amount || 0,
+          fee: raw.fee || 0,
+          net_amount: raw.net_amount || raw.netAmount || 0,
+          payment_link_url: raw.payment_link_url || raw.paymentLinkUrl || "",
+          status: raw.status || "",
+          expires_at: raw.expires_at || raw.expiresAt || "",
+        };
+      } else {
+        const lastStatus = response.status;
+        const lastErrorText = await response.text();
+        const maskedKey = cfg.apiKey.length > 8 ? `${cfg.apiKey.slice(0, 4)}...${cfg.apiKey.slice(-4)}` : "***";
+        console.warn(`Sumopod payment attempt (${lastStatus}) failed [URL: ${cleanUrl}/payments, Key: ${maskedKey}]: ${lastErrorText}`);
+        throw new AppError(`Sumopod API Error (${lastStatus}): ${lastErrorText || "Unauthorized"}`, 502);
       }
-      throw new AppError(`Sumopod API Error (${lastStatus || 502}): ${lastErrorText || "Unauthorized"}`, 502);
+    } catch (err: any) {
+      if (err instanceof AppError) throw err;
+      if (err.name === "AbortError") throw new AppError("Sumopod API request timeout", 504);
+      console.warn(`Sumopod connection attempt failed [URL: ${cleanUrl}]:`, err?.message || err);
+      throw new AppError(`Sumopod API Error: ${err?.message || err}`, 502);
     } finally {
       clearTimeout(timeoutId);
     }

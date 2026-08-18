@@ -25,6 +25,10 @@ if (!envVars.JWT_SECRET || envVars.JWT_SECRET.length < 16) {
   throw new Error("JWT_SECRET must be set in .env and at least 16 characters");
 }
 
+if (envVars.SUMOPOD_WEBHOOK_SECRET && envVars.SUMOPOD_WEBHOOK_SECRET.trim().length > 0 && envVars.SUMOPOD_WEBHOOK_SECRET.trim().length < 24) {
+  throw new Error("SUMOPOD_WEBHOOK_SECRET harus minimal 24 karakter jika di-set (atau kosongkan untuk menonaktifkan webhook HMAC)");
+}
+
 // Warn if SUMOPOD_API_KEY is missing in .env (can still be resolved from app_settings DB)
 if (!envVars.SUMOPOD_API_KEY) {
   console.warn("[env] SUMOPOD_API_KEY is not set in .env (Sumopod functions will rely on app_settings database configuration)");
