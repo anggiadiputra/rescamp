@@ -1222,7 +1222,7 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
 
   // Fallback default supported Resellercamp TLDs if still empty
   if (tldSet.size === 0) {
-    const defaultTlds = ["com", "id", "co.id", "my.id", "or.id", "web.id", "ac.id", "sch.id", "biz", "info", "xyz", "net", "org"];
+    const defaultTlds = ["com", "id", "co.id", "my.id", "or.id", "web.id", "biz.id", "ac.id", "sch.id", "ponpes.id", "biz", "info", "xyz", "net", "org"];
     for (const t of defaultTlds) tldSet.add(t);
   }
 
@@ -1241,34 +1241,49 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
   // Helper to extract status from Resellercamp response shape
   function extractDomainStatus(res: any, fullDomain: string): string {
     if (!res) return "unavailable";
-    const domainLower = fullDomain.toLowerCase();
+    const targetDomain = fullDomain.trim().toLowerCase();
 
-    if (Array.isArray(res)) {
-      for (const item of res) {
+    // If response is wrapped in { data: ... } or { result: ... }
+    const data = res.data ?? res.result ?? res;
+
+    // 1. If data is an Array: loop each element
+    if (Array.isArray(data)) {
+      for (const item of data) {
         if (!item || typeof item !== "object") continue;
-        if (item[domainLower]) {
-          const val = item[domainLower];
-          if (typeof val === "string") return val.toLowerCase();
-          if (val && typeof val === "object") return String(val.status || val.classkey || "unavailable").toLowerCase();
+        // Direct key match on item (e.g. { "example.com": { status: "available" } })
+        for (const [k, v] of Object.entries(item)) {
+          if (k.toLowerCase() === targetDomain) {
+            if (typeof v === "string") return v.toLowerCase();
+            if (v && typeof v === "object") return String((v as any).status || (v as any).classkey || "unavailable").toLowerCase();
+          }
         }
-        if (typeof item.status === "string") return item.status.toLowerCase();
+        // If item itself has domain and status fields: { domain: "example.com", status: "available" }
+        const itemDomain = String(item.domain || item.domain_name || item.name || "").toLowerCase();
+        if (itemDomain === targetDomain && item.status) {
+          return String(item.status).toLowerCase();
+        }
       }
-      if (res[0]) return extractDomainStatus(res[0], fullDomain);
-    } else if (typeof res === "object") {
-      const source = res.data || res.result || res;
-      if (source[domainLower]) {
-        const val = source[domainLower];
-        if (typeof val === "string") return val.toLowerCase();
-        if (val && typeof val === "object") return String(val.status || val.classkey || "unavailable").toLowerCase();
+      // Single element array containing status: [{ status: "available" }]
+      if (data.length === 1 && data[0] && typeof data[0] === "object" && typeof data[0].status === "string" && !data[0].domain) {
+        return data[0].status.toLowerCase();
       }
-      if (typeof source.status === "string") return source.status.toLowerCase();
-      for (const [k, v] of Object.entries(source)) {
-        if (k.toLowerCase() === domainLower) {
+    }
+
+    // 2. If data is an Object:
+    if (typeof data === "object") {
+      // Direct domain lookup
+      for (const [k, v] of Object.entries(data)) {
+        if (k.toLowerCase() === targetDomain) {
           if (typeof v === "string") return v.toLowerCase();
           if (v && typeof v === "object") return String((v as any).status || (v as any).classkey || "unavailable").toLowerCase();
         }
       }
+      // If object itself is { status: "available" } for single domain check
+      if (typeof data.status === "string" && !data.domain && Object.keys(data).length <= 3) {
+        return data.status.toLowerCase();
+      }
     }
+
     return "unavailable";
   }
 
