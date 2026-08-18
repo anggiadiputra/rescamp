@@ -248,10 +248,10 @@ async function resolveCustomerId(u: any): Promise<number | undefined> {
 
 export async function bulkAvailability(ctx: any) {
   const { keyword } = ctx.query;
-  if (!keyword || keyword.includes(".")) return { data: [] };
+  if (!keyword || typeof keyword !== "string" || !keyword.trim()) return { data: [] };
   try {
     const creds = await getResellerCreds(ctx);
-    const results = await svc.bulkAvailability(creds, keyword);
+    const results = await svc.bulkAvailability(creds, keyword.trim());
     return { data: results };
   } catch (err: any) {
     console.warn("[bulkAvailability] Handler warning/fallback:", err?.message || err);

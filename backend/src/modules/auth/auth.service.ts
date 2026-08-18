@@ -438,16 +438,23 @@ export async function getResellerData(userId: number) {
   let account: any = null;
   let balance: any = null;
   let syncError = "";
+  let apiKey = "";
+  let resolvedResellerId = user.resellerId || "";
 
-  // Resolve credentials with decryption + cache
-  const creds = await resolveResellerCreds(userId);
-  const apiKey = creds.apiKey;
+  // Resolve credentials with decryption + cache safely
+  try {
+    const creds = await resolveResellerCreds(userId);
+    apiKey = creds.apiKey || "";
+    if (creds.resellerId) resolvedResellerId = creds.resellerId;
+  } catch (err: any) {
+    syncError = err?.message || "Kredensial reseller belum dikonfigurasi";
+  }
 
-  if (creds.resellerId && apiKey) {
-    const liquid = new LiquidClient(creds.resellerId, apiKey);
+  if (resolvedResellerId && apiKey) {
+    const liquid = new LiquidClient(resolvedResellerId, apiKey);
     try {
       const [acc, bal] = await Promise.all([
-        liquid.getReseller(creds.resellerId).catch(() => null),
+        liquid.getReseller(resolvedResellerId).catch(() => null),
         liquid.getBalance().catch(() => null),
       ]);
       account = acc;
@@ -480,12 +487,12 @@ export async function getResellerData(userId: number) {
         }
       }
     } catch (e: any) {
-      syncError = e.message || "Gagal sinkronisasi";
+      syncError = e.message || "Gagal sinkronisasi data reseller";
     }
   }
 
   return {
-    reseller_id: user.resellerId || "",
+    reseller_id: resolvedResellerId,
     api_key_masked: maskApiKey(apiKey || ""),
     balance,
     account,

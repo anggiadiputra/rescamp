@@ -167,20 +167,9 @@ export default function LandingPage() {
         const singleRes = await api.get<any>(`/domains/availability?domain=${encodeURIComponent(rawInput)}`);
         setSearchResult(singleRes && singleRes.data ? (Array.isArray(singleRes.data) ? singleRes.data : [singleRes.data]) : []);
       }
-    } catch {
-      setSearchResult([
-        { domain: `${baseKeyword}.com`, available: true, price: "180.00", renew_price: "209.00", transfer_price: "209.00" },
-        { domain: `${baseKeyword}.id`, available: true, price: "241.50", renew_price: "241.50", transfer_price: "241.50" },
-        { domain: `${baseKeyword}.co.id`, available: true, price: "310.50", renew_price: "310.50", transfer_price: "310.50" },
-        { domain: `${baseKeyword}.my.id`, available: true, price: "5.00", renew_price: "15.00", transfer_price: "15.00" },
-        { domain: `${baseKeyword}.web.id`, available: true, price: "5.00", renew_price: "60.00", transfer_price: "60.00" },
-        { domain: `${baseKeyword}.biz.id`, available: true, price: "5.00", renew_price: "15.00", transfer_price: "15.00" },
-        { domain: `${baseKeyword}.xyz`, available: true, price: "68.89", renew_price: "194.35", transfer_price: "194.35" },
-        { domain: `${baseKeyword}.or.id`, available: true, price: "56.93", renew_price: "56.93", transfer_price: "56.93" },
-        { domain: `${baseKeyword}.ac.id`, available: true, price: "56.93", renew_price: "56.93", transfer_price: "56.93" },
-        { domain: `${baseKeyword}.sch.id`, available: true, price: "56.93", renew_price: "56.93", transfer_price: "56.93" },
-        { domain: `${baseKeyword}.ponpes.id`, available: true, price: "50.49", renew_price: "50.49", transfer_price: "50.49" },
-      ]);
+    } catch (err: any) {
+      setSearchResult([]);
+      console.warn("[LandingPage] search error:", err?.message || err);
     } finally {
       setIsSearching(false);
     }

@@ -128,6 +128,9 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   tax_enabled: "false",
   tax_rate: "11",
   tax_label: "PPN",
+
+  reseller_id: env.DEFAULT_RESELLER_ID || "",
+  reseller_api_key: env.RESELLER_API_KEY || "",
 };
 
 let isTableInitialized = false;
@@ -220,6 +223,12 @@ function validateSettingUrl(key: string, value: string) {
 
 export async function updateSystemSettings(data: Record<string, any>): Promise<Record<string, string>> {
   await ensureSettingsTableExists();
+  const { clearCredsCache } = await import("../../lib/reseller-creds");
+  const { encryptApiKey } = await import("../../lib/encryption");
+
+  let updatedResellerId = "";
+  let updatedResellerApiKey = "";
+
   for (const [key, value] of Object.entries(data)) {
     const stringVal = typeof value === "boolean" ? (value ? "true" : "false") : String(value ?? "");
 
@@ -230,12 +239,38 @@ export async function updateSystemSettings(data: Record<string, any>): Promise<R
 
     validateSettingUrl(key, stringVal);
 
+    if (key === "reseller_id" && stringVal.trim()) {
+      updatedResellerId = stringVal.trim();
+    }
+    if ((key === "reseller_api_key" || key === "liquid_api_key") && stringVal.trim()) {
+      updatedResellerApiKey = stringVal.trim();
+    }
+
     const [existing] = await db.select().from(appSettings).where(eq(appSettings.key, key));
 
     if (existing) {
       await db.update(appSettings).set({ value: stringVal }).where(eq(appSettings.key, key));
     } else {
       await db.insert(appSettings).values({ key, value: stringVal, category: getCategoryForKey(key) });
+    }
+  }
+
+  // If reseller credentials were updated, sync to primary reseller user in users table & invalidate cache
+  if (updatedResellerId || updatedResellerApiKey) {
+    clearCredsCache();
+    try {
+      const [master] = await db.select().from(users).where(sql`${users.role} IN ('reseller', 'admin')`).limit(1);
+      if (master) {
+        const updatePayload: Record<string, any> = {};
+        if (updatedResellerId) updatePayload.resellerId = updatedResellerId;
+        if (updatedResellerApiKey) {
+          updatePayload.apiKeyEncrypted = await encryptApiKey(updatedResellerApiKey);
+          updatePayload.apiKey = null; // Remove plaintext
+        }
+        await db.update(users).set(updatePayload).where(eq(users.id, master.id));
+      }
+    } catch (e) {
+      console.warn("[updateSystemSettings] Syncing updated credentials to master user failed:", e);
     }
   }
 
@@ -249,7 +284,9 @@ function getCategoryForKey(key: string): string {
   if (key.startsWith("s3_")) return "s3";
   if (key.includes("color") || key.includes("theme")) return "theme";
   if (key.startsWith("seo_") || key.startsWith("brand_") || key.startsWith("site_") || key === "og_image_url") return "brand_seo";
+  if (key.startsWith("turnstile_")) return "security";
   if (key.startsWith("tax_")) return "tax";
+  if (key.startsWith("reseller_") || key.startsWith("liquid_")) return "reseller";
   return "general";
 }
 

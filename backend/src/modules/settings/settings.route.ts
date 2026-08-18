@@ -33,6 +33,8 @@ const MASKED_SETTINGS_FIELDS = [
   "s3_access_key",
   "s3_secret_key",
   "turnstile_secret_key",
+  "reseller_api_key",
+  "liquid_api_key",
 ];
 
 function maskSettingsSecrets(settings: Record<string, string>): Record<string, string> {
@@ -80,8 +82,11 @@ async function handleTestKirisan({ body }: any) {
   return res;
 }
 
-async function handleTestLiquid() {
-  const res = await testLiquidConnection();
+async function handleTestLiquid(ctx: any) {
+  const body = ctx?.body || {};
+  const rId = body?.reseller_id;
+  const key = body?.api_key;
+  const res = await testLiquidConnection(rId, key);
   return res;
 }
 
@@ -97,5 +102,6 @@ export const settingsRoutes = new Elysia({ prefix: "/settings" })
       .put("", handlePutSettings as any)
       .post("/test-kirisan", handleTestKirisan as any)
       .get("/test-liquid", handleTestLiquid as any)
+      .post("/test-liquid", handleTestLiquid as any)
   );
 

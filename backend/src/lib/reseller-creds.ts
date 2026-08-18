@@ -155,7 +155,7 @@ export async function resolveResellerCreds(userId?: number): Promise<ResellerCre
   const creds: ResellerCreds = { resellerId, apiKey };
 
   if (!creds.resellerId || !creds.apiKey) {
-    throw new AppError("Kredensial reseller tidak ditemukan. Hubungi penyedia layanan.", 502);
+    throw new AppError("Kredensial reseller tidak ditemukan. Pastikan Reseller ID dan API Key telah dikonfigurasi di Pengaturan atau .env.", 400);
   }
 
   // Cache the resolved credentials
@@ -234,7 +234,11 @@ export async function resolveCredsFromUser(user: {
         apiKey = await decryptApiKey(user.apiKeyEncrypted);
       } catch (e) {
         console.warn("[resolveCredsFromUser] own decryptApiKey failed:", e);
-        if (user.apiKey) apiKey = user.apiKey;
+        if (user.apiKey) {
+          apiKey = user.apiKey;
+        } else if (user.apiKeyEncrypted && !user.apiKeyEncrypted.includes(":")) {
+          apiKey = user.apiKeyEncrypted;
+        }
       }
     } else if (user.apiKey) {
       apiKey = user.apiKey;
@@ -258,7 +262,11 @@ export async function resolveCredsFromUser(user: {
             apiKey = await decryptApiKey(master.apiKeyEncrypted);
           } catch (e) {
             console.warn("[resolveCredsFromUser] master fallback decrypt failed:", e);
-            if (master.apiKey) apiKey = master.apiKey;
+            if (master.apiKey) {
+              apiKey = master.apiKey;
+            } else if (master.apiKeyEncrypted && !master.apiKeyEncrypted.includes(":")) {
+              apiKey = master.apiKeyEncrypted;
+            }
           }
         } else if (master.apiKey) {
           apiKey = master.apiKey;
@@ -281,7 +289,7 @@ export async function resolveCredsFromUser(user: {
   const creds: ResellerCreds = { resellerId, apiKey };
 
   if (!creds.resellerId || !creds.apiKey) {
-    throw new AppError("Kredensial reseller tidak ditemukan. Hubungi penyedia layanan.", 502);
+    throw new AppError("Kredensial reseller tidak ditemukan. Pastikan Reseller ID dan API Key telah dikonfigurasi di Pengaturan atau .env.", 400);
   }
 
   if (resellerId && apiKey) {

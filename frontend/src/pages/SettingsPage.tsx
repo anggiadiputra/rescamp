@@ -22,6 +22,7 @@ const SECTION_FIELDS: Record<string, string[]> = {
   s3: ["s3_endpoint", "s3_region", "s3_access_key", "s3_secret_key", "s3_bucket", "s3_public_url"],
   turnstile: ["turnstile_enabled", "turnstile_site_key", "turnstile_secret_key", "turnstile_verify_url"],
   tax: ["tax_enabled", "tax_rate", "tax_label"],
+  reseller: ["reseller_id", "reseller_api_key"],
 };
 
 export default function SettingsPage() {
@@ -30,6 +31,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingKirisan, setTestingKirisan] = useState(false);
+  const [testingLiquid, setTestingLiquid] = useState(false);
   const [msg, setMsg] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
 
@@ -43,6 +45,7 @@ export default function SettingsPage() {
     s3: false,
     turnstile: false,
     tax: false,
+    reseller: false,
   });
 
   // Track initial/saved form state to allow section cancellation
@@ -123,6 +126,10 @@ export default function SettingsPage() {
     tax_enabled: false,
     tax_rate: "11",
     tax_label: "PPN",
+
+    // Resellercamp Upstream API
+    reseller_id: "",
+    reseller_api_key: "",
   });
 
   useEffect(() => {
@@ -143,6 +150,8 @@ export default function SettingsPage() {
         tax_enabled: data.tax_enabled === "true" || data.tax_enabled === true,
         tax_rate: data.tax_rate ?? "11",
         tax_label: data.tax_label ?? "PPN",
+        reseller_id: data.reseller_id || "",
+        reseller_api_key: data.reseller_api_key || "",
       };
       setForm(loadedForm);
       setInitialForm(loadedForm);
@@ -207,6 +216,7 @@ export default function SettingsPage() {
           s3: false,
           turnstile: false,
           tax: false,
+          reseller: false,
         });
       }
       toast("Konfigurasi sistem berhasil disimpan dan diterapkan!");
@@ -234,6 +244,20 @@ export default function SettingsPage() {
       toast(e.message || "Gagal mengirim email pengujian Kirisan", "error");
     }
     setTestingKirisan(false);
+  }
+
+  async function handleTestLiquid() {
+    setTestingLiquid(true);
+    try {
+      const res = await api.post<any>("/settings/test-liquid", {
+        reseller_id: form.reseller_id,
+        api_key: form.reseller_api_key,
+      });
+      toast(res.message || "Koneksi Resellercamp API Berhasil!");
+    } catch (e: any) {
+      toast(e.message || "Gagal menguji koneksi Resellercamp API", "error");
+    }
+    setTestingLiquid(false);
   }
 
   async function handleSyncReseller() {
@@ -1670,6 +1694,111 @@ export default function SettingsPage() {
                 </div>
               )}
             </Card>
+
+            {/* Resellercamp Liquid API Configuration — only for reseller role */}
+            {user?.role === "reseller" && (
+              <Card className="p-6 bg-white border border-gray-200 shadow-xs rounded-xl space-y-6">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                      <Key className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Kredensial Resellercamp (Liquid API)</h2>
+                      <p className="text-xs text-gray-500">Konfigurasi akun reseller untuk pemesanan domain, DNS, dan sinkronisasi data.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {editingSections.reseller ? (
+                      <>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => cancelSectionEdit("reseller", SECTION_FIELDS.reseller)}
+                          disabled={saving}
+                        >
+                          <X className="w-3.5 h-3.5 mr-1" /> Batal
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleSave(undefined, "reseller")}
+                          disabled={saving}
+                        >
+                          <Check className="w-3.5 h-3.5 mr-1" /> Simpan
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => toggleSectionEdit("reseller")}
+                      >
+                        <SlidersHorizontal className="w-3.5 h-3.5 mr-1" /> Ubah
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {!editingSections.reseller ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="bg-gray-50 p-3.5 rounded-lg border border-gray-100">
+                      <span className="text-xs text-gray-400 block mb-1 font-medium">Reseller ID</span>
+                      <span className="text-sm font-mono text-gray-900 font-semibold">{form.reseller_id || "Belum diatur"}</span>
+                    </div>
+                    <div className="bg-gray-50 p-3.5 rounded-lg border border-gray-100">
+                      <span className="text-xs text-gray-400 block mb-1 font-medium">API Key</span>
+                      <span className="text-sm font-mono text-gray-700">{maskSecret(form.reseller_api_key)}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">
+                          Reseller ID <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={form.reseller_id || ""}
+                          onChange={(e) => setForm({ ...form, reseller_id: e.target.value })}
+                          className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white"
+                          placeholder="Contoh: 17058"
+                        />
+                        <p className="text-[10px] text-gray-400 mt-1">ID Reseller dari dashboard Resellercamp / Liquid.</p>
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">
+                          API Key Resellercamp <span className="text-red-500">*</span>
+                        </label>
+                        <SecretInput
+                          value={form.reseller_api_key || ""}
+                          onChange={(e) => setForm({ ...form, reseller_api_key: e.target.value })}
+                          placeholder="Masukkan API Key Resellercamp..."
+                        />
+                        <p className="text-[10px] text-gray-400 mt-1">API Key dienkripsi aman dengan AES-256-GCM di database.</p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex items-center gap-3">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleTestLiquid}
+                        disabled={testingLiquid || !form.reseller_id || !form.reseller_api_key}
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 mr-1 ${testingLiquid ? "animate-spin" : ""}`} />
+                        {testingLiquid ? "Menguji..." : "Uji Koneksi Resellercamp"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            )}
 
             {/* Reseller API Sync — only for reseller role */}
             {user?.role === "reseller" && (
