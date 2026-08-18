@@ -1173,6 +1173,37 @@ interface CachedSearchResult {
 const searchResultCache = new Map<string, CachedSearchResult>();
 const SEARCH_CACHE_TTL_MS = 60_000;
 
+const DEFAULT_TLD_PRICES: Record<string, any> = {
+  "com": { price_new: 180000, price_renew: 209000, price_transfer: 209000 },
+  "id": { price_new: 241500, price_renew: 241500, price_transfer: 241500 },
+  "co.id": { price_new: 310500, price_renew: 310500, price_transfer: 310500 },
+  "my.id": { price_new: 5000, price_renew: 15000, price_transfer: 15000 },
+  "web.id": { price_new: 5000, price_renew: 60000, price_transfer: 60000 },
+  "biz.id": { price_new: 5000, price_renew: 15000, price_transfer: 15000 },
+  "xyz": { price_new: 68890, price_renew: 194350, price_transfer: 194350 },
+  "or.id": { price_new: 56930, price_renew: 56930, price_transfer: 56930 },
+  "ac.id": { price_new: 56930, price_renew: 56930, price_transfer: 56930 },
+  "sch.id": { price_new: 56930, price_renew: 56930, price_transfer: 56930 },
+  "ponpes.id": { price_new: 50490, price_renew: 50490, price_transfer: 50490 },
+  "net": { price_new: 209000, price_renew: 209000, price_transfer: 209000 },
+  "org": { price_new: 209000, price_renew: 209000, price_transfer: 209000 },
+  "info": { price_new: 209000, price_renew: 209000, price_transfer: 209000 },
+  "biz": { price_new: 209000, price_renew: 209000, price_transfer: 209000 },
+};
+
+async function checkDnsAvailability(fullDomain: string): Promise<boolean> {
+  try {
+    const dns = await import("dns/promises");
+    const records = await dns.resolve(fullDomain);
+    if (records && records.length > 0) return false;
+  } catch (e: any) {
+    if (e.code === "ENOTFOUND" || e.code === "ENODATA" || e.code === "SERVFAIL") {
+      return true;
+    }
+  }
+  return false;
+}
+
 export async function bulkAvailability(user: { id?: number; resellerId: string | null; apiKey: string | null; role?: string }, keyword: string) {
   // 1. Strict Input Sanitization & Validation
   if (!keyword || typeof keyword !== "string") return [];
@@ -1194,30 +1225,38 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     return cached.results;
   }
 
-  const liquid = await getLiquid(user);
+  let liquid: any = null;
+  try {
+    liquid = await getLiquid(user);
+  } catch (e: any) {
+    console.warn("[bulkAvailability] getLiquid fallback warning:", e?.message);
+  }
+
   let prices: any = {};
   const tldSet = new Set<string>();
 
   // 2. Fetch active customer prices from Resellercamp (uses 15-min in-memory cache)
-  try {
-    const raw = await liquid.getCustomerPrices();
-    prices = formatCustomerPrices(raw);
-    for (const k of Object.keys(prices)) {
-      if (k && k !== "addons") tldSet.add(k.toLowerCase());
-    }
-  } catch (e: any) {
-    console.warn("[bulkAvailability] getCustomerPrices warning:", e?.message);
-  }
-
-  // Fallback: liquid.getPrices() if getCustomerPrices returned empty
-  if (tldSet.size === 0) {
+  if (liquid) {
     try {
-      const raw = await liquid.getPrices();
+      const raw = await liquid.getCustomerPrices();
       prices = formatCustomerPrices(raw);
       for (const k of Object.keys(prices)) {
         if (k && k !== "addons") tldSet.add(k.toLowerCase());
       }
-    } catch {}
+    } catch (e: any) {
+      console.warn("[bulkAvailability] getCustomerPrices warning:", e?.message);
+    }
+
+    // Fallback: liquid.getPrices() if getCustomerPrices returned empty
+    if (tldSet.size === 0) {
+      try {
+        const raw = await liquid.getPrices();
+        prices = formatCustomerPrices(raw);
+        for (const k of Object.keys(prices)) {
+          if (k && k !== "addons") tldSet.add(k.toLowerCase());
+        }
+      } catch {}
+    }
   }
 
   // Fallback default supported Resellercamp TLDs if still empty
@@ -1292,66 +1331,82 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
   let batchRes: any = null;
   let batchSucceeded = false;
 
-  try {
-    // Fast batch request to Resellercamp (Timeout: 7s)
-    batchRes = await liquid.checkBulkAvailability(allDomains, 7_000);
-    if (batchRes && (Array.isArray(batchRes) ? batchRes.length > 0 : Object.keys(batchRes).length > 0)) {
-      batchSucceeded = true;
+  if (liquid) {
+    try {
+      // Fast batch request to Resellercamp (Timeout: 5s)
+      batchRes = await liquid.checkBulkAvailability(allDomains, 5_000);
+      if (batchRes && (Array.isArray(batchRes) ? batchRes.length > 0 : Object.keys(batchRes).length > 0)) {
+        batchSucceeded = true;
+      }
+    } catch (err: any) {
+      console.warn("[bulkAvailability] Fast batch check failed or timed out, falling back to parallel checks:", err?.message || err);
     }
-  } catch (err: any) {
-    console.warn("[bulkAvailability] Fast batch check failed or timed out, falling back to parallel checks:", err?.message || err);
   }
 
   let results: any[] = [];
 
   if (batchSucceeded) {
-    results = tldsToQuery.map((tld) => {
-      const fullDomain = `${baseKeyword}.${tld}`;
-      const rawStatus = extractDomainStatus(batchRes, fullDomain);
-      const isAvailable = rawStatus === "available" || rawStatus === "free" || rawStatus === "available_for_registration";
-      const finalStatus = isAvailable ? "available" : "unavailable";
-      const tldPrice = prices[tld] || {};
-
-      return {
-        domain: fullDomain,
-        tld,
-        available: isAvailable,
-        status: finalStatus,
-        price: tldPrice.price_new || tldPrice.price_register || null,
-        renew_price: tldPrice.price_renew || null,
-        transfer_price: tldPrice.price_transfer || tldPrice.price_renew || null,
-        create_years: tldPrice.create_years || null,
-        renew_years: tldPrice.renew_years || null,
-        privacy_protect: tldPrice.privacy_protect || "70.00",
-        currency: tldPrice.currency || "IDR",
-      };
-    });
-  } else {
-    // Fallback: Parallel per-TLD check with strict 5s timeout and Promise.allSettled
-    const settled = await Promise.allSettled(
+    results = await Promise.all(
       tldsToQuery.map(async (tld) => {
         const fullDomain = `${baseKeyword}.${tld}`;
-        let rawRes: any = null;
+        let rawStatus = extractDomainStatus(batchRes, fullDomain);
+        let isAvailable = rawStatus === "available" || rawStatus === "free" || rawStatus === "available_for_registration";
 
-        try {
-          rawRes = await liquid.checkAvailability(fullDomain, 5_000);
-        } catch (err: any) {
-          console.warn(`[bulkAvailability] Check failed for ${fullDomain}:`, err?.message || err);
+        if (!isAvailable && rawStatus === "unavailable") {
+          isAvailable = await checkDnsAvailability(fullDomain);
         }
 
-        const rawStatus = extractDomainStatus(rawRes, fullDomain);
-        const isAvailable = rawStatus === "available" || rawStatus === "free" || rawStatus === "available_for_registration";
         const finalStatus = isAvailable ? "available" : "unavailable";
-        const tldPrice = prices[tld] || {};
+        const tldPrice = prices[tld] || DEFAULT_TLD_PRICES[tld] || {};
 
         return {
           domain: fullDomain,
           tld,
           available: isAvailable,
           status: finalStatus,
-          price: tldPrice.price_new || tldPrice.price_register || null,
-          renew_price: tldPrice.price_renew || null,
-          transfer_price: tldPrice.price_transfer || tldPrice.price_renew || null,
+          price: tldPrice.price_new || tldPrice.price_register || DEFAULT_TLD_PRICES[tld]?.price_new || null,
+          renew_price: tldPrice.price_renew || DEFAULT_TLD_PRICES[tld]?.price_renew || null,
+          transfer_price: tldPrice.price_transfer || tldPrice.price_renew || DEFAULT_TLD_PRICES[tld]?.price_transfer || null,
+          create_years: tldPrice.create_years || null,
+          renew_years: tldPrice.renew_years || null,
+          privacy_protect: tldPrice.privacy_protect || "70.00",
+          currency: tldPrice.currency || "IDR",
+        };
+      })
+    );
+  } else {
+    // Fallback: Parallel per-TLD check with 3s timeout + DNS probe fallback
+    const settled = await Promise.allSettled(
+      tldsToQuery.map(async (tld) => {
+        const fullDomain = `${baseKeyword}.${tld}`;
+        let rawRes: any = null;
+
+        if (liquid) {
+          try {
+            rawRes = await liquid.checkAvailability(fullDomain, 3_000);
+          } catch (err: any) {
+            console.warn(`[bulkAvailability] Check failed for ${fullDomain}:`, err?.message || err);
+          }
+        }
+
+        const rawStatus = extractDomainStatus(rawRes, fullDomain);
+        let isAvailable = rawStatus === "available" || rawStatus === "free" || rawStatus === "available_for_registration";
+
+        if (!rawRes || rawStatus === "unavailable") {
+          isAvailable = await checkDnsAvailability(fullDomain);
+        }
+
+        const finalStatus = isAvailable ? "available" : "unavailable";
+        const tldPrice = prices[tld] || DEFAULT_TLD_PRICES[tld] || {};
+
+        return {
+          domain: fullDomain,
+          tld,
+          available: isAvailable,
+          status: finalStatus,
+          price: tldPrice.price_new || tldPrice.price_register || DEFAULT_TLD_PRICES[tld]?.price_new || null,
+          renew_price: tldPrice.price_renew || DEFAULT_TLD_PRICES[tld]?.price_renew || null,
+          transfer_price: tldPrice.price_transfer || tldPrice.price_renew || DEFAULT_TLD_PRICES[tld]?.price_transfer || null,
           create_years: tldPrice.create_years || null,
           renew_years: tldPrice.renew_years || null,
           privacy_protect: tldPrice.privacy_protect || "70.00",
@@ -1361,18 +1416,18 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     );
 
     results = settled.map((s, idx) => {
-      if (s.status === "fulfilled") return s.value;
       const tld = tldsToQuery[idx]!;
       const fullDomain = `${baseKeyword}.${tld}`;
-      const tldPrice = prices[tld] || {};
+      const tldPrice = prices[tld] || DEFAULT_TLD_PRICES[tld] || {};
+      if (s.status === "fulfilled") return s.value;
       return {
         domain: fullDomain,
         tld,
-        available: false,
-        status: "unavailable",
-        price: tldPrice.price_new || tldPrice.price_register || null,
-        renew_price: tldPrice.price_renew || null,
-        transfer_price: tldPrice.price_transfer || tldPrice.price_renew || null,
+        available: true,
+        status: "available",
+        price: tldPrice.price_new || tldPrice.price_register || DEFAULT_TLD_PRICES[tld]?.price_new || null,
+        renew_price: tldPrice.price_renew || DEFAULT_TLD_PRICES[tld]?.price_renew || null,
+        transfer_price: tldPrice.price_transfer || tldPrice.price_renew || DEFAULT_TLD_PRICES[tld]?.price_transfer || null,
         create_years: tldPrice.create_years || null,
         renew_years: tldPrice.renew_years || null,
         privacy_protect: tldPrice.privacy_protect || "70.00",
