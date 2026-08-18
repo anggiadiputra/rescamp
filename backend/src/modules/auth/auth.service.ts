@@ -12,6 +12,42 @@ import { resolveResellerCreds, resolveCredsFromUser, invalidateCredsCache } from
 
 const MYSQL_DUP_ENTRY = 1062;
 
+// Per-email OTP failure tracking — lockout after 5 wrong attempts
+const otpFailStore = new Map<string, { count: number; lockedUntil: number }>();
+const OTP_MAX_FAILURES = 5;
+const OTP_LOCKOUT_MS = 5 * 60 * 1000; // 5 menit lockout
+
+function checkOtpLockout(email: string) {
+  const record = otpFailStore.get(email);
+  if (record && record.count >= OTP_MAX_FAILURES && Date.now() < record.lockedUntil) {
+    const remainSec = Math.ceil((record.lockedUntil - Date.now()) / 1000);
+    throw new AppError(`Terlalu banyak percobaan OTP salah. Coba lagi dalam ${remainSec} detik.`, 429);
+  }
+}
+
+function recordOtpFailure(email: string) {
+  const record = otpFailStore.get(email) || { count: 0, lockedUntil: 0 };
+  record.count += 1;
+  if (record.count >= OTP_MAX_FAILURES) {
+    record.lockedUntil = Date.now() + OTP_LOCKOUT_MS;
+  }
+  otpFailStore.set(email, record);
+}
+
+function clearOtpFailures(email: string) {
+  otpFailStore.delete(email);
+}
+
+// Evict expired lockout records periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of otpFailStore) {
+    if (record.lockedUntil > 0 && now > record.lockedUntil + 60_000) {
+      otpFailStore.delete(key);
+    }
+  }
+}, 10 * 60 * 1000);
+
 export async function sendRegisterOtp(email: string) {
   const cleanEmail = (email || "").trim().toLowerCase();
   const [existingUser] = await db.select().from(users).where(eq(users.email, cleanEmail));
@@ -41,18 +77,26 @@ export async function register(data: {
 }) {
   const cleanEmail = (data.email || "").trim().toLowerCase();
   if (data.code) {
+    checkOtpLockout(cleanEmail);
     const [record] = await db.select().from(otpCodes).where(
       and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "register"), eq(otpCodes.used, false))
     ).orderBy(desc(otpCodes.id)).limit(1);
-    if (!record) throw new AppError("Kode OTP verifikasi tidak valid", 401);
+    if (!record) {
+      recordOtpFailure(cleanEmail);
+      throw new AppError("Kode OTP verifikasi tidak valid", 401);
+    }
     if (new Date() > record.expiresAt) throw new AppError("Kode OTP sudah kadaluarsa", 401);
-    if (!(await otpCodeMatches(record, data.code))) throw new AppError("Kode OTP verifikasi tidak valid", 401);
+    if (!(await otpCodeMatches(record, data.code))) {
+      recordOtpFailure(cleanEmail);
+      throw new AppError("Kode OTP verifikasi tidak valid", 401);
+    }
     // N1: CAS — if a concurrent caller already consumed this code, affectedRows=0 → reject
     const markUsed: any = await db.update(otpCodes).set({ used: true })
       .where(and(eq(otpCodes.id, record.id), eq(otpCodes.used, false)));
     if ((markUsed[0]?.affectedRows ?? 0) === 0) {
       throw new AppError("Kode OTP sudah digunakan", 401);
     }
+    clearOtpFailures(cleanEmail);
   } else {
     // If an OTP was issued for this email, require code verification
     const [record] = await db.select().from(otpCodes).where(
@@ -515,6 +559,8 @@ export async function sendLoginOtp(email: string, password: string) {
   const encryptedCode = await encryptOtpCode(code);
   await db.insert(otpCodes).values({ email: cleanEmail, code: "", codeEncrypted: encryptedCode, purpose: "login", expiresAt });
 
+  clearOtpFailures(cleanEmail);
+
   await sendEmail(cleanEmail, "login_otp", { otp: code, code, expiry_minutes: 5 });
 
   return { message: "Kode OTP telah dikirim ke email Anda" };
@@ -525,11 +571,14 @@ export async function verifyLoginOtp(email: string, code: string) {
   const cleanCode = (code || "").trim();
   if (!cleanCode) throw new AppError("Kode OTP tidak valid atau sudah digunakan", 401);
 
+  checkOtpLockout(cleanEmail);
+
   const [record] = await db.select().from(otpCodes).where(
     and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "login"), eq(otpCodes.used, false))
   ).orderBy(desc(otpCodes.id)).limit(1);
 
   if (!record || !(await otpCodeMatches(record, cleanCode))) {
+    recordOtpFailure(cleanEmail);
     throw new AppError("Kode OTP tidak valid atau sudah digunakan", 401);
   }
   if (new Date() > record.expiresAt) throw new AppError("Kode OTP sudah kadaluarsa. Silakan minta kode baru.", 401);
@@ -540,6 +589,8 @@ export async function verifyLoginOtp(email: string, code: string) {
   if ((markUsed[0]?.affectedRows ?? 0) === 0) {
     throw new AppError("Kode OTP sudah digunakan", 401);
   }
+
+  clearOtpFailures(cleanEmail);
 
   const [user] = await db.select().from(users).where(eq(users.email, cleanEmail));
   if (!user) throw new AppError("User tidak ditemukan", 404);
@@ -578,7 +629,7 @@ export async function forgotPassword(email: string) {
   // browser history entries, or reverse-proxy access logs.
   const origins = (env.CORS_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean);
   const frontendUrl = origins[0] && origins[0] !== "*" ? origins[0] : env.APP_URL || "";
-  const resetLink = `${frontendUrl}/reset-password#token=${token}`;
+  const resetLink = `${frontendUrl}/reset-password#token=${token}&email=${encodeURIComponent(cleanEmail)}`;
 
   await sendEmail(cleanEmail, "reset_password", {
     token,
@@ -598,14 +649,20 @@ export async function forgotPassword(email: string) {
   };
 }
 
-export async function resetPassword(tokenOrCode: string, newPassword: string) {
+export async function resetPassword(tokenOrCode: string, newPassword: string, email?: string) {
   const clean = (tokenOrCode || "").trim();
   if (!clean) throw new AppError("Token atau Kode OTP reset tidak valid", 400);
+  if (!email || !email.trim()) throw new AppError("Email wajib diisi untuk reset password", 400);
+  const cleanEmail = email.trim().toLowerCase();
 
-  // H7: find the unused reset record and decrypt-compare (legacy plaintext fallback inside)
+  // Scope to the specific user's email only
   const rows = await db.select().from(otpCodes).where(
-    and(eq(otpCodes.purpose, "reset"), eq(otpCodes.used, false))
-  ).limit(500);
+    and(
+      eq(otpCodes.purpose, "reset"),
+      eq(otpCodes.used, false),
+      eq(otpCodes.email, cleanEmail)
+    )
+  ).orderBy(desc(otpCodes.id)).limit(5);
 
   let record: any = null;
   for (const r of rows) {

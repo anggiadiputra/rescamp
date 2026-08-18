@@ -8,12 +8,12 @@ import { AppError } from "../../lib/error";
 // Bearer header still accepted for non-browser clients.
 function setAuthCookie(ctx: any, token: string) {
   const secure = (process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true") ? "; Secure" : "";
-  ctx.set.headers["Set-Cookie"] = `token=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=86400${secure}`;
+  ctx.set.headers["Set-Cookie"] = `token=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Strict; Max-Age=86400${secure}`;
 }
 
 function clearAuthCookie(ctx: any) {
   const secure = (process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true") ? "; Secure" : "";
-  ctx.set.headers["Set-Cookie"] = `token=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${secure}`;
+  ctx.set.headers["Set-Cookie"] = `token=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0${secure}`;
 }
 
 export async function register(ctx: any) {
@@ -100,8 +100,8 @@ export async function forgotPassword(ctx: any) {
 }
 
 export async function resetPassword(ctx: any) {
-  const { token, password } = ctx.body;
-  const result = await svc.resetPassword(token, password);
+  const { token, password, email } = ctx.body;
+  const result = await svc.resetPassword(token, password, email);
   return { data: result };
 }
 

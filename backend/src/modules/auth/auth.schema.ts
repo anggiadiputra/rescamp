@@ -109,4 +109,8 @@ export const loginSchema = t.Object({
 export const resetPasswordSchema = t.Object({
   token: t.String({ minLength: 1 }),
   password: passwordField,
+  email: t.String({
+    format: "email",
+    transform: (v: string) => (v || "").trim().toLowerCase(),
+  }),
 });
