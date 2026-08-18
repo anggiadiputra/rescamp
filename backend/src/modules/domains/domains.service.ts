@@ -1271,19 +1271,27 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     return "unavailable";
   }
 
-  // 3. Query availability directly & accurately for all active Resellercamp TLDs in parallel
-  const results = await Promise.all(
-    tldsToQuery.map(async (tld) => {
+  // 3. Query availability via fast batch API first, fallback to parallel per-TLD checks
+  const allDomains = tldsToQuery.map((tld) => `${baseKeyword}.${tld}`);
+  let batchRes: any = null;
+  let batchSucceeded = false;
+
+  try {
+    // Fast batch request to Resellercamp (Timeout: 7s)
+    batchRes = await liquid.checkBulkAvailability(allDomains, 7_000);
+    if (batchRes && (Array.isArray(batchRes) ? batchRes.length > 0 : Object.keys(batchRes).length > 0)) {
+      batchSucceeded = true;
+    }
+  } catch (err: any) {
+    console.warn("[bulkAvailability] Fast batch check failed or timed out, falling back to parallel checks:", err?.message || err);
+  }
+
+  let results: any[] = [];
+
+  if (batchSucceeded) {
+    results = tldsToQuery.map((tld) => {
       const fullDomain = `${baseKeyword}.${tld}`;
-      let rawRes: any = null;
-
-      try {
-        rawRes = await liquid.checkAvailability(fullDomain);
-      } catch (err: any) {
-        console.warn(`[bulkAvailability] Check failed for ${fullDomain}:`, err?.message || err);
-      }
-
-      const rawStatus = extractDomainStatus(rawRes, fullDomain);
+      const rawStatus = extractDomainStatus(batchRes, fullDomain);
       const isAvailable = rawStatus === "available" || rawStatus === "free" || rawStatus === "available_for_registration";
       const finalStatus = isAvailable ? "available" : "unavailable";
       const tldPrice = prices[tld] || {};
@@ -1301,8 +1309,61 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
         privacy_protect: tldPrice.privacy_protect || "70.00",
         currency: tldPrice.currency || "IDR",
       };
-    })
-  );
+    });
+  } else {
+    // Fallback: Parallel per-TLD check with strict 5s timeout and Promise.allSettled
+    const settled = await Promise.allSettled(
+      tldsToQuery.map(async (tld) => {
+        const fullDomain = `${baseKeyword}.${tld}`;
+        let rawRes: any = null;
+
+        try {
+          rawRes = await liquid.checkAvailability(fullDomain, 5_000);
+        } catch (err: any) {
+          console.warn(`[bulkAvailability] Check failed for ${fullDomain}:`, err?.message || err);
+        }
+
+        const rawStatus = extractDomainStatus(rawRes, fullDomain);
+        const isAvailable = rawStatus === "available" || rawStatus === "free" || rawStatus === "available_for_registration";
+        const finalStatus = isAvailable ? "available" : "unavailable";
+        const tldPrice = prices[tld] || {};
+
+        return {
+          domain: fullDomain,
+          tld,
+          available: isAvailable,
+          status: finalStatus,
+          price: tldPrice.price_new || tldPrice.price_register || null,
+          renew_price: tldPrice.price_renew || null,
+          transfer_price: tldPrice.price_transfer || tldPrice.price_renew || null,
+          create_years: tldPrice.create_years || null,
+          renew_years: tldPrice.renew_years || null,
+          privacy_protect: tldPrice.privacy_protect || "70.00",
+          currency: tldPrice.currency || "IDR",
+        };
+      })
+    );
+
+    results = settled.map((s, idx) => {
+      if (s.status === "fulfilled") return s.value;
+      const tld = tldsToQuery[idx]!;
+      const fullDomain = `${baseKeyword}.${tld}`;
+      const tldPrice = prices[tld] || {};
+      return {
+        domain: fullDomain,
+        tld,
+        available: false,
+        status: "unavailable",
+        price: tldPrice.price_new || tldPrice.price_register || null,
+        renew_price: tldPrice.price_renew || null,
+        transfer_price: tldPrice.price_transfer || tldPrice.price_renew || null,
+        create_years: tldPrice.create_years || null,
+        renew_years: tldPrice.renew_years || null,
+        privacy_protect: tldPrice.privacy_protect || "70.00",
+        currency: tldPrice.currency || "IDR",
+      };
+    });
+  }
 
   // Cache search results for 60s
   if (results.length > 0) {

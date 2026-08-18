@@ -13,9 +13,14 @@ export class LiquidClient {
     this.authHeader = "Basic " + btoa(`${resellerId}:${apiKey}`);
   }
 
-  private async request<T>(method: HttpMethod, path: string, body?: Record<string, any>): Promise<T> {
+  private async request<T>(
+    method: HttpMethod,
+    path: string,
+    body?: Record<string, any>,
+    timeoutMs: number = 30_000
+  ): Promise<T> {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30_000); // 30s timeout
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const url = `${this.baseURL}${path}`;
 
     try {
@@ -69,8 +74,8 @@ export class LiquidClient {
         throw err;
       }
       if (err.name === "AbortError") {
-        console.error(`[Resellercamp API Timeout] ${method} ${path}`);
-        throw new AppError("Resellercamp API request timed out (30s)", 504);
+        console.error(`[Resellercamp API Timeout] ${method} ${path} (${(timeoutMs / 1000).toFixed(0)}s)`);
+        throw new AppError(`Resellercamp API request timed out (${(timeoutMs / 1000).toFixed(0)}s)`, 504);
       }
       console.error(`[Resellercamp API Connection Error] ${method} ${path}:`, err);
       throw new AppError(`Gagal terhubung ke Resellercamp API: ${err.message || "Network Error"}`, 502);
@@ -80,15 +85,15 @@ export class LiquidClient {
   }
 
   // --- Domain ---
-  checkAvailability(domain: string) {
-    return this.request<any>("GET", `/domains/availability?domain=${encodeURIComponent(domain)}`);
+  checkAvailability(domain: string, timeoutMs: number = 8_000) {
+    return this.request<any>("GET", `/domains/availability?domain=${encodeURIComponent(domain)}`, undefined, timeoutMs);
   }
 
-  checkBulkAvailability(domains: string[]) {
+  checkBulkAvailability(domains: string[], timeoutMs: number = 10_000) {
     if (!domains || domains.length === 0) return Promise.resolve([]);
-    if (domains.length === 1 && domains[0]) return this.checkAvailability(domains[0]);
+    if (domains.length === 1 && domains[0]) return this.checkAvailability(domains[0], timeoutMs);
     const qs = domains.filter((d): d is string => Boolean(d)).map((d) => `domain=${encodeURIComponent(d)}&domain-name=${encodeURIComponent(d)}`).join("&");
-    return this.request<any>("GET", `/domains/availability?${qs}`);
+    return this.request<any>("GET", `/domains/availability?${qs}`, undefined, timeoutMs);
   }
 
   /**
@@ -200,7 +205,7 @@ export class LiquidClient {
       const list = await this.request<any>("GET", `/customers/${customerId}/contacts?status=Active`);
       const arr = Array.isArray(list) ? list : list?.data || list?.contacts || [];
       if (arr.length > 0) return String(arr[0].contact_id || arr[0].id);
-    } catch {}
+    } catch { }
 
     return customerId;
   }
