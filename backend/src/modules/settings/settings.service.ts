@@ -292,6 +292,14 @@ function getCategoryForKey(key: string): string {
   return "general";
 }
 
+function unmaskIfNecessary(providedVal?: string, dbVal?: string): string {
+  if (!providedVal) return dbVal || "";
+  if (providedVal.includes("•") || providedVal.includes("****")) {
+    return dbVal || "";
+  }
+  return providedVal;
+}
+
 export async function testKirisanConnection(payload: {
   kirisan_token?: string;
   kirisan_channel_key?: string;
@@ -299,8 +307,8 @@ export async function testKirisanConnection(payload: {
   recipient_email: string;
 }) {
   const settings = await getSystemSettings();
-  const token = payload.kirisan_token || settings.kirisan_token;
-  const channelKey = payload.kirisan_channel_key || settings.kirisan_channel_key;
+  const token = unmaskIfNecessary(payload.kirisan_token, settings.kirisan_token);
+  const channelKey = unmaskIfNecessary(payload.kirisan_channel_key, settings.kirisan_channel_key);
   const templateId = payload.kirisan_template_id || settings.kirisan_template_id || settings.kirisan_login_otp_template_id;
   const apiUrl = settings.kirisan_api_url || env.KIRISAN_API_URL;
 
@@ -373,13 +381,14 @@ export async function testEmailConnection(payload: {
     return testKirisanConnection(payload);
   }
 
-  // Brevo API / SMTP Relay
-  const apiKey = payload.brevo_api_key || payload.smtp_pass || settings.brevo_api_key || settings.smtp_pass;
+  // Brevo API / SMTP Relay: unmask if frontend passed masked string ('xsmt••••odZV')
+  const rawApiKey = payload.brevo_api_key || payload.smtp_pass;
+  const apiKey = unmaskIfNecessary(rawApiKey, settings.brevo_api_key || settings.smtp_pass);
   const fromEmail = payload.smtp_from_email || settings.smtp_from_email || "noreply@ekstensi.id";
   const fromName = payload.smtp_from_name || settings.smtp_from_name || settings.brand_name || "Ekstensi.id Support";
 
-  if (!apiKey) {
-    throw new Error("Brevo API Key / SMTP Password (Key) wajib diisi untuk menguji pengiriman email.");
+  if (!apiKey || apiKey.includes("•")) {
+    throw new Error("Brevo API Key / SMTP Password belum diisi atau masih ter-mask. Masukkan Kunci API Brevo di Settings dan klik Simpan terlebih dahulu.");
   }
 
   const brevoRes = await fetch("https://api.brevo.com/v3/smtp/email", {
@@ -414,6 +423,9 @@ export async function testEmailConnection(payload: {
   const json: any = await brevoRes.json().catch(() => null);
 
   if (!brevoRes.ok) {
+    if (brevoRes.status === 401 && apiKey.startsWith("xsmtp")) {
+      throw new Error("Gagal otentikasi Brevo API. Kunci yang Anda masukkan ('xsmtp...') adalah SMTP Password. Silakan gunakan Brevo API Key berawalan 'xkeysib-...' dari Dashboard Brevo > SMTP & API > API Keys.");
+    }
     throw new Error(json?.message || json?.error || `Brevo API mengembalikan HTTP status ${brevoRes.status}`);
   }
 
