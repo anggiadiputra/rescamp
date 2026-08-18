@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { getSystemSettings, updateSystemSettings, testKirisanConnection, testLiquidConnection } from "./settings.service";
+import { getSystemSettings, updateSystemSettings, testKirisanConnection, testEmailConnection, testLiquidConnection } from "./settings.service";
 import { AppError } from "../../lib/error";
 import { authGuard, resellerGuard } from "../../middleware/auth";
 import { settingsRateLimiter, rateLimit } from "../../lib/rate-limit";
@@ -82,6 +82,14 @@ async function handleTestKirisan({ body }: any) {
   return res;
 }
 
+async function handleTestEmail({ body }: any) {
+  if (!body || !body.recipient_email) {
+    throw new AppError("Email penerima (recipient_email) wajib diisi", 400);
+  }
+  const res = await testEmailConnection(body);
+  return res;
+}
+
 async function handleTestLiquid(ctx: any) {
   const body = ctx?.body || {};
   const rId = body?.reseller_id;
@@ -101,7 +109,7 @@ export const settingsRoutes = new Elysia({ prefix: "/settings" })
       .put("/", handlePutSettings as any)
       .put("", handlePutSettings as any)
       .post("/test-kirisan", handleTestKirisan as any)
+      .post("/test-email", handleTestEmail as any)
       .get("/test-liquid", handleTestLiquid as any)
       .post("/test-liquid", handleTestLiquid as any)
   );
-

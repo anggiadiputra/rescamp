@@ -29,6 +29,7 @@ export interface SettingsData {
   smtp_pass?: string;
   smtp_from_email?: string;
   smtp_from_name?: string;
+  brevo_api_key?: string;
 
   // Theme & Colors
   primary_color?: string;
@@ -94,6 +95,7 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   smtp_pass: "",
   smtp_from_email: "noreply@ekstensi.id",
   smtp_from_name: "Ekstensi.id Support",
+  brevo_api_key: "",
 
   primary_color: "#000000",
   header_color: "#ffffff",
@@ -346,6 +348,78 @@ export async function testKirisanConnection(payload: {
   return {
     success: true,
     message: `Koneksi Kirisan API Berhasil! Email pengujian dikirim ke ${payload.recipient_email}`,
+    data: json,
+  };
+}
+
+export async function testEmailConnection(payload: {
+  provider?: "kirisan" | "smtp" | "brevo_api";
+  recipient_email: string;
+  kirisan_token?: string;
+  kirisan_channel_key?: string;
+  kirisan_template_id?: string;
+  brevo_api_key?: string;
+  smtp_host?: string;
+  smtp_port?: string;
+  smtp_user?: string;
+  smtp_pass?: string;
+  smtp_from_email?: string;
+  smtp_from_name?: string;
+}) {
+  const settings = await getSystemSettings();
+  const provider = payload.provider || settings.email_provider || "kirisan";
+
+  if (provider === "kirisan") {
+    return testKirisanConnection(payload);
+  }
+
+  // Brevo API / SMTP Relay
+  const apiKey = payload.brevo_api_key || payload.smtp_pass || settings.brevo_api_key || settings.smtp_pass;
+  const fromEmail = payload.smtp_from_email || settings.smtp_from_email || "noreply@ekstensi.id";
+  const fromName = payload.smtp_from_name || settings.smtp_from_name || settings.brand_name || "Ekstensi.id Support";
+
+  if (!apiKey) {
+    throw new Error("Brevo API Key / SMTP Password (Key) wajib diisi untuk menguji pengiriman email.");
+  }
+
+  const brevoRes = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": apiKey,
+      "accept": "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sender: { name: fromName, email: fromEmail },
+      to: [{ email: payload.recipient_email }],
+      subject: `[Test Email] Pengujian Koneksi Brevo - ${settings.brand_name || "Ekstensi.id"}`,
+      htmlContent: `
+        <div style="font-family: sans-serif; padding: 24px; background: #f9fafb; color: #111827;">
+          <div style="max-width: 500px; margin: 0 auto; background: #ffffff; padding: 24px; border-radius: 12px; border: 1px solid #e5e7eb;">
+            <h2 style="margin-top: 0; color: #111827;">Pengujian Brevo API Berhasil!</h2>
+            <p>Halo,</p>
+            <p>Ini adalah email pengujian untuk mengonfirmasi bahwa pengiriman email transaksional via <strong>Brevo API / SMTP Relay</strong> di platform Anda telah berfungsi dengan sempurna.</p>
+            <div style="background: #f3f4f6; padding: 12px 16px; border-radius: 8px; font-family: monospace; font-size: 12px; margin: 16px 0;">
+              Sender: ${fromName} &lt;${fromEmail}&gt;<br/>
+              Recipient: ${payload.recipient_email}<br/>
+              Status: 200 OK (Brevo REST API)
+            </div>
+            <p style="color: #6b7280; font-size: 12px; margin-bottom: 0;">Email ini dikirim secara otomatis dari halaman Settings Dashboard.</p>
+          </div>
+        </div>
+      `,
+    }),
+  });
+
+  const json: any = await brevoRes.json().catch(() => null);
+
+  if (!brevoRes.ok) {
+    throw new Error(json?.message || json?.error || `Brevo API mengembalikan HTTP status ${brevoRes.status}`);
+  }
+
+  return {
+    success: true,
+    message: `Koneksi Brevo API Berhasil! Email pengujian dikirim ke ${payload.recipient_email}`,
     data: json,
   };
 }

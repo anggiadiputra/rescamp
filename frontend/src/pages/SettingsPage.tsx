@@ -226,22 +226,30 @@ export default function SettingsPage() {
     setSaving(false);
   }
 
-  async function handleTestKirisan() {
+  async function handleTestEmail() {
     if (!recipientEmail) {
       toast("Masukkan email penerima pengujian terlebih dahulu", "error");
       return;
     }
     setTestingKirisan(true);
     try {
-      const res = await api.post<any>("/settings/test-kirisan", {
+      const res = await api.post<any>("/settings/test-email", {
+        provider: form.email_provider,
         kirisan_token: form.kirisan_token,
         kirisan_channel_key: form.kirisan_channel_key,
         kirisan_template_id: form.kirisan_template_id || form.kirisan_login_otp_template_id,
+        smtp_host: form.smtp_host,
+        smtp_port: form.smtp_port,
+        smtp_user: form.smtp_user,
+        smtp_pass: form.smtp_pass,
+        brevo_api_key: form.brevo_api_key || form.smtp_pass,
+        smtp_from_email: form.smtp_from_email,
+        smtp_from_name: form.smtp_from_name,
         recipient_email: recipientEmail,
       });
-      toast(res.message || "Email pengujian Kirisan berhasil dikirim!");
+      toast(res.message || "Email pengujian berhasil dikirim!");
     } catch (e: any) {
-      toast(e.message || "Gagal mengirim email pengujian Kirisan", "error");
+      toast(e.message || "Gagal mengirim email pengujian", "error");
     }
     setTestingKirisan(false);
   }
@@ -605,13 +613,13 @@ export default function SettingsPage() {
                     />
                     <Button
                       type="button"
-                      onClick={handleTestKirisan}
+                      onClick={handleTestEmail}
                       disabled={testingKirisan}
                       style={{ backgroundColor: settings.primary_color || "#000000" }}
                       className="w-full sm:w-auto px-4 py-2 hover:opacity-90 text-white font-semibold text-xs rounded-lg transition-opacity flex items-center justify-center gap-1.5 shrink-0"
                     >
                       <Send className="w-3.5 h-3.5" />
-                      {testingKirisan ? "Menguji..." : "Uji Kirisan API"}
+                      {testingKirisan ? "Menguji..." : `Uji Email (${form.email_provider === "kirisan" ? "Kirisan" : "Brevo"})`}
                     </Button>
                   </div>
                 </div>
