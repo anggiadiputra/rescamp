@@ -74,7 +74,7 @@ export class LiquidClient {
         throw err;
       }
       if (err.name === "AbortError") {
-        console.error(`[Resellercamp API Timeout] ${method} ${path} (${(timeoutMs / 1000).toFixed(0)}s)`);
+        console.warn(`[Resellercamp API Timeout] ${method} ${path} (${(timeoutMs / 1000).toFixed(0)}s - using fallback)`);
         throw new AppError(`Resellercamp API request timed out (${(timeoutMs / 1000).toFixed(0)}s)`, 504);
       }
       console.error(`[Resellercamp API Connection Error] ${method} ${path}:`, err);

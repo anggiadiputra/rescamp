@@ -4,6 +4,20 @@ import { eq, and, like, inArray, or, sql } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { resolveResellerCreds } from "../../lib/reseller-creds";
+import dns from "node:dns/promises";
+
+async function checkDnsAvailability(domain: string): Promise<boolean> {
+  try {
+    await Promise.any([
+      dns.resolveNs(domain),
+      dns.resolveSoa(domain),
+      dns.resolve4(domain),
+    ]);
+    return false; // Records found -> Taken
+  } catch (err: any) {
+    return true; // No DNS records found -> Available
+  }
+}
 
 // ponytail: helper used by mutators below. Single source of truth for the
 // "domain-suspended → reject any user config" rule. upgrade path: when we add
@@ -223,7 +237,13 @@ export function parseNameservers(raw: any): string[] | null {
 
 export async function checkAvailability(user: { id?: number; resellerId: string | null; apiKey: string | null; role?: string }, domain: string) {
   const liquid = await getLiquid(user);
-  const res = await liquid.checkAvailability(domain);
+  let res: any = null;
+  try {
+    res = await liquid.checkAvailability(domain, 3_500);
+  } catch (err: any) {
+    const isAvail = await checkDnsAvailability(domain).catch(() => false);
+    res = { [domain]: { status: isAvail ? "available" : "unavailable" } };
+  }
 
   // Extract TLD (e.g. "example.com" -> "com")
   const parts = domain.split(".");
@@ -1308,22 +1328,49 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     return "unavailable";
   }
 
-  // 3. Query availability directly from Resellercamp in parallel with strict 5s timeout
-  const settled = await Promise.allSettled(
+  // 3. Query availability directly from Resellercamp using fast single batch API
+  const allFullDomains = tldsToQuery.map((tld) => `${baseKeyword}.${tld}`);
+  let batchRes: any = null;
+  let batchSucceeded = false;
+
+  if (liquid) {
+    try {
+      batchRes = await liquid.checkBulkAvailability(allFullDomains, 3_500);
+      if (batchRes && (typeof batchRes === "object" || Array.isArray(batchRes))) {
+        batchSucceeded = true;
+      }
+    } catch (err: any) {
+      // batch timed out or failed; fallback to DNS probe for each domain
+    }
+  }
+
+  // 4. Resolve each TLD status with DNS probe fallback
+  const results = await Promise.all(
     tldsToQuery.map(async (tld) => {
       const fullDomain = `${baseKeyword}.${tld}`;
-      let rawRes: any = null;
+      let isAvailable = false;
+      let statusResolved = false;
 
-      if (liquid) {
-        try {
-          rawRes = await liquid.checkAvailability(fullDomain, 5_000);
-        } catch (err: any) {
-          console.warn(`[bulkAvailability] Check failed for ${fullDomain}:`, err?.message || err);
+      if (batchSucceeded && batchRes) {
+        const rawStatus = extractDomainStatus(batchRes, fullDomain);
+        if (rawStatus === "available" || rawStatus === "free" || rawStatus === "available_for_registration") {
+          isAvailable = true;
+          statusResolved = true;
+        } else if (rawStatus === "unavailable" || rawStatus === "taken" || rawStatus === "registered") {
+          isAvailable = false;
+          statusResolved = true;
         }
       }
 
-      const rawStatus = extractDomainStatus(rawRes, fullDomain);
-      const isAvailable = rawStatus === "available" || rawStatus === "free" || rawStatus === "available_for_registration";
+      // If status could not be resolved from batch, check via DNS probe
+      if (!statusResolved) {
+        try {
+          isAvailable = await checkDnsAvailability(fullDomain);
+        } catch {
+          isAvailable = false;
+        }
+      }
+
       const finalStatus = isAvailable ? "available" : "unavailable";
       const tldPrice = prices[tld] || DEFAULT_TLD_PRICES[tld] || {};
 
@@ -1342,26 +1389,6 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
       };
     })
   );
-
-  const results = settled.map((s, idx) => {
-    const tld = tldsToQuery[idx]!;
-    const fullDomain = `${baseKeyword}.${tld}`;
-    const tldPrice = prices[tld] || DEFAULT_TLD_PRICES[tld] || {};
-    if (s.status === "fulfilled") return s.value;
-    return {
-      domain: fullDomain,
-      tld,
-      available: false,
-      status: "unavailable",
-      price: tldPrice.price_new || tldPrice.price_register || DEFAULT_TLD_PRICES[tld]?.price_new || null,
-      renew_price: tldPrice.price_renew || DEFAULT_TLD_PRICES[tld]?.price_renew || null,
-      transfer_price: tldPrice.price_transfer || tldPrice.price_renew || DEFAULT_TLD_PRICES[tld]?.price_transfer || null,
-      create_years: tldPrice.create_years || null,
-      renew_years: tldPrice.renew_years || null,
-      privacy_protect: tldPrice.privacy_protect || "70.00",
-      currency: tldPrice.currency || "IDR",
-    };
-  });
 
   // Cache search results for 60s
   if (results.length > 0) {
