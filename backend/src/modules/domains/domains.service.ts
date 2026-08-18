@@ -243,14 +243,15 @@ export async function checkAvailability(user: { id?: number; resellerId: string 
     }
   }
 
-  // Attach price details to availability result
-  if (Array.isArray(res) && res[0]) {
-    const key = Object.keys(res[0])[0];
-    if (key && res[0][key]) {
-      res[0][key].price = priceInfo?.price_new || priceInfo?.price_register || null;
-      res[0][key].renew_price = priceInfo?.price_renew || null;
-      res[0][key].privacy_protect = priceInfo?.privacy_protect || "70.00";
-      res[0][key].currency = priceInfo?.currency || "IDR";
+  // Attach price details to availability result (handles both Object and Array response shapes)
+  const targetObj = Array.isArray(res) ? res[0] : res;
+  if (targetObj && typeof targetObj === "object") {
+    const key = Object.keys(targetObj)[0];
+    if (key && targetObj[key] && typeof targetObj[key] === "object") {
+      targetObj[key].price = priceInfo?.price_new || priceInfo?.price_register || null;
+      targetObj[key].renew_price = priceInfo?.price_renew || null;
+      targetObj[key].privacy_protect = priceInfo?.privacy_protect || "70.00";
+      targetObj[key].currency = priceInfo?.currency || "IDR";
     }
   }
 
