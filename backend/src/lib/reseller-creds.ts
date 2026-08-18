@@ -101,6 +101,8 @@ export async function resolveResellerCreds(userId?: number): Promise<ResellerCre
           console.warn("[resolveResellerCreds] decryptApiKey failed for user", targetUser.id, e);
           if (targetUser.apiKey) {
             apiKey = targetUser.apiKey;
+          } else if (targetUser.apiKeyEncrypted && !targetUser.apiKeyEncrypted.includes(":")) {
+            apiKey = targetUser.apiKeyEncrypted;
           }
         }
       } else if (targetUser.apiKey) {
@@ -126,7 +128,11 @@ export async function resolveResellerCreds(userId?: number): Promise<ResellerCre
             apiKey = await decryptApiKey(master.apiKeyEncrypted);
           } catch (e) {
             console.warn("[resolveResellerCreds] master decryptApiKey failed:", e);
-            if (master.apiKey) apiKey = master.apiKey;
+            if (master.apiKey) {
+              apiKey = master.apiKey;
+            } else if (master.apiKeyEncrypted && !master.apiKeyEncrypted.includes(":")) {
+              apiKey = master.apiKeyEncrypted;
+            }
           }
         } else if (master.apiKey) {
           apiKey = master.apiKey;

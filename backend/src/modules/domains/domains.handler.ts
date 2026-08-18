@@ -30,8 +30,13 @@ async function getResellerCreds(ctx: any) {
   }
 
   // Visitor or fallback to master reseller
-  const creds = await resolveResellerCreds(0);
-  return { id: 0, resellerId: creds.resellerId, apiKey: creds.apiKey, role: "visitor" };
+  try {
+    const creds = await resolveResellerCreds(0);
+    return { id: 0, resellerId: creds.resellerId || "", apiKey: creds.apiKey || "", role: "visitor" };
+  } catch (e: any) {
+    console.warn("[getResellerCreds] Master creds resolution warning (using DNS/default pricing fallback):", e?.message);
+    return { id: 0, resellerId: "", apiKey: "", role: "visitor" };
+  }
 }
 
 export async function checkAvailability(ctx: any) {
