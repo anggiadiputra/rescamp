@@ -8,6 +8,22 @@ import {
 import { useSettings } from "../contexts/SettingsContext";
 import { useAuth } from "../contexts/AuthContext";
 
+const SECTION_FIELDS: Record<string, string[]> = {
+  brand: ["brand_name", "site_tagline", "seo_title", "seo_description", "seo_keywords", "og_image_url"],
+  email: [
+    "email_provider", "kirisan_api_url", "kirisan_token", "kirisan_channel_key",
+    "kirisan_template_id", "kirisan_login_otp_template_id", "kirisan_register_otp_template_id",
+    "kirisan_reset_password_template_id", "kirisan_register_success_template_id",
+    "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_from_email", "smtp_from_name"
+  ],
+  theme: ["primary_color", "header_color", "sidebar_color", "theme_preset"],
+  fonnte: ["fonnte_api_url", "fonnte_token", "fonnte_sender", "fonnte_notify_order", "fonnte_notify_expiry"],
+  sumopod: ["sumopod_api_key", "sumopod_base_url", "sumopod_webhook_token", "sumopod_webhook_secret", "sumopod_success_url", "sumopod_cancel_url"],
+  s3: ["s3_endpoint", "s3_region", "s3_access_key", "s3_secret_key", "s3_bucket", "s3_public_url"],
+  turnstile: ["turnstile_enabled", "turnstile_site_key", "turnstile_secret_key", "turnstile_verify_url"],
+  tax: ["tax_enabled", "tax_rate", "tax_label"],
+};
+
 export default function SettingsPage() {
   const { refreshSettings, updatePreviewColors, settings } = useSettings();
   const { user } = useAuth();
@@ -166,7 +182,16 @@ export default function SettingsPage() {
     setSaving(true);
     setMsg("");
     try {
-      await api.put("/settings", form);
+      let payload: Record<string, any> = form;
+      if (targetSection && SECTION_FIELDS[targetSection]) {
+        payload = {};
+        for (const field of SECTION_FIELDS[targetSection]) {
+          if (field in form) {
+            payload[field] = form[field];
+          }
+        }
+      }
+      await api.put("/settings", payload);
       await refreshSettings();
       setInitialForm({ ...form });
       if (targetSection) {

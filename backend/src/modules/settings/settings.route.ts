@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import { getSystemSettings, updateSystemSettings, testKirisanConnection, testLiquidConnection } from "./settings.service";
 import { AppError } from "../../lib/error";
 import { authGuard, resellerGuard } from "../../middleware/auth";
+import { settingsRateLimiter, rateLimit } from "../../lib/rate-limit";
 
 // Field yang aman untuk publik (tidak ada secret/API key)
 const PUBLIC_SETTINGS_FIELDS = [
@@ -20,6 +21,33 @@ const PUBLIC_SETTINGS_FIELDS = [
   "turnstile_site_key",
 ] as const;
 
+// Fields yang berisi secret — di-mask sebelum dikembalikan ke client
+const MASKED_SETTINGS_FIELDS = [
+  "sumopod_api_key",
+  "sumopod_webhook_secret",
+  "sumopod_webhook_token",
+  "kirisan_token",
+  "kirisan_channel_key",
+  "fonnte_token",
+  "smtp_pass",
+  "s3_access_key",
+  "s3_secret_key",
+  "turnstile_secret_key",
+];
+
+function maskSettingsSecrets(settings: Record<string, string>): Record<string, string> {
+  const masked = { ...settings };
+  for (const field of MASKED_SETTINGS_FIELDS) {
+    if (masked[field] && masked[field].length > 0) {
+      const val = masked[field];
+      masked[field] = val.length > 8
+        ? val.slice(0, 4) + "••••" + val.slice(-4)
+        : "••••••••";
+    }
+  }
+  return masked;
+}
+
 // Endpoint PUBLIK — hanya field aman, tanpa auth
 async function handleGetPublicSettings() {
   const all = await getSystemSettings();
@@ -30,10 +58,10 @@ async function handleGetPublicSettings() {
   return { data: pub };
 }
 
-// Endpoint ADMIN — semua field, wajib auth
+// Endpoint ADMIN — semua field (secret di-mask), wajib auth
 async function handleGetSettings() {
   const settings = await getSystemSettings();
-  return { data: settings };
+  return { data: maskSettingsSecrets(settings) };
 }
 
 async function handlePutSettings({ body }: any) {
@@ -41,7 +69,7 @@ async function handlePutSettings({ body }: any) {
     throw new AppError("Data pengaturan tidak valid", 400);
   }
   const updated = await updateSystemSettings(body);
-  return { success: true, message: "Pengaturan berhasil disimpan", data: updated };
+  return { success: true, message: "Pengaturan berhasil disimpan", data: maskSettingsSecrets(updated) };
 }
 
 async function handleTestKirisan({ body }: any) {
@@ -60,8 +88,8 @@ async function handleTestLiquid() {
 export const settingsRoutes = new Elysia({ prefix: "/settings" })
   // Endpoint publik — tidak butuh login
   .get("/public", handleGetPublicSettings as any)
-  // Semua endpoint lain wajib auth reseller
-  .guard({ beforeHandle: [authGuard, resellerGuard] }, (app) =>
+  // Semua endpoint lain wajib auth reseller + rate limit
+  .guard({ beforeHandle: [authGuard, resellerGuard, rateLimit(settingsRateLimiter, "Terlalu banyak permintaan pengaturan.")] }, (app) =>
     app
       .get("/", handleGetSettings as any)
       .get("", handleGetSettings as any)

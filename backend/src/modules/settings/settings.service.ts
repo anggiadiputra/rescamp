@@ -208,11 +208,12 @@ function validateSettingUrl(key: string, value: string) {
   } catch {
     throw new AppError(`URL tidak valid untuk pengaturan "${key}"`, 400);
   }
-  if (parsed.protocol !== "https:") {
+  const isLocalHost = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+  if (parsed.protocol !== "https:" && !isLocalHost) {
     throw new AppError(`Pengaturan "${key}" harus menggunakan https://`, 400);
   }
   const allowed = URL_FIELD_ALLOWED_HOSTS[key];
-  if (allowed && !allowed.includes(parsed.hostname)) {
+  if (allowed && !allowed.includes(parsed.hostname) && !isLocalHost) {
     throw new AppError(`Host "${parsed.hostname}" tidak diizinkan untuk pengaturan "${key}"`, 400);
   }
 }
@@ -221,6 +222,11 @@ export async function updateSystemSettings(data: Record<string, any>): Promise<R
   await ensureSettingsTableExists();
   for (const [key, value] of Object.entries(data)) {
     const stringVal = typeof value === "boolean" ? (value ? "true" : "false") : String(value ?? "");
+
+    // Do not overwrite existing secret values with masked placeholders
+    if (stringVal.includes("••••") || stringVal.includes("****")) {
+      continue;
+    }
 
     validateSettingUrl(key, stringVal);
 
