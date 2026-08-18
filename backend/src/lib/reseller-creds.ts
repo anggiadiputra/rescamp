@@ -98,11 +98,12 @@ export async function resolveResellerCreds(userId?: number): Promise<ResellerCre
         try {
           apiKey = await decryptApiKey(targetUser.apiKeyEncrypted);
         } catch (e) {
-          console.error("[resolveResellerCreds] decryptApiKey failed, trying plaintext:", e);
-          apiKey = targetUser.apiKey || "";
+          console.error("[resolveResellerCreds] decryptApiKey failed:", e);
+          throw new AppError("Dekripsi API key reseller gagal. Pastikan ENCRYPTION_KEY benar.", 500);
         }
-      } else {
-        apiKey = targetUser.apiKey || "";
+      } else if (targetUser.apiKey) {
+        console.warn("[resolveResellerCreds] WARNING: Using plaintext apiKey for user", targetUser.id, "— encrypt this key via Settings");
+        apiKey = targetUser.apiKey;
       }
     }
   }
@@ -184,10 +185,11 @@ export async function resolveCredsFromUser(user: {
         try {
           apiKey = await decryptApiKey(parentUser.apiKeyEncrypted);
         } catch (e) {
-          apiKey = parentUser.apiKey || "";
+          console.error("[resolveCredsFromUser] parent decryptApiKey failed:", e);
+          throw new AppError("Dekripsi API key parent reseller gagal.", 500);
         }
-      } else {
-        apiKey = parentUser.apiKey || "";
+      } else if (parentUser.apiKey) {
+        apiKey = parentUser.apiKey;
       }
     }
   }
@@ -198,10 +200,11 @@ export async function resolveCredsFromUser(user: {
       try {
         apiKey = await decryptApiKey(user.apiKeyEncrypted);
       } catch (e) {
-        apiKey = user.apiKey || "";
+        console.error("[resolveCredsFromUser] own decryptApiKey failed:", e);
+        throw new AppError("Dekripsi API key reseller gagal.", 500);
       }
-    } else {
-      apiKey = user.apiKey || "";
+    } else if (user.apiKey) {
+      apiKey = user.apiKey;
     }
   }
 
