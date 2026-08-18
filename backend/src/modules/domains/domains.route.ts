@@ -4,14 +4,14 @@ import * as h from "./domains.handler";
 import { authGuard, resellerGuard } from "../../middleware/auth";
 import { dnsRoutes } from "../dns/dns.route";
 import { forwardingRoutes } from "../forwarding/forwarding.route";
-import { domainCheckRateLimiter, rateLimit } from "../../lib/rate-limit";
+import { domainCheckRateLimiter, authenticatedRateLimiter, authRateLimiter, rateLimit } from "../../lib/rate-limit";
 
 export const domainRoutes = new Elysia({ prefix: "/domains" })
   .get("/availability", h.checkAvailability as any, { beforeHandle: rateLimit(domainCheckRateLimiter, "Terlalu banyak permintaan cek domain."), detail: { tags: ["Domains"], summary: "Check availability" } })
   .get("/bulk-availability", h.bulkAvailability as any, { beforeHandle: rateLimit(domainCheckRateLimiter, "Terlalu banyak permintaan cek domain."), detail: { tags: ["Domains"], summary: "Bulk availability across TLDs" } })
   .get("/suggestion", h.suggestions as any, { beforeHandle: rateLimit(domainCheckRateLimiter, "Terlalu banyak permintaan rekomendasi domain."), detail: { tags: ["Domains"], summary: "Suggestions" } })
-  .post("/verify-contact", h.verifyContactPublic as any, { detail: { tags: ["Domains"], summary: "Public ICANN RAA / Contact verification" } })
-  .guard({ beforeHandle: authGuard }, (app) =>
+  .post("/verify-contact", h.verifyContactPublic as any, { beforeHandle: rateLimit(authRateLimiter, "Terlalu banyak permintaan verifikasi kontak."), detail: { tags: ["Domains"], summary: "Public ICANN RAA / Contact verification" } })
+  .guard({ beforeHandle: [authGuard, rateLimit(authenticatedRateLimiter, "Terlalu banyak permintaan domain. Silakan coba lagi nanti.")] }, (app) =>
     app
       .post("/", h.register as any, { body: domainRegisterSchema, detail: { tags: ["Domains"], summary: "Register domain" } })
       .post("/order", h.register as any, { body: domainRegisterSchema, detail: { tags: ["Domains"], summary: "Register domain order (Sumopod Gateway)" } })

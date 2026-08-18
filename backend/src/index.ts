@@ -30,10 +30,19 @@ const app = new Elysia()
         if (!origin) return true; // same-origin or non-browser clients
         // Exact match from CORS_ORIGIN env var
         if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) return true;
-        // Wildcard subdomain match for ekstensi.id
-        if (origin.endsWith(".ekstensi.id")) return true;
-        // Local development
-        if (origin.includes("localhost") || origin.includes("127.0.0.1")) return true;
+        // Strict subdomain match for ekstensi.id (HTTPS only)
+        try {
+          const url = new URL(origin);
+          if (url.protocol === "https:" &&
+              (url.hostname === "ekstensi.id" || url.hostname.endsWith(".ekstensi.id"))) {
+            return true;
+          }
+          // Local development only
+          if (process.env.NODE_ENV !== "production" &&
+              (url.hostname === "localhost" || url.hostname === "127.0.0.1")) {
+            return true;
+          }
+        } catch {}
         console.warn(`[CORS] Rejected origin: ${origin}`);
         return false;
       },

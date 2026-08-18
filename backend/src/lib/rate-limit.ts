@@ -96,6 +96,16 @@ export const webhookRateLimiter = createRateLimiter({
   windowMs: 60 * 1000, // 100 requests per minute for webhooks
 });
 
+export const authenticatedRateLimiter = createRateLimiter({
+  maxRequests: 30,
+  windowMs: 60 * 1000, // 30 requests per minute for authenticated endpoints
+});
+
+export const settingsRateLimiter = createRateLimiter({
+  maxRequests: 10,
+  windowMs: 60 * 1000, // 10 requests per minute for admin settings
+});
+
 /**
  * Get client IP from request.
  * H5: headers are trusted ONLY when TRUST_PROXY=true (app behind a proxy that
