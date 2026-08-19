@@ -261,43 +261,6 @@ export async function checkAvailability(user: { id?: number; resellerId: string 
   const fullDomain = domain.toLowerCase().trim();
   console.log(`[checkAvailability] Checking: ${fullDomain}`);
 
-  // 1. Check local DB for existing active/pending domain record
-  const [localDomain] = await db
-    .select({ id: domains.id })
-    .from(domains)
-    .where(and(eq(domains.domainName, fullDomain), ne(domains.status, "cancelled")))
-    .limit(1);
-
-  let isTakenLocally = Boolean(localDomain);
-
-  if (!isTakenLocally) {
-    const pendingTxns = await db
-      .select({ metadata: transactions.metadata })
-      .from(transactions)
-      .where(
-        and(
-          inArray(transactions.type, ["register", "transfer"]),
-          inArray(transactions.status, ["pending_payment", "processing_domain", "completed"])
-        )
-      );
-
-    for (const tx of pendingTxns) {
-      if (tx.metadata) {
-        try {
-          const meta = JSON.parse(tx.metadata);
-          if (meta.domainName && meta.domainName.toLowerCase().trim() === fullDomain) {
-            isTakenLocally = true;
-            break;
-          }
-        } catch {}
-      }
-    }
-  }
-
-  if (isTakenLocally) {
-    console.log(`[checkAvailability] ${fullDomain} → UNAVAILABLE (found in local DB/transactions)`);
-  }
-
   // Extract TLD (e.g. "example.com" -> "com")
   const parts = fullDomain.split(".");
   const tld = parts.length > 1 ? parts.slice(1).join(".").toLowerCase() : "";
@@ -316,18 +279,6 @@ export async function checkAvailability(user: { id?: number; resellerId: string 
         priceInfo = fallback[tld] || null;
       } catch {}
     }
-  }
-
-  if (isTakenLocally) {
-    return {
-      [fullDomain]: {
-        status: "unavailable",
-        price: priceInfo?.price_new || priceInfo?.price_register || null,
-        renew_price: priceInfo?.price_renew || null,
-        privacy_protect: priceInfo?.privacy_protect || "70.00",
-        currency: priceInfo?.currency || "IDR",
-      },
-    };
   }
 
   // Query Resellercamp API — NO DNS fallback (DNS is unreliable for availability)
@@ -1491,54 +1442,9 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     return null;
   }
 
-  // 3. Pre-fetch local DB domains and active/pending transactions
   const allFullDomains = tldsToQuery.map(t => `${baseKeyword}.${t}`.toLowerCase());
-  const localDomainSet = new Set<string>();
 
-  try {
-    const localDomains = await db
-      .select({ domainName: domains.domainName, status: domains.status })
-      .from(domains)
-      .where(and(inArray(domains.domainName, allFullDomains), ne(domains.status, "cancelled")));
-    
-    for (const ld of localDomains) {
-      if (ld.domainName) {
-        localDomainSet.add(ld.domainName.toLowerCase().trim());
-      }
-    }
-
-    const pendingTxns = await db
-      .select({ metadata: transactions.metadata })
-      .from(transactions)
-      .where(
-        and(
-          inArray(transactions.type, ["register", "transfer"]),
-          inArray(transactions.status, ["pending_payment", "processing_domain", "completed"])
-        )
-      );
-
-    for (const tx of pendingTxns) {
-      if (tx.metadata) {
-        try {
-          const meta = JSON.parse(tx.metadata);
-          if (meta.domainName && typeof meta.domainName === "string") {
-            const dName = meta.domainName.toLowerCase().trim();
-            if (allFullDomains.includes(dName)) {
-              localDomainSet.add(dName);
-            }
-          }
-        } catch {}
-      }
-    }
-  } catch (e: any) {
-    console.warn("[bulkAvailability] Local DB lookup warning:", e?.message);
-  }
-
-  if (localDomainSet.size > 0) {
-    console.log(`[bulkAvailability] Local DB blocked domains:`, Array.from(localDomainSet));
-  }
-
-  // 4. Query Resellercamp API for all target domains concurrently
+  // 3. Query Resellercamp API for all target domains concurrently
   let apiData: any = null;
   let apiSucceeded = false;
 
@@ -1554,44 +1460,35 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     console.warn("[bulkAvailability] No Liquid client — all domains will be marked 'unknown'");
   }
 
-  // 5. Resolve each TLD status: local DB → API → "unknown" (NO DNS fallback)
+  // 4. Resolve each TLD status directly from Resellercamp API response
   const results = tldsToQuery.map((tld) => {
     const fullDomain = `${baseKeyword}.${tld}`.toLowerCase();
     let isAvailable = false;
     let statusResolved = false;
     let finalStatus = "unknown";
 
-    // Priority 1: Check Local DB / Pending Orders
-    if (localDomainSet.has(fullDomain)) {
-      isAvailable = false;
-      statusResolved = true;
-      finalStatus = "unavailable";
-    } else {
-      // Priority 2: Check Resellercamp API response
-      if (apiData) {
-        const rawStatus = extractDomainStatus(apiData, fullDomain);
-        if (rawStatus) {
-          const st = rawStatus.toLowerCase().trim();
-          if (st === "available" || st === "free" || st === "available_for_registration") {
-            isAvailable = true;
-            statusResolved = true;
-            finalStatus = "available";
-          } else {
-            // regthroughus, regthroughothers, registered, taken, active, pending, unknown, etc.
-            isAvailable = false;
-            statusResolved = true;
-            finalStatus = "unavailable";
-          }
-          console.log(`[bulkAvailability] ${fullDomain} → API status: "${rawStatus}" → ${finalStatus}`);
+    if (apiData) {
+      const rawStatus = extractDomainStatus(apiData, fullDomain);
+      if (rawStatus) {
+        const st = rawStatus.toLowerCase().trim();
+        if (st === "available" || st === "free" || st === "available_for_registration") {
+          isAvailable = true;
+          statusResolved = true;
+          finalStatus = "available";
+        } else {
+          // regthroughus, regthroughothers, registered, taken, active, pending, unknown, etc.
+          isAvailable = false;
+          statusResolved = true;
+          finalStatus = "unavailable";
         }
+        console.log(`[bulkAvailability] ${fullDomain} → API status: "${rawStatus}" → ${finalStatus}`);
       }
+    }
 
-      // Priority 3: No API data — mark as "unknown" (NOT available)
-      if (!statusResolved) {
-        isAvailable = false;
-        finalStatus = "unknown";
-        console.log(`[bulkAvailability] ${fullDomain} → no API data, marked as "unknown"`);
-      }
+    if (!statusResolved) {
+      isAvailable = false;
+      finalStatus = "unknown";
+      console.log(`[bulkAvailability] ${fullDomain} → no API data, marked as "unknown"`);
     }
 
     const tldPrice = prices[tld] || DEFAULT_TLD_PRICES[tld] || {};
