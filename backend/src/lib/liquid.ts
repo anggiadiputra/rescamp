@@ -118,17 +118,30 @@ export class LiquidClient {
       const domainName = validDomains[i];
       if (!domainName) continue;
       if (res && res.status === "fulfilled" && res.value !== undefined && res.value !== null) {
-        const val = res.value;
-        if (typeof val === "object") {
+        let val = res.value;
+        if (Array.isArray(val) && val.length > 0) {
+          val = val[0];
+        }
+        if (typeof val === "object" && val !== null) {
           if (val[domainName]) {
             merged[domainName] = val[domainName];
           } else if (val.status || val.classkey) {
             merged[domainName] = val;
           } else {
-            Object.assign(merged, val);
+            let assigned = false;
+            for (const [k, v] of Object.entries(val)) {
+              if (k.toLowerCase() === domainName) {
+                merged[domainName] = v;
+                assigned = true;
+                break;
+              }
+            }
+            if (!assigned) {
+              merged[domainName] = val;
+            }
           }
-        } else {
-          merged[domainName] = { status: String(val) };
+        } else if (typeof val === "string") {
+          merged[domainName] = { status: val };
         }
       }
     }

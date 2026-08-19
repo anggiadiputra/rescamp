@@ -1402,14 +1402,42 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
   function extractDomainStatus(res: any, fullDomain: string): string | null {
     if (!res) return null;
     const targetDomain = fullDomain.trim().toLowerCase();
-
-    // If response is wrapped in { data: ... } or { result: ... }
     const data = res.data ?? res.result ?? res;
 
-    // 1. If data is an Array: loop each element
+    // 1. Direct object check
+    if (typeof data === "object" && data !== null) {
+      if (data[targetDomain] !== undefined) {
+        const v = data[targetDomain];
+        if (typeof v === "string") return v.toLowerCase();
+        if (v && typeof v === "object") return String(v.status || v.classkey || "").toLowerCase() || null;
+      }
+      for (const [k, v] of Object.entries(data)) {
+        if (k.toLowerCase() === targetDomain) {
+          if (typeof v === "string") return v.toLowerCase();
+          if (v && typeof v === "object") return String((v as any).status || (v as any).classkey || "").toLowerCase() || null;
+        }
+        if (v && typeof v === "object") {
+          const nested = (v as any)[targetDomain];
+          if (nested) {
+            if (typeof nested === "string") return nested.toLowerCase();
+            if (typeof nested === "object") return String(nested.status || nested.classkey || "").toLowerCase() || null;
+          }
+        }
+      }
+      if (typeof data.status === "string" && !data.domain && Object.keys(data).length <= 3) {
+        return data.status.toLowerCase();
+      }
+    }
+
+    // 2. If data is an Array
     if (Array.isArray(data)) {
       for (const item of data) {
         if (!item || typeof item !== "object") continue;
+        if (item[targetDomain] !== undefined) {
+          const v = item[targetDomain];
+          if (typeof v === "string") return v.toLowerCase();
+          if (v && typeof v === "object") return String(v.status || v.classkey || "").toLowerCase() || null;
+        }
         for (const [k, v] of Object.entries(item)) {
           if (k.toLowerCase() === targetDomain) {
             if (typeof v === "string") return v.toLowerCase();
@@ -1423,19 +1451,6 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
       }
       if (data.length === 1 && data[0] && typeof data[0] === "object" && typeof data[0].status === "string" && !data[0].domain) {
         return data[0].status.toLowerCase();
-      }
-    }
-
-    // 2. If data is an Object:
-    if (typeof data === "object") {
-      for (const [k, v] of Object.entries(data)) {
-        if (k.toLowerCase() === targetDomain) {
-          if (typeof v === "string") return v.toLowerCase();
-          if (v && typeof v === "object") return String((v as any).status || (v as any).classkey || "").toLowerCase() || null;
-        }
-      }
-      if (typeof data.status === "string" && !data.domain && Object.keys(data).length <= 3) {
-        return data.status.toLowerCase();
       }
     }
 
