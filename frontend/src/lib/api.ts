@@ -8,6 +8,23 @@ export interface RequestOptions {
   signal?: AbortSignal;
 }
 
+const PUBLIC_PATHS = [
+  "/",
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/register-reseller",
+  "/prices",
+  "/verify",
+];
+
+function isPublicPath(pathname: string): boolean {
+  if (PUBLIC_PATHS.includes(pathname)) return true;
+  if (pathname.startsWith("/billing/pay") || pathname.startsWith("/verify")) return true;
+  return false;
+}
+
 let isRedirectingToLogin = false;
 
 async function request<T>(method: string, path: string, body?: unknown, options?: RequestOptions): Promise<T> {
@@ -23,8 +40,8 @@ async function request<T>(method: string, path: string, body?: unknown, options?
   const json = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    if (res.status === 401) {
-      if (!isRedirectingToLogin && window.location.pathname !== "/login" && window.location.pathname !== "/") {
+    if (res.status === 401 && path !== "/auth/me" && !path.startsWith("/auth/")) {
+      if (!isRedirectingToLogin && typeof window !== "undefined" && !isPublicPath(window.location.pathname)) {
         isRedirectingToLogin = true;
         window.location.href = "/login";
       }
