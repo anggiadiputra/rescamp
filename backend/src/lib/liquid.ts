@@ -335,6 +335,9 @@ export class LiquidClient {
     const qs = params ? "?" + new URLSearchParams(params).toString() : "";
     return this.request<any>("GET", `/customers/${customerId}/contacts${qs}`);
   }
+  getCustomerContact(customerId: string | number, contactId: string | number, timeoutMs = 6_000) {
+    return this.request<any>("GET", `/customers/${customerId}/contacts/${contactId}`, undefined, timeoutMs);
+  }
   getDefaultCustomerContact(customerId: string | number, eligibilityCriteria?: string) {
     const qs = eligibilityCriteria ? `?eligibility_criteria=${encodeURIComponent(eligibilityCriteria)}` : "";
     return this.request<any>("GET", `/customers/${customerId}/contacts/default${qs}`);

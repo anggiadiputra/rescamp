@@ -216,6 +216,85 @@ export function parseDomainContact(raw: any): {
   };
 }
 
+export async function resolveFullDomainContacts(
+  liquid: LiquidClient,
+  ext: any,
+  ownerFallback: any
+): Promise<{
+  registrantContact: any;
+  adminContact: any;
+  techContact: any;
+  billingContact: any;
+}> {
+  let regRaw = ext.registrant_contact ?? ext.registrant ?? ext.registrant_contact_details ?? ext.registrantcontact ?? ext.contacts?.registrant;
+  let adminRaw = ext.admin_contact ?? ext.admin ?? ext.admin_contact_details ?? ext.admincontact ?? ext.contacts?.admin;
+  let techRaw = ext.tech_contact ?? ext.tech ?? ext.technical_contact ?? ext.tech_contact_details ?? ext.techcontact ?? ext.contacts?.tech;
+  let billingRaw = ext.billing_contact ?? ext.billing ?? ext.billing_contact_details ?? ext.billingcontact ?? ext.contacts?.billing;
+
+  const regId = ext.registrant_contact_id || (typeof regRaw === "object" ? regRaw?.contact_id || regRaw?.id : regRaw);
+  const adminId = ext.admin_contact_id || (typeof adminRaw === "object" ? adminRaw?.contact_id || adminRaw?.id : adminRaw);
+  const techId = ext.tech_contact_id || (typeof techRaw === "object" ? techRaw?.contact_id || techRaw?.id : techRaw);
+  const billingId = ext.billing_contact_id || (typeof billingRaw === "object" ? billingRaw?.contact_id || billingRaw?.id : billingRaw);
+  const custId = String(ext.customer_id || ext.customerid || ext.customerId || "");
+
+  // If contact details lack address or phone, hydrate from /customers/{customer_id}/contacts/{contact_id}
+  if (custId && regId) {
+    const isThin = !regRaw || typeof regRaw !== "object" || (!regRaw.address_line_1 && !regRaw.address && !regRaw.tel_no && !regRaw.phone);
+    if (isThin) {
+      try {
+        const fetched = await liquid.getCustomerContact(custId, regId);
+        if (fetched && (fetched.name || fetched.email || fetched.address_line_1 || fetched.address)) {
+          regRaw = fetched;
+        }
+      } catch {
+        try {
+          const list = await liquid.listCustomerContacts(custId);
+          const arr = Array.isArray(list) ? list : list?.data || list?.contacts || [];
+          const found = arr.find((c: any) => String(c.contact_id || c.id) === String(regId));
+          if (found) regRaw = found;
+        } catch {}
+      }
+    }
+  }
+
+  if (custId && adminId && adminId !== regId) {
+    const isThin = !adminRaw || typeof adminRaw !== "object" || (!adminRaw.address_line_1 && !adminRaw.address);
+    if (isThin) {
+      try {
+        const fetched = await liquid.getCustomerContact(custId, adminId);
+        if (fetched) adminRaw = fetched;
+      } catch {}
+    }
+  }
+
+  if (custId && techId && techId !== regId && techId !== adminId) {
+    const isThin = !techRaw || typeof techRaw !== "object" || (!techRaw.address_line_1 && !techRaw.address);
+    if (isThin) {
+      try {
+        const fetched = await liquid.getCustomerContact(custId, techId);
+        if (fetched) techRaw = fetched;
+      } catch {}
+    }
+  }
+
+  if (custId && billingId && billingId !== regId && billingId !== adminId) {
+    const isThin = !billingRaw || typeof billingRaw !== "object" || (!billingRaw.address_line_1 && !billingRaw.address);
+    if (isThin) {
+      try {
+        const fetched = await liquid.getCustomerContact(custId, billingId);
+        if (fetched) billingRaw = fetched;
+      } catch {}
+    }
+  }
+
+  const registrantContact = parseDomainContact(regRaw) || ownerFallback;
+  const adminContact = parseDomainContact(adminRaw) || registrantContact;
+  const techContact = parseDomainContact(techRaw) || registrantContact;
+  const billingContact = parseDomainContact(billingRaw) || registrantContact;
+
+  return { registrantContact, adminContact, techContact, billingContact };
+}
+
 export function parseRaaVerification(raw: any): { status: "verified" | "pending" | "unknown"; email?: string; canResend?: boolean } {
   if (!raw) return { status: "verified", canResend: false };
   const target = typeof raw === "object" ? (raw.data ?? raw) : raw;
@@ -814,10 +893,11 @@ export async function getDomain(userParam: any, lookup: string | number) {
             phone: cust?.phone || undefined,
           };
 
-          const registrantContact = parseDomainContact(ext.registrant_contact ?? ext.registrant ?? ext.registrant_contact_details ?? ext.registrantcontact ?? ext.contacts?.registrant) || ownerContact;
-          const adminContact = parseDomainContact(ext.admin_contact ?? ext.admin ?? ext.admin_contact_details ?? ext.admincontact ?? ext.contacts?.admin) || registrantContact;
-          const techContact = parseDomainContact(ext.tech_contact ?? ext.tech ?? ext.technical_contact ?? ext.tech_contact_details ?? ext.techcontact ?? ext.contacts?.tech) || registrantContact;
-          const billingContact = parseDomainContact(ext.billing_contact ?? ext.billing ?? ext.billing_contact_details ?? ext.billingcontact ?? ext.contacts?.billing) || registrantContact;
+          const { registrantContact, adminContact, techContact, billingContact } = await resolveFullDomainContacts(
+            liquid,
+            { ...ext, customer_id: ext.customer_id || cust?.liquidCustomerId },
+            ownerContact
+          );
           const raaVerification = parseRaaVerification(ext.raa_verification ?? ext.raa_status ?? ext.raa_verification_status);
 
           const nsFormatted = parseNameservers(domain.nameservers);
@@ -998,10 +1078,11 @@ export async function getDomain(userParam: any, lookup: string | number) {
     phone: liquidItem.phone || undefined,
   };
 
-  const registrantContact = parseDomainContact(liquidItem.registrant_contact ?? liquidItem.registrant ?? liquidItem.registrant_contact_details ?? liquidItem.registrantcontact ?? liquidItem.contacts?.registrant) || defaultRemoteOwner;
-  const adminContact = parseDomainContact(liquidItem.admin_contact ?? liquidItem.admin ?? liquidItem.admin_contact_details ?? liquidItem.admincontact ?? liquidItem.contacts?.admin) || registrantContact;
-  const techContact = parseDomainContact(liquidItem.tech_contact ?? liquidItem.tech ?? liquidItem.technical_contact ?? liquidItem.tech_contact_details ?? liquidItem.techcontact ?? liquidItem.contacts?.tech) || registrantContact;
-  const billingContact = parseDomainContact(liquidItem.billing_contact ?? liquidItem.billing ?? liquidItem.billing_contact_details ?? liquidItem.billingcontact ?? liquidItem.contacts?.billing) || registrantContact;
+  const { registrantContact, adminContact, techContact, billingContact } = await resolveFullDomainContacts(
+    liquid,
+    liquidItem,
+    defaultRemoteOwner
+  );
   const raaVerification = parseRaaVerification(liquidItem.raa_verification ?? liquidItem.raa_status ?? liquidItem.raa_verification_status);
 
 
