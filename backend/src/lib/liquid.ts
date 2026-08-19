@@ -93,11 +93,31 @@ export class LiquidClient {
     return this.request<any>("GET", `/domains/availability?domain=${encodeURIComponent(domain)}`, undefined, timeoutMs);
   }
 
-  checkBulkAvailability(domains: string[], timeoutMs: number = 10_000) {
-    if (!domains || domains.length === 0) return Promise.resolve([]);
-    if (domains.length === 1 && domains[0]) return this.checkAvailability(domains[0], timeoutMs);
-    const qs = domains.filter((d): d is string => Boolean(d)).map((d) => `domain=${encodeURIComponent(d)}`).join("&");
-    return this.request<any>("GET", `/domains/availability?${qs}`, undefined, timeoutMs);
+  async checkBulkAvailability(domains: string[], timeoutMs: number = 8_000): Promise<Record<string, any>> {
+    if (!domains || domains.length === 0) return {};
+    const validDomains = domains.filter((d): d is string => Boolean(d));
+    if (validDomains.length === 0) return {};
+    if (validDomains.length === 1 && validDomains[0]) {
+      try {
+        return await this.checkAvailability(validDomains[0], timeoutMs);
+      } catch {
+        return {};
+      }
+    }
+
+    const results = await Promise.allSettled(
+      validDomains.map((d) => this.checkAvailability(d, timeoutMs))
+    );
+
+    const merged: Record<string, any> = {};
+    for (const res of results) {
+      if (res.status === "fulfilled" && res.value) {
+        if (typeof res.value === "object") {
+          Object.assign(merged, res.value);
+        }
+      }
+    }
+    return merged;
   }
 
   /**

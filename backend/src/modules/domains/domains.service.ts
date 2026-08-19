@@ -1538,37 +1538,17 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     console.log(`[bulkAvailability] Local DB blocked domains:`, Array.from(localDomainSet));
   }
 
-  // 4. Separate TLDs into Primary and Secondary groups for fast & resilient batch queries
-  const primaryTldKeys = new Set(["com", "id", "co.id", "my.id", "web.id", "biz.id", "xyz", "net", "org"]);
-  const primaryTlds = tldsToQuery.filter(t => primaryTldKeys.has(t));
-  const secondaryTlds = tldsToQuery.filter(t => !primaryTldKeys.has(t));
-
-  let primaryData: any = null;
-  let secondaryData: any = null;
+  // 4. Query Resellercamp API for all target domains concurrently
+  let apiData: any = null;
   let apiSucceeded = false;
 
   if (liquid) {
-    const [primaryRes, secondaryRes] = await Promise.allSettled([
-      primaryTlds.length > 0
-        ? liquid.checkBulkAvailability(primaryTlds.map(t => `${baseKeyword}.${t}`), 8_000)
-        : Promise.resolve(null),
-      secondaryTlds.length > 0
-        ? liquid.checkBulkAvailability(secondaryTlds.map(t => `${baseKeyword}.${t}`), 8_000)
-        : Promise.resolve(null),
-    ]);
-
-    primaryData = primaryRes.status === "fulfilled" ? primaryRes.value : null;
-    secondaryData = secondaryRes.status === "fulfilled" ? secondaryRes.value : null;
-    apiSucceeded = Boolean(primaryData || secondaryData);
-
-    console.log(`[bulkAvailability] API primary response:`, primaryData ? JSON.stringify(primaryData).slice(0, 500) : "null");
-    console.log(`[bulkAvailability] API secondary response:`, secondaryData ? JSON.stringify(secondaryData).slice(0, 500) : "null");
-
-    if (primaryRes.status === "rejected") {
-      console.warn("[bulkAvailability] Primary batch API failed:", (primaryRes as PromiseRejectedResult).reason?.message);
-    }
-    if (secondaryRes.status === "rejected") {
-      console.warn("[bulkAvailability] Secondary batch API failed:", (secondaryRes as PromiseRejectedResult).reason?.message);
+    try {
+      apiData = await liquid.checkBulkAvailability(allFullDomains, 8_000);
+      apiSucceeded = Boolean(apiData && typeof apiData === "object" && Object.keys(apiData).length > 0);
+      console.log(`[bulkAvailability] API response keys:`, apiData ? Object.keys(apiData) : "null");
+    } catch (e: any) {
+      console.warn("[bulkAvailability] API batch check failed:", e?.message);
     }
   } else {
     console.warn("[bulkAvailability] No Liquid client — all domains will be marked 'unknown'");
@@ -1588,9 +1568,8 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
       finalStatus = "unavailable";
     } else {
       // Priority 2: Check Resellercamp API response
-      const batchPayload = primaryTldKeys.has(tld) ? primaryData : secondaryData;
-      if (batchPayload) {
-        const rawStatus = extractDomainStatus(batchPayload, fullDomain);
+      if (apiData) {
+        const rawStatus = extractDomainStatus(apiData, fullDomain);
         if (rawStatus) {
           const st = rawStatus.toLowerCase().trim();
           if (st === "available" || st === "free" || st === "available_for_registration") {
