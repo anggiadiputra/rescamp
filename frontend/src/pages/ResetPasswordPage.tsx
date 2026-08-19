@@ -26,6 +26,20 @@ export default function ResetPasswordPage() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
 
+  // Sync from URL params or hash if present
+  useEffect(() => {
+    const qToken = searchParams.get("token") || searchParams.get("code") || searchParams.get("otp");
+    const qEmail = searchParams.get("email");
+    const hParams = new URLSearchParams(window.location.hash.slice(1));
+    const hToken = hParams.get("token");
+    const hEmail = hParams.get("email");
+
+    const t = qToken || hToken;
+    const em = qEmail || hEmail;
+    if (t) setInputToken(t);
+    if (em) setEmail(em);
+  }, [searchParams]);
+
   // Countdown timer for resend OTP
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -35,7 +49,7 @@ export default function ResetPasswordPage() {
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
-  const hasDirectToken = !!initialToken && initialToken.length > 10;
+  const hasDirectToken = !!inputToken && inputToken.length > 10;
 
   async function handleResendOtp() {
     const cleanEmail = (email || "").trim().toLowerCase();

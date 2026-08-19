@@ -100,6 +100,13 @@ const app = new Elysia()
     return { error: "Internal server error", statusCode: 500 };
   })
   .get("/", () => ({ message: "Domain Dashboard API", version: "1.0.0" }))
+  .get("/reset-password", ({ request, set }) => {
+    const url = new URL(request.url);
+    const origins = (env.CORS_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean);
+    const frontendOrigin = origins.find((o) => o !== "*" && !o.includes("api."));
+    const base = frontendOrigin || (env.APP_URL ? env.APP_URL.replace("api.", "dash.") : "https://dash.ekstensi.id");
+    set.redirect = `${base.replace(/\/$/, "")}/reset-password${url.search}`;
+  })
   .group("/api", (app) =>
     app
       .use(authRoutes)
