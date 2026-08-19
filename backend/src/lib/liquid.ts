@@ -411,8 +411,8 @@ export class LiquidClient {
       throw err;
     }
   }
-  getDomain(domainId: string) {
-    return this.request<any>("GET", `/domains/${domainId}?fields=all`);
+  getDomain(domainId: string, fields: string = "All", timeoutMs: number = 8_000) {
+    return this.request<any>("GET", `/domains/${domainId}?fields=${fields}`, undefined, timeoutMs);
   }
   listDomains(params?: Record<string, string>) {
     const qs = params ? "?" + new URLSearchParams(params).toString() : "";
@@ -591,8 +591,8 @@ export class LiquidClient {
   }
 
   // --- DNS ---
-  getDnsRecords(domainId: string, type: string) {
-    return this.request<any>("GET", `/domains/${domainId}/dns/${type}`);
+  getDnsRecords(domainId: string, type: string, timeoutMs: number = 8_000) {
+    return this.request<any>("GET", `/domains/${domainId}/dns/${type}`, undefined, timeoutMs);
   }
   addDnsRecord(domainId: string, type: string, data: Record<string, any>) {
     return this.request<any>("POST", `/domains/${domainId}/dns/${type}`, data);
