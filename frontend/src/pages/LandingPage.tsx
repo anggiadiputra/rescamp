@@ -165,7 +165,14 @@ export default function LandingPage() {
         setSearchResult(list);
       } else {
         const singleRes = await api.get<any>(`/domains/availability?domain=${encodeURIComponent(rawInput)}`);
-        setSearchResult(singleRes && singleRes.data ? (Array.isArray(singleRes.data) ? singleRes.data : [singleRes.data]) : []);
+        const inner = singleRes?.data;
+        let singleList: any[] = [];
+        if (inner && typeof inner === "object" && !Array.isArray(inner)) {
+          for (const [dom, info] of Object.entries(inner)) {
+            singleList.push({ domain: dom, ...((info as any) || {}) });
+          }
+        }
+        setSearchResult(singleList);
       }
     } catch (err: any) {
       setSearchResult([]);
