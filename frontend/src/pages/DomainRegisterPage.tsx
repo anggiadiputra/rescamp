@@ -340,23 +340,26 @@ export default function DomainRegisterPage() {
           <div className="p-4 pt-1 divide-y divide-gray-100 max-h-[310px] overflow-y-auto">
             {bulkResults.map((r: any, i: number) => {
               const isSelected = selectedDomain?.domain === r.domain;
-              const isAvail = r.available !== false;
+              const isAvail = r.available === true;
+              const isUnknown = r.status === "unknown";
 
               return (
                 <div key={i} className={`py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors ${
                   r.available && isSelected ? "bg-emerald-50/60 px-2 rounded-lg" : ""
                 }`}>
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className={`w-4 h-4 shrink-0 ${isAvail ? "text-emerald-500" : "text-rose-500"}`} />
+                    <CheckCircle2 className={`w-4 h-4 shrink-0 ${isAvail ? "text-emerald-500" : isUnknown ? "text-gray-400" : "text-rose-500"}`} />
                     <span className="font-bold text-sm text-gray-900">{r.domain}</span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isAvail ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
-                      {isAvail ? "Tersedia" : "Sudah Terdaftar"}
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isAvail ? "bg-emerald-100 text-emerald-800" : isUnknown ? "bg-gray-100 text-gray-600" : "bg-rose-100 text-rose-800"}`}>
+                      {isAvail ? "Tersedia" : isUnknown ? "Tidak Diketahui" : "Sudah Terdaftar"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between sm:justify-end gap-3">
                     <div className="text-left sm:text-right">
                       {isAvail ? (
                         <div className="text-sm font-bold text-gray-900">{fmtPrice(r.price)} <span className="text-[10px] text-gray-400 font-normal">/tahun</span></div>
+                      ) : isUnknown ? (
+                        <div className="text-sm font-bold text-gray-400">—</div>
                       ) : (
                         <div className="text-sm font-bold text-amber-700">
                           Transfer: {fmtPrice(r.transfer_price || r.renew_price || r.price)} <span className="text-[10px] text-amber-600/70 font-normal">/tahun</span>
@@ -376,6 +379,10 @@ export default function DomainRegisterPage() {
                         {isSelected ? <Check className="w-3.5 h-3.5" /> : null}
                         {isSelected ? "Terpilih" : "Daftar"}
                       </button>
+                    ) : isUnknown ? (
+                      <span className="px-3.5 py-1.5 bg-gray-200 text-gray-500 text-xs font-bold rounded-lg flex items-center gap-1 shrink-0">
+                        Cek Ulang
+                      </span>
                     ) : (
                       <button
                         onClick={() => nav(`/domains/transfer?domain=${encodeURIComponent(r.domain)}`)}

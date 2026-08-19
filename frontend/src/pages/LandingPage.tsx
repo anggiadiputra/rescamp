@@ -245,9 +245,10 @@ export default function LandingPage() {
                   <span className="text-[10px] font-semibold text-blue-600">Transparansi Harga Domain</span>
                 </div>
                 <div className="p-4 pt-1 divide-y divide-gray-100 max-h-[310px] overflow-y-auto">
-                  {searchResult.map((res: any, idx: number) => {
+                {searchResult.map((res: any, idx: number) => {
                     const dName = res.domain || res.domainName || `${keyword}.com`;
-                    const isAvail = res.available !== false;
+                    const isAvail = res.available === true;
+                    const isUnknown = res.status === "unknown";
 
                     const itemTld = String(res.tld || dName.split(".").slice(1).join(".") || "").toLowerCase();
                     const liveInfo = livePrices[itemTld];
@@ -265,16 +266,18 @@ export default function LandingPage() {
                     return (
                       <div key={idx} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <CheckCircle2 className={`w-4 h-4 shrink-0 ${isAvail ? "text-emerald-500" : "text-rose-500"}`} />
+                          <CheckCircle2 className={`w-4 h-4 shrink-0 ${isAvail ? "text-emerald-500" : isUnknown ? "text-gray-400" : "text-rose-500"}`} />
                           <span className="font-bold text-sm text-gray-900">{dName}</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isAvail ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
-                            {isAvail ? "Tersedia" : "Sudah Terdaftar"}
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isAvail ? "bg-emerald-100 text-emerald-800" : isUnknown ? "bg-gray-100 text-gray-600" : "bg-rose-100 text-rose-800"}`}>
+                            {isAvail ? "Tersedia" : isUnknown ? "Tidak Diketahui" : "Sudah Terdaftar"}
                           </span>
                         </div>
                         <div className="flex items-center justify-between sm:justify-end gap-3">
                           <div className="text-left sm:text-right">
                             {isAvail ? (
                               <div className="text-sm font-bold text-gray-900">{formattedPrice} <span className="text-[10px] text-gray-400 font-normal">/tahun</span></div>
+                            ) : isUnknown ? (
+                              <div className="text-sm font-bold text-gray-400">—</div>
                             ) : (
                               <div className="text-sm font-bold text-amber-700">
                                 Transfer: {formattedTransferPrice} <span className="text-[10px] text-amber-600/70 font-normal">/tahun</span>
@@ -289,6 +292,10 @@ export default function LandingPage() {
                             >
                               Cari Domain <ChevronRight className="w-3.5 h-3.5" />
                             </button>
+                          ) : isUnknown ? (
+                            <span className="px-3.5 py-1.5 bg-gray-200 text-gray-500 text-xs font-bold rounded-lg flex items-center gap-1 shrink-0">
+                              Cek Ulang
+                            </span>
                           ) : (
                             <button
                               onClick={() => handleTransferClick(dName, formattedTransferPrice)}

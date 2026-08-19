@@ -39,16 +39,38 @@ export function cleanDateOnly(val?: any): string | null {
   return clean || null;
 }
 
-async function getLiquid(user?: { id?: number; resellerId?: string | null; apiKey?: string | null; role?: string | null }): Promise<LiquidClient> {
-  if (user?.id) {
-    const creds = await resolveResellerCreds(user.id);
+async function getLiquid(user?: { id?: number; resellerId?: string | null; apiKey?: string | null; role?: string | null }): Promise<LiquidClient | null> {
+  try {
+    if (user?.id) {
+      const creds = await resolveResellerCreds(user.id);
+      if (!creds.resellerId || !creds.apiKey) {
+        console.warn("[getLiquid] Empty credentials resolved for userId:", user.id);
+        return null;
+      }
+      return new LiquidClient(creds.resellerId, creds.apiKey);
+    }
+    if (user?.resellerId && user?.apiKey) {
+      return new LiquidClient(user.resellerId, user.apiKey);
+    }
+    const creds = await resolveResellerCreds(0);
+    if (!creds.resellerId || !creds.apiKey) {
+      console.warn("[getLiquid] Empty master credentials resolved");
+      return null;
+    }
     return new LiquidClient(creds.resellerId, creds.apiKey);
+  } catch (e: any) {
+    console.warn("[getLiquid] Failed to resolve credentials:", e?.message);
+    return null;
   }
-  if (user?.resellerId && user?.apiKey) {
-    return new LiquidClient(user.resellerId, user.apiKey);
+}
+
+/** Non-nullable variant for operations that require API access (register, transfer, renew, etc.) */
+async function getLiquidRequired(user?: { id?: number; resellerId?: string | null; apiKey?: string | null; role?: string | null }): Promise<LiquidClient> {
+  const client = await getLiquid(user);
+  if (!client) {
+    throw new AppError("Kredensial Resellercamp tidak tersedia. Pastikan Reseller ID dan API Key telah dikonfigurasi.", 400);
   }
-  const creds = await resolveResellerCreds(0);
-  return new LiquidClient(creds.resellerId, creds.apiKey);
+  return client;
 }
 
 export function parsePrivacyProtectionStatus(raw: any): boolean {
@@ -237,6 +259,7 @@ export function parseNameservers(raw: any): string[] | null {
 
 export async function checkAvailability(user: { id?: number; resellerId: string | null; apiKey: string | null; role?: string }, domain: string) {
   const fullDomain = domain.toLowerCase().trim();
+  console.log(`[checkAvailability] Checking: ${fullDomain}`);
 
   // 1. Check local DB for existing active/pending domain record
   const [localDomain] = await db
@@ -271,15 +294,16 @@ export async function checkAvailability(user: { id?: number; resellerId: string 
     }
   }
 
+  if (isTakenLocally) {
+    console.log(`[checkAvailability] ${fullDomain} → UNAVAILABLE (found in local DB/transactions)`);
+  }
+
   // Extract TLD (e.g. "example.com" -> "com")
   const parts = fullDomain.split(".");
   const tld = parts.length > 1 ? parts.slice(1).join(".").toLowerCase() : "";
 
   let priceInfo: any = null;
-  let liquid: any = null;
-  try {
-    liquid = await getLiquid(user);
-  } catch {}
+  const liquid = await getLiquid(user);
 
   if (tld && liquid) {
     try {
@@ -306,17 +330,39 @@ export async function checkAvailability(user: { id?: number; resellerId: string 
     };
   }
 
+  // Query Resellercamp API — NO DNS fallback (DNS is unreliable for availability)
   let res: any = null;
+  let apiSuccess = false;
   if (liquid) {
     try {
-      res = await liquid.checkAvailability(fullDomain, 5_000);
+      res = await liquid.checkAvailability(fullDomain, 8_000);
+      apiSuccess = true;
+      console.log(`[checkAvailability] API raw response for ${fullDomain}:`, JSON.stringify(res));
     } catch (err: any) {
-      const isAvail = await checkDnsAvailability(fullDomain).catch(() => false);
-      res = { [fullDomain]: { status: isAvail ? "available" : "unavailable" } };
+      console.warn(`[checkAvailability] API call failed for ${fullDomain}:`, err?.message);
+      // Return "unknown" — do NOT fallback to DNS probe
+      return {
+        [fullDomain]: {
+          status: "unknown",
+          price: priceInfo?.price_new || priceInfo?.price_register || null,
+          renew_price: priceInfo?.price_renew || null,
+          privacy_protect: priceInfo?.privacy_protect || "70.00",
+          currency: priceInfo?.currency || "IDR",
+        },
+      };
     }
   } else {
-    const isAvail = await checkDnsAvailability(fullDomain).catch(() => false);
-    res = { [fullDomain]: { status: isAvail ? "available" : "unavailable" } };
+    console.warn(`[checkAvailability] No Liquid client available (empty credentials) for ${fullDomain}`);
+    // No API available — return "unknown", not a DNS guess
+    return {
+      [fullDomain]: {
+        status: "unknown",
+        price: priceInfo?.price_new || priceInfo?.price_register || null,
+        renew_price: priceInfo?.price_renew || null,
+        privacy_protect: priceInfo?.privacy_protect || "70.00",
+        currency: priceInfo?.currency || "IDR",
+      },
+    };
   }
 
   // Attach price details & normalize status in availability result
@@ -325,10 +371,12 @@ export async function checkAvailability(user: { id?: number; resellerId: string 
     const key = Object.keys(targetObj)[0];
     if (key && targetObj[key] && typeof targetObj[key] === "object") {
       const rawSt = String(targetObj[key].status || "").toLowerCase().trim();
+      console.log(`[checkAvailability] ${fullDomain} → raw status from API: "${rawSt}"`);
       if (rawSt) {
         if (rawSt === "available" || rawSt === "free" || rawSt === "available_for_registration") {
           targetObj[key].status = "available";
         } else {
+          // regthroughus, regthroughothers, registered, taken, unknown, etc. = unavailable
           targetObj[key].status = "unavailable";
         }
       }
@@ -336,16 +384,29 @@ export async function checkAvailability(user: { id?: number; resellerId: string 
       targetObj[key].renew_price = priceInfo?.price_renew || null;
       targetObj[key].privacy_protect = priceInfo?.privacy_protect || "70.00";
       targetObj[key].currency = priceInfo?.currency || "IDR";
+    } else if (key && typeof targetObj[key] === "string") {
+      // Handle flat response format: { "domain.com": "regthroughus" }
+      const rawSt = targetObj[key].toLowerCase().trim();
+      console.log(`[checkAvailability] ${fullDomain} → raw flat status from API: "${rawSt}"`);
+      const isAvail = rawSt === "available" || rawSt === "free" || rawSt === "available_for_registration";
+      targetObj[key] = {
+        status: isAvail ? "available" : "unavailable",
+        price: priceInfo?.price_new || priceInfo?.price_register || null,
+        renew_price: priceInfo?.price_renew || null,
+        privacy_protect: priceInfo?.privacy_protect || "70.00",
+        currency: priceInfo?.currency || "IDR",
+      };
     }
   }
 
+  console.log(`[checkAvailability] Final result for ${fullDomain}:`, JSON.stringify(res));
   return res;
 }
 
 import { createDomainOrderPayment } from "../payments/payments.service";
 
 export async function getSuggestions(user: { id?: number; resellerId: string | null; apiKey: string | null }, keyword: string, tld?: string) {
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
   return liquid.getDomainSuggestions(keyword, tld);
 }
 
@@ -390,7 +451,7 @@ export async function orderRegisterDomain(
     }
   }
 
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
   
   const years = data.years || 1;
   const tldKey = data.tld.toLowerCase();
@@ -443,7 +504,7 @@ export async function orderTransferDomain(
   user: { id: number; resellerId: string | null; apiKey: string | null },
   data: { domain_name: string; auth_code: string; customer_id?: number; nameservers?: string[] }
 ) {
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
   const tld = data.domain_name.split(".").slice(1).join(".").toLowerCase();
 
   let unitPrice = 150000;
@@ -478,7 +539,7 @@ export async function orderRenewDomain(
   options?: { purchasePrivacyProtection?: boolean }
 ) {
   const domain = await getDomain(userParam, domainId);
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
   const tldKey = domain.tld.toLowerCase();
   const includePrivacy = Boolean(options?.purchasePrivacyProtection) && !tldKey.endsWith("id");
 
@@ -530,7 +591,7 @@ export async function orderBuyPrivacy(
     throw new AppError("WHOIS privacy sudah aktif untuk domain ini", 409);
   }
 
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
 
   let privacyPrice = 70000;
   try {
@@ -559,7 +620,7 @@ export async function registerDomain(
   user: { id?: number; resellerId: string | null; apiKey: string | null },
   data: Record<string, any>
 ) {
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
   const years = data.years || 1;
   const fullDomain = data.tld ? `${data.domain_name}.${data.tld}` : data.domain_name;
 
@@ -711,91 +772,93 @@ export async function getDomain(userParam: any, lookup: string | number) {
     if (ref && ref !== "null" && ref !== "undefined") {
       try {
         const liquid = await getLiquid(userParam);
-        if (!domain.liquidOrderId && domain.domainName) {
-          try {
-            const item: any = await liquid.getDomain(domain.domainName);
-            const orderId = String(item?.domain_id || item?.order_id || item?.id || "");
-            if (orderId) {
-              await db.update(domains).set({ liquidOrderId: orderId }).where(eq(domains.id, domain.id));
-              domain.liquidOrderId = orderId;
-            }
-          } catch {}
-        }
-        const domainRef = String(domain.liquidOrderId || domain.domainName);
-        const isDotId = domain.domainName.toLowerCase().endsWith(".id");
-        let liveFlag = false;
-        if (!isDotId) {
-          try {
-            const live: any = await liquid.getPrivacyProtection(domainRef);
-            liveFlag = parsePrivacyProtectionStatus(live);
-          } catch {}
-        }
-        const dbFlag = domain.privacyProtection === 1;
-
-        if (liveFlag !== dbFlag) {
-          await db.update(domains).set({ privacyProtection: liveFlag ? 1 : 0 }).where(eq(domains.id, domain.id));
-          domain.privacyProtection = liveFlag ? 1 : 0;
-        }
-
-        try {
-          const liveNsRaw = await liquid.getNameservers(domainRef);
-          const liveNs = parseNameservers(liveNsRaw);
-          if (liveNs && liveNs.length > 0) {
-            const currentNs = Array.isArray(domain.nameservers) ? domain.nameservers : [];
-            if (JSON.stringify(liveNs) !== JSON.stringify(currentNs)) {
-              await db.update(domains).set({ nameservers: liveNs }).where(eq(domains.id, domain.id));
-              domain.nameservers = liveNs;
-            }
+        if (liquid) {
+          if (!domain.liquidOrderId && domain.domainName) {
+            try {
+              const item: any = await liquid.getDomain(domain.domainName);
+              const orderId = String(item?.domain_id || item?.order_id || item?.id || "");
+              if (orderId) {
+                await db.update(domains).set({ liquidOrderId: orderId }).where(eq(domains.id, domain.id));
+                domain.liquidOrderId = orderId;
+              }
+            } catch {}
           }
-        } catch {}
+          const domainRef = String(domain.liquidOrderId || domain.domainName);
+          const isDotId = domain.domainName.toLowerCase().endsWith(".id");
+          let liveFlag = false;
+          if (!isDotId) {
+            try {
+              const live: any = await liquid.getPrivacyProtection(domainRef);
+              liveFlag = parsePrivacyProtectionStatus(live);
+            } catch {}
+          }
+          const dbFlag = domain.privacyProtection === 1;
 
-        // Fetch complete domain details (fields=All) for contacts, RAA verification, DNSSEC, glue records
-        let extraDetails: any = null;
-        if (/^\d+$/.test(domainRef)) {
+          if (liveFlag !== dbFlag) {
+            await db.update(domains).set({ privacyProtection: liveFlag ? 1 : 0 }).where(eq(domains.id, domain.id));
+            domain.privacyProtection = liveFlag ? 1 : 0;
+          }
+
           try {
-            extraDetails = await liquid.getDomain(domainRef);
+            const liveNsRaw = await liquid.getNameservers(domainRef);
+            const liveNs = parseNameservers(liveNsRaw);
+            if (liveNs && liveNs.length > 0) {
+              const currentNs = Array.isArray(domain.nameservers) ? domain.nameservers : [];
+              if (JSON.stringify(liveNs) !== JSON.stringify(currentNs)) {
+                await db.update(domains).set({ nameservers: liveNs }).where(eq(domains.id, domain.id));
+                domain.nameservers = liveNs;
+              }
+            }
           } catch {}
+
+          // Fetch complete domain details (fields=All) for contacts, RAA verification, DNSSEC, glue records
+          let extraDetails: any = null;
+          if (/^\d+$/.test(domainRef)) {
+            try {
+              extraDetails = await liquid.getDomain(domainRef);
+            } catch {}
+          }
+          const ext = (extraDetails && typeof extraDetails === "object") ? (extraDetails.data ?? extraDetails) : {};
+
+          const ownerContact = {
+            name: cust?.name || reseller?.name || (userParam as any)?.name || (userParam as any)?.email?.split("@")[0] || undefined,
+            company: cust?.company || undefined,
+            email: cust?.email || reseller?.email || (userParam as any)?.email || undefined,
+            address: cust?.address || undefined,
+            city: cust?.city || undefined,
+            state: cust?.state || undefined,
+            country: cust?.country || "ID",
+            zipcode: cust?.zipcode || undefined,
+            phone: cust?.phone || undefined,
+          };
+
+          const registrantContact = parseDomainContact(ext.registrant_contact ?? ext.registrant ?? ext.registrant_contact_details ?? ext.registrantcontact ?? ext.contacts?.registrant) || ownerContact;
+          const adminContact = parseDomainContact(ext.admin_contact ?? ext.admin ?? ext.admin_contact_details ?? ext.admincontact ?? ext.contacts?.admin) || registrantContact;
+          const techContact = parseDomainContact(ext.tech_contact ?? ext.tech ?? ext.technical_contact ?? ext.tech_contact_details ?? ext.techcontact ?? ext.contacts?.tech) || registrantContact;
+          const billingContact = parseDomainContact(ext.billing_contact ?? ext.billing ?? ext.billing_contact_details ?? ext.billingcontact ?? ext.contacts?.billing) || registrantContact;
+          const raaVerification = parseRaaVerification(ext.raa_verification ?? ext.raa_status ?? ext.raa_verification_status);
+
+          const nsFormatted = parseNameservers(domain.nameservers);
+
+          return {
+            ...domain,
+            nameservers: nsFormatted,
+            registrantContact,
+            adminContact,
+            techContact,
+            billingContact,
+            raaVerification,
+            _local: true,
+            domainId: domain.id,
+            liquidOrderId: domain.liquidOrderId || null,
+            customerId: domain.customerId || cust?.id || null,
+            liquidCustomerId: cust?.liquidCustomerId || null,
+            customerName: cust?.name || reseller?.name || (userParam as any)?.name || (userParam as any)?.email || null,
+            customerEmail: cust?.email || reseller?.email || (userParam as any)?.email || null,
+            userId: domain.userId,
+            resellerId: reseller?.resellerId || user.resellerId || null,
+          };
         }
-        const ext = (extraDetails && typeof extraDetails === "object") ? (extraDetails.data ?? extraDetails) : {};
-
-        const ownerContact = {
-          name: cust?.name || reseller?.name || (userParam as any)?.name || (userParam as any)?.email?.split("@")[0] || undefined,
-          company: cust?.company || undefined,
-          email: cust?.email || reseller?.email || (userParam as any)?.email || undefined,
-          address: cust?.address || undefined,
-          city: cust?.city || undefined,
-          state: cust?.state || undefined,
-          country: cust?.country || "ID",
-          zipcode: cust?.zipcode || undefined,
-          phone: cust?.phone || undefined,
-        };
-
-        const registrantContact = parseDomainContact(ext.registrant_contact ?? ext.registrant ?? ext.registrant_contact_details ?? ext.registrantcontact ?? ext.contacts?.registrant) || ownerContact;
-        const adminContact = parseDomainContact(ext.admin_contact ?? ext.admin ?? ext.admin_contact_details ?? ext.admincontact ?? ext.contacts?.admin) || registrantContact;
-        const techContact = parseDomainContact(ext.tech_contact ?? ext.tech ?? ext.technical_contact ?? ext.tech_contact_details ?? ext.techcontact ?? ext.contacts?.tech) || registrantContact;
-        const billingContact = parseDomainContact(ext.billing_contact ?? ext.billing ?? ext.billing_contact_details ?? ext.billingcontact ?? ext.contacts?.billing) || registrantContact;
-        const raaVerification = parseRaaVerification(ext.raa_verification ?? ext.raa_status ?? ext.raa_verification_status);
-
-        const nsFormatted = parseNameservers(domain.nameservers);
-
-        return {
-          ...domain,
-          nameservers: nsFormatted,
-          registrantContact,
-          adminContact,
-          techContact,
-          billingContact,
-          raaVerification,
-          _local: true,
-          domainId: domain.id,
-          liquidOrderId: domain.liquidOrderId || null,
-          customerId: domain.customerId || cust?.id || null,
-          liquidCustomerId: cust?.liquidCustomerId || null,
-          customerName: cust?.name || reseller?.name || (userParam as any)?.name || (userParam as any)?.email || null,
-          customerEmail: cust?.email || reseller?.email || (userParam as any)?.email || null,
-          userId: domain.userId,
-          resellerId: reseller?.resellerId || user.resellerId || null,
-        };
       } catch {
         // ignore — fall back to local column
       }
@@ -838,6 +901,7 @@ export async function getDomain(userParam: any, lookup: string | number) {
   // Live-only fallback: probe Resellercamp so client-side links to liquidOrderId still resolve.
   // Used when the domain listing is served live (no DB cache) but the row was never synced locally.
   const liquid = await getLiquid(userParam);
+  if (!liquid) throw new AppError("Domain not found", 404);
   let liquidItem: any = null;
   try {
     liquidItem = await liquid.getDomain(lookupStr);
@@ -995,7 +1059,7 @@ export async function getDomain(userParam: any, lookup: string | number) {
 
 export async function renewDomain(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number, years: number) {
   const domain = await getDomain(userParam, domainId);
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
   const liquidRes = await liquid.renewDomain(String(domain.liquidOrderId || domain.domainName), years);
   await db.update(domains).set({ years: (domain.years || 1) + years }).where(eq(domains.id, domain.id));
   return { domain_id: domain.id, domain_name: domain.domainName, years_added: years, previous_expiry: domain.expiryDate, new_expiry: liquidRes?.expiry_date || null };
@@ -1008,7 +1072,7 @@ export async function updateLock(user: { id?: number; resellerId: string | null;
   if (Boolean(domain.locked) === lock) {
     return { locked: lock, alreadyInState: true };
   }
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
   try {
     if (lock) await liquid.lockDomain(String(domain.liquidOrderId || domain.domainName));
     else await liquid.unlockDomain(String(domain.liquidOrderId || domain.domainName));
@@ -1037,7 +1101,7 @@ export async function updateLock(user: { id?: number; resellerId: string | null;
 export async function updateNameservers(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number, ns: string[]) {
   const domain = await getDomain(userParam, domainId);
   assertNotSuspended(domain);
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
 
   let domainRef = String(domain.liquidOrderId || "").trim();
   if (!domainRef || !/^\d+$/.test(domainRef)) {
@@ -1094,7 +1158,7 @@ export async function updateNameservers(user: { id?: number; resellerId: string 
 
 export async function getAuthCode(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number) {
   const domain = await getDomain(userParam, domainId);
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
 
   let ref = String(domain.liquidOrderId || "").trim();
   if (!ref && domain.domainName) {
@@ -1141,7 +1205,7 @@ export async function getAuthCode(user: { id?: number; resellerId: string | null
 export async function updateAuthCode(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number, authCode: string) {
   const domain = await getDomain(userParam, domainId);
   assertNotSuspended(domain);
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
   return liquid.updateAuthCode(String(domain.liquidOrderId || domain.domainName || domainId), authCode);
 }
 
@@ -1152,7 +1216,7 @@ export async function toggleTheftProtection(user: { id?: number; resellerId: str
   if (Boolean(domain.theftProtection) === enable) {
     return { theftProtection: enable, alreadyInState: true };
   }
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
   try {
     if (enable) await liquid.enableTheftProtection(String(domain.liquidOrderId || domain.domainName));
     else await liquid.disableTheftProtection(String(domain.liquidOrderId || domain.domainName));
@@ -1180,7 +1244,7 @@ export async function toggleTheftProtection(user: { id?: number; resellerId: str
 
 export async function restoreDomain(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number) {
   const domain = await getDomain(userParam, domainId);
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
   const res = await liquid.restoreDomain(String(domain.liquidOrderId || domain.domainName));
   await db.update(domains).set({ status: "active" }).where(eq(domains.id, domain.id));
   return res;
@@ -1188,7 +1252,7 @@ export async function restoreDomain(user: { id?: number; resellerId: string | nu
 
 export async function toggleSuspend(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number, suspend: boolean, reason?: string) {
   let domain = await getDomain(userParam, domainId) as any;
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
   const ref = String(domain.liquidOrderId || domain.domainName);
   // Root-cause fix: Resellercamp's /domains LIST endpoint reports `suspended: false` even
   // for domains that are actually suspended (the `/domains/{id}` DETAIL and `/domains/{id}/suspended`
@@ -1280,7 +1344,7 @@ export async function deleteDomainRecord(user: { id: number; resellerId: string 
   const domain = await getDomain(user, domainId);
   // Per LIQUID docs (DELETE /v1/domains/{domain_id}), deletion is allowed regardless of status.
   // We delete the wholesale order first; only then purge the local cache row.
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
   await liquid.deleteDomain(String(domain.liquidOrderId || domain.domainName));
   await db.delete(domains).where(eq(domains.id, domain.id));
 }
@@ -1326,18 +1390,17 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
   if (baseKeyword.length > 63) baseKeyword = baseKeyword.slice(0, 63);
   const requestedTld = parts.length > 1 ? parts.slice(1).join(".") : null;
 
+  console.log(`[bulkAvailability] keyword="${keyword}" → base="${baseKeyword}", requestedTld=${requestedTld || "all"}`);
+
   const cacheKey = `search:${baseKeyword}:${requestedTld || "all"}`;
   const cached = searchResultCache.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) {
+    console.log(`[bulkAvailability] Returning cached results for "${cacheKey}"`);
     return cached.results;
   }
 
-  let liquid: any = null;
-  try {
-    liquid = await getLiquid(user);
-  } catch (e: any) {
-    console.warn("[bulkAvailability] getLiquid fallback warning:", e?.message);
-  }
+  const liquid = await getLiquid(user);
+  console.log(`[bulkAvailability] Liquid client: ${liquid ? "OK" : "NULL (no credentials)"}`);
 
   let prices: any = {};
   const tldSet = new Set<string>();
@@ -1471,83 +1534,106 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     console.warn("[bulkAvailability] Local DB lookup warning:", e?.message);
   }
 
+  if (localDomainSet.size > 0) {
+    console.log(`[bulkAvailability] Local DB blocked domains:`, Array.from(localDomainSet));
+  }
+
   // 4. Separate TLDs into Primary and Secondary groups for fast & resilient batch queries
   const primaryTldKeys = new Set(["com", "id", "co.id", "my.id", "web.id", "biz.id", "xyz", "net", "org"]);
   const primaryTlds = tldsToQuery.filter(t => primaryTldKeys.has(t));
   const secondaryTlds = tldsToQuery.filter(t => !primaryTldKeys.has(t));
 
-  const [primaryRes, secondaryRes] = await Promise.allSettled([
-    liquid && primaryTlds.length > 0
-      ? liquid.checkBulkAvailability(primaryTlds.map(t => `${baseKeyword}.${t}`), 5_000)
-      : Promise.resolve(null),
-    liquid && secondaryTlds.length > 0
-      ? liquid.checkBulkAvailability(secondaryTlds.map(t => `${baseKeyword}.${t}`), 5_000)
-      : Promise.resolve(null),
-  ]);
+  let primaryData: any = null;
+  let secondaryData: any = null;
+  let apiSucceeded = false;
 
-  const primaryData = primaryRes.status === "fulfilled" ? primaryRes.value : null;
-  const secondaryData = secondaryRes.status === "fulfilled" ? secondaryRes.value : null;
+  if (liquid) {
+    const [primaryRes, secondaryRes] = await Promise.allSettled([
+      primaryTlds.length > 0
+        ? liquid.checkBulkAvailability(primaryTlds.map(t => `${baseKeyword}.${t}`), 8_000)
+        : Promise.resolve(null),
+      secondaryTlds.length > 0
+        ? liquid.checkBulkAvailability(secondaryTlds.map(t => `${baseKeyword}.${t}`), 8_000)
+        : Promise.resolve(null),
+    ]);
 
-  // 5. Resolve each TLD status with local DB check, API check, and DNS probe fallback
-  const results = await Promise.all(
-    tldsToQuery.map(async (tld) => {
-      const fullDomain = `${baseKeyword}.${tld}`.toLowerCase();
-      let isAvailable = false;
-      let statusResolved = false;
+    primaryData = primaryRes.status === "fulfilled" ? primaryRes.value : null;
+    secondaryData = secondaryRes.status === "fulfilled" ? secondaryRes.value : null;
+    apiSucceeded = Boolean(primaryData || secondaryData);
 
-      // Priority 1: Check Local DB / Pending Orders
-      if (localDomainSet.has(fullDomain)) {
-        isAvailable = false;
-        statusResolved = true;
-      } else {
-        // Priority 2: Check Resellercamp API response
-        const batchPayload = primaryTldKeys.has(tld) ? primaryData : secondaryData;
-        if (batchPayload) {
-          const rawStatus = extractDomainStatus(batchPayload, fullDomain);
-          if (rawStatus) {
-            const st = rawStatus.toLowerCase().trim();
-            if (st === "available" || st === "free" || st === "available_for_registration") {
-              isAvailable = true;
-              statusResolved = true;
-            } else {
-              // Any other non-empty status (regthroughus, regthroughothers, registered, taken, active, pending, etc.) means NOT available
-              isAvailable = false;
-              statusResolved = true;
-            }
-          }
-        }
+    console.log(`[bulkAvailability] API primary response:`, primaryData ? JSON.stringify(primaryData).slice(0, 500) : "null");
+    console.log(`[bulkAvailability] API secondary response:`, secondaryData ? JSON.stringify(secondaryData).slice(0, 500) : "null");
 
-        // Priority 3: Fallback DNS probe
-        if (!statusResolved) {
-          try {
-            isAvailable = await checkDnsAvailability(fullDomain);
-          } catch {
+    if (primaryRes.status === "rejected") {
+      console.warn("[bulkAvailability] Primary batch API failed:", (primaryRes as PromiseRejectedResult).reason?.message);
+    }
+    if (secondaryRes.status === "rejected") {
+      console.warn("[bulkAvailability] Secondary batch API failed:", (secondaryRes as PromiseRejectedResult).reason?.message);
+    }
+  } else {
+    console.warn("[bulkAvailability] No Liquid client — all domains will be marked 'unknown'");
+  }
+
+  // 5. Resolve each TLD status: local DB → API → "unknown" (NO DNS fallback)
+  const results = tldsToQuery.map((tld) => {
+    const fullDomain = `${baseKeyword}.${tld}`.toLowerCase();
+    let isAvailable = false;
+    let statusResolved = false;
+    let finalStatus = "unknown";
+
+    // Priority 1: Check Local DB / Pending Orders
+    if (localDomainSet.has(fullDomain)) {
+      isAvailable = false;
+      statusResolved = true;
+      finalStatus = "unavailable";
+    } else {
+      // Priority 2: Check Resellercamp API response
+      const batchPayload = primaryTldKeys.has(tld) ? primaryData : secondaryData;
+      if (batchPayload) {
+        const rawStatus = extractDomainStatus(batchPayload, fullDomain);
+        if (rawStatus) {
+          const st = rawStatus.toLowerCase().trim();
+          if (st === "available" || st === "free" || st === "available_for_registration") {
+            isAvailable = true;
+            statusResolved = true;
+            finalStatus = "available";
+          } else {
+            // regthroughus, regthroughothers, registered, taken, active, pending, unknown, etc.
             isAvailable = false;
+            statusResolved = true;
+            finalStatus = "unavailable";
           }
+          console.log(`[bulkAvailability] ${fullDomain} → API status: "${rawStatus}" → ${finalStatus}`);
         }
       }
 
-      const finalStatus = isAvailable ? "available" : "unavailable";
-      const tldPrice = prices[tld] || DEFAULT_TLD_PRICES[tld] || {};
+      // Priority 3: No API data — mark as "unknown" (NOT available)
+      if (!statusResolved) {
+        isAvailable = false;
+        finalStatus = "unknown";
+        console.log(`[bulkAvailability] ${fullDomain} → no API data, marked as "unknown"`);
+      }
+    }
 
-      return {
-        domain: fullDomain,
-        tld,
-        available: isAvailable,
-        status: finalStatus,
-        price: tldPrice.price_new || tldPrice.price_register || DEFAULT_TLD_PRICES[tld]?.price_new || null,
-        renew_price: tldPrice.price_renew || DEFAULT_TLD_PRICES[tld]?.price_renew || null,
-        transfer_price: tldPrice.price_transfer || tldPrice.price_renew || DEFAULT_TLD_PRICES[tld]?.price_transfer || null,
-        create_years: tldPrice.create_years || null,
-        renew_years: tldPrice.renew_years || null,
-        privacy_protect: tldPrice.privacy_protect || "70.00",
-        currency: tldPrice.currency || "IDR",
-      };
-    })
-  );
+    const tldPrice = prices[tld] || DEFAULT_TLD_PRICES[tld] || {};
 
-  // Cache search results for 60s
-  if (results.length > 0) {
+    return {
+      domain: fullDomain,
+      tld,
+      available: isAvailable,
+      status: finalStatus,
+      price: tldPrice.price_new || tldPrice.price_register || DEFAULT_TLD_PRICES[tld]?.price_new || null,
+      renew_price: tldPrice.price_renew || DEFAULT_TLD_PRICES[tld]?.price_renew || null,
+      transfer_price: tldPrice.price_transfer || tldPrice.price_renew || DEFAULT_TLD_PRICES[tld]?.price_transfer || null,
+      create_years: tldPrice.create_years || null,
+      renew_years: tldPrice.renew_years || null,
+      privacy_protect: tldPrice.privacy_protect || "70.00",
+      currency: tldPrice.currency || "IDR",
+    };
+  });
+
+  // Only cache results if API actually succeeded (don't cache fallback/failure results)
+  if (results.length > 0 && apiSucceeded) {
     searchResultCache.set(cacheKey, { results, expiresAt: Date.now() + SEARCH_CACHE_TTL_MS });
   }
 
@@ -1833,7 +1919,7 @@ export async function listDomainsFromLiquid(
 
 export async function resendRaaVerification(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number) {
   const domain = await getDomain(userParam, domainId);
-  const liquid = await getLiquid(user);
+  const liquid = await getLiquidRequired(user);
   let domainRef = String(domain.liquidOrderId || "").trim();
   if (!domainRef || !/^\d+$/.test(domainRef)) {
     if (domain.domainName) {
@@ -1855,7 +1941,7 @@ export async function verifyContactPublicService(params: { customerId: string; c
     const creds = await resolveResellerCreds(1);
     if (creds.resellerId && creds.apiKey && params.customerId) {
       const liquid = await getLiquid(creds);
-      if (params.contactId) {
+      if (liquid && params.contactId) {
         await liquid.getContactDetails(params.customerId, params.contactId).catch(() => null);
       }
     }
