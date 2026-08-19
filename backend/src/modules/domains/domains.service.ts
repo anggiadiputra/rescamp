@@ -1,6 +1,6 @@
 import { db } from "../../db";
 import { domains, users, customers, transactions } from "../../db/schema";
-import { eq, and, like, inArray, or, sql } from "drizzle-orm";
+import { eq, and, like, inArray, or, sql, ne } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { resolveResellerCreds } from "../../lib/reseller-creds";
@@ -236,21 +236,52 @@ export function parseNameservers(raw: any): string[] | null {
 
 
 export async function checkAvailability(user: { id?: number; resellerId: string | null; apiKey: string | null; role?: string }, domain: string) {
-  const liquid = await getLiquid(user);
-  let res: any = null;
-  try {
-    res = await liquid.checkAvailability(domain, 5_000);
-  } catch (err: any) {
-    const isAvail = await checkDnsAvailability(domain).catch(() => false);
-    res = { [domain]: { status: isAvail ? "available" : "unavailable" } };
+  const fullDomain = domain.toLowerCase().trim();
+
+  // 1. Check local DB for existing active/pending domain record
+  const [localDomain] = await db
+    .select({ id: domains.id })
+    .from(domains)
+    .where(and(eq(domains.domainName, fullDomain), ne(domains.status, "cancelled")))
+    .limit(1);
+
+  let isTakenLocally = Boolean(localDomain);
+
+  if (!isTakenLocally) {
+    const pendingTxns = await db
+      .select({ metadata: transactions.metadata })
+      .from(transactions)
+      .where(
+        and(
+          inArray(transactions.type, ["register", "transfer"]),
+          inArray(transactions.status, ["pending_payment", "processing_domain", "completed"])
+        )
+      );
+
+    for (const tx of pendingTxns) {
+      if (tx.metadata) {
+        try {
+          const meta = JSON.parse(tx.metadata);
+          if (meta.domainName && meta.domainName.toLowerCase().trim() === fullDomain) {
+            isTakenLocally = true;
+            break;
+          }
+        } catch {}
+      }
+    }
   }
 
   // Extract TLD (e.g. "example.com" -> "com")
-  const parts = domain.split(".");
+  const parts = fullDomain.split(".");
   const tld = parts.length > 1 ? parts.slice(1).join(".").toLowerCase() : "";
 
   let priceInfo: any = null;
-  if (tld) {
+  let liquid: any = null;
+  try {
+    liquid = await getLiquid(user);
+  } catch {}
+
+  if (tld && liquid) {
     try {
       const rawCustPrices = await liquid.getCustomerPrices();
       const prices = formatCustomerPrices(rawCustPrices);
@@ -263,11 +294,44 @@ export async function checkAvailability(user: { id?: number; resellerId: string 
     }
   }
 
-  // Attach price details to availability result (handles both Object and Array response shapes)
+  if (isTakenLocally) {
+    return {
+      [fullDomain]: {
+        status: "unavailable",
+        price: priceInfo?.price_new || priceInfo?.price_register || null,
+        renew_price: priceInfo?.price_renew || null,
+        privacy_protect: priceInfo?.privacy_protect || "70.00",
+        currency: priceInfo?.currency || "IDR",
+      },
+    };
+  }
+
+  let res: any = null;
+  if (liquid) {
+    try {
+      res = await liquid.checkAvailability(fullDomain, 5_000);
+    } catch (err: any) {
+      const isAvail = await checkDnsAvailability(fullDomain).catch(() => false);
+      res = { [fullDomain]: { status: isAvail ? "available" : "unavailable" } };
+    }
+  } else {
+    const isAvail = await checkDnsAvailability(fullDomain).catch(() => false);
+    res = { [fullDomain]: { status: isAvail ? "available" : "unavailable" } };
+  }
+
+  // Attach price details & normalize status in availability result
   const targetObj = Array.isArray(res) ? res[0] : res;
   if (targetObj && typeof targetObj === "object") {
     const key = Object.keys(targetObj)[0];
     if (key && targetObj[key] && typeof targetObj[key] === "object") {
+      const rawSt = String(targetObj[key].status || "").toLowerCase().trim();
+      if (rawSt) {
+        if (rawSt === "available" || rawSt === "free" || rawSt === "available_for_registration") {
+          targetObj[key].status = "available";
+        } else {
+          targetObj[key].status = "unavailable";
+        }
+      }
       targetObj[key].price = priceInfo?.price_new || priceInfo?.price_register || null;
       targetObj[key].renew_price = priceInfo?.price_renew || null;
       targetObj[key].privacy_protect = priceInfo?.privacy_protect || "70.00";
@@ -289,8 +353,44 @@ export async function orderRegisterDomain(
   user: { id: number; resellerId: string | null; apiKey: string | null },
   data: { domain_name: string; tld: string; years: number; customer_id?: number; nameservers?: string[]; auto_renew?: boolean; privacy_protection?: boolean }
 ) {
+  const fullDomain = `${data.domain_name}.${data.tld}`.toLowerCase().trim();
+
+  // 1. Pre-check local DB for existing active/pending domain record
+  const [existingDomain] = await db
+    .select({ id: domains.id, status: domains.status })
+    .from(domains)
+    .where(and(eq(domains.domainName, fullDomain), ne(domains.status, "cancelled")))
+    .limit(1);
+
+  if (existingDomain) {
+    throw new AppError(`Domain ${fullDomain} sudah terdaftar atau dalam pengelolaan sistem.`, 400);
+  }
+
+  // 2. Pre-check transactions table for pending payment / processing domain registration
+  const pendingTxns = await db
+    .select({ metadata: transactions.metadata })
+    .from(transactions)
+    .where(
+      and(
+        inArray(transactions.type, ["register", "transfer"]),
+        inArray(transactions.status, ["pending_payment", "processing_domain", "completed"])
+      )
+    );
+
+  for (const tx of pendingTxns) {
+    if (tx.metadata) {
+      try {
+        const meta = JSON.parse(tx.metadata);
+        if (meta.domainName && meta.domainName.toLowerCase().trim() === fullDomain) {
+          throw new AppError(`Domain ${fullDomain} sedang dalam proses pemesanan atau pembayaran.`, 400);
+        }
+      } catch (e) {
+        if (e instanceof AppError) throw e;
+      }
+    }
+  }
+
   const liquid = await getLiquid(user);
-  const fullDomain = `${data.domain_name}.${data.tld}`;
   
   const years = data.years || 1;
   const tldKey = data.tld.toLowerCase();
@@ -1328,7 +1428,50 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     return null;
   }
 
-  // 3. Separate TLDs into Primary and Secondary groups for fast & resilient batch queries
+  // 3. Pre-fetch local DB domains and active/pending transactions
+  const allFullDomains = tldsToQuery.map(t => `${baseKeyword}.${t}`.toLowerCase());
+  const localDomainSet = new Set<string>();
+
+  try {
+    const localDomains = await db
+      .select({ domainName: domains.domainName, status: domains.status })
+      .from(domains)
+      .where(and(inArray(domains.domainName, allFullDomains), ne(domains.status, "cancelled")));
+    
+    for (const ld of localDomains) {
+      if (ld.domainName) {
+        localDomainSet.add(ld.domainName.toLowerCase().trim());
+      }
+    }
+
+    const pendingTxns = await db
+      .select({ metadata: transactions.metadata })
+      .from(transactions)
+      .where(
+        and(
+          inArray(transactions.type, ["register", "transfer"]),
+          inArray(transactions.status, ["pending_payment", "processing_domain", "completed"])
+        )
+      );
+
+    for (const tx of pendingTxns) {
+      if (tx.metadata) {
+        try {
+          const meta = JSON.parse(tx.metadata);
+          if (meta.domainName && typeof meta.domainName === "string") {
+            const dName = meta.domainName.toLowerCase().trim();
+            if (allFullDomains.includes(dName)) {
+              localDomainSet.add(dName);
+            }
+          }
+        } catch {}
+      }
+    }
+  } catch (e: any) {
+    console.warn("[bulkAvailability] Local DB lookup warning:", e?.message);
+  }
+
+  // 4. Separate TLDs into Primary and Secondary groups for fast & resilient batch queries
   const primaryTldKeys = new Set(["com", "id", "co.id", "my.id", "web.id", "biz.id", "xyz", "net", "org"]);
   const primaryTlds = tldsToQuery.filter(t => primaryTldKeys.has(t));
   const secondaryTlds = tldsToQuery.filter(t => !primaryTldKeys.has(t));
@@ -1345,31 +1488,42 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
   const primaryData = primaryRes.status === "fulfilled" ? primaryRes.value : null;
   const secondaryData = secondaryRes.status === "fulfilled" ? secondaryRes.value : null;
 
-  // 4. Resolve each TLD status with DNS probe fallback
+  // 5. Resolve each TLD status with local DB check, API check, and DNS probe fallback
   const results = await Promise.all(
     tldsToQuery.map(async (tld) => {
-      const fullDomain = `${baseKeyword}.${tld}`;
+      const fullDomain = `${baseKeyword}.${tld}`.toLowerCase();
       let isAvailable = false;
       let statusResolved = false;
 
-      const batchPayload = primaryTldKeys.has(tld) ? primaryData : secondaryData;
-      if (batchPayload) {
-        const rawStatus = extractDomainStatus(batchPayload, fullDomain);
-        if (rawStatus === "available" || rawStatus === "free" || rawStatus === "available_for_registration") {
-          isAvailable = true;
-          statusResolved = true;
-        } else if (rawStatus === "unavailable" || rawStatus === "taken" || rawStatus === "registered") {
-          isAvailable = false;
-          statusResolved = true;
+      // Priority 1: Check Local DB / Pending Orders
+      if (localDomainSet.has(fullDomain)) {
+        isAvailable = false;
+        statusResolved = true;
+      } else {
+        // Priority 2: Check Resellercamp API response
+        const batchPayload = primaryTldKeys.has(tld) ? primaryData : secondaryData;
+        if (batchPayload) {
+          const rawStatus = extractDomainStatus(batchPayload, fullDomain);
+          if (rawStatus) {
+            const st = rawStatus.toLowerCase().trim();
+            if (st === "available" || st === "free" || st === "available_for_registration") {
+              isAvailable = true;
+              statusResolved = true;
+            } else {
+              // Any other non-empty status (regthroughus, regthroughothers, registered, taken, active, pending, etc.) means NOT available
+              isAvailable = false;
+              statusResolved = true;
+            }
+          }
         }
-      }
 
-      // If status could not be resolved from API payload, check via DNS probe
-      if (!statusResolved) {
-        try {
-          isAvailable = await checkDnsAvailability(fullDomain);
-        } catch {
-          isAvailable = false;
+        // Priority 3: Fallback DNS probe
+        if (!statusResolved) {
+          try {
+            isAvailable = await checkDnsAvailability(fullDomain);
+          } catch {
+            isAvailable = false;
+          }
         }
       }
 
