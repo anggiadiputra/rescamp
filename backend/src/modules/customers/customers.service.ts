@@ -77,50 +77,58 @@ export async function listCustomers(userId: number, search?: string, page = 1, p
   return { data: rows, meta: { total: Number(countResult?.count || 0), page, perPage } };
 }
 
-export async function getCustomer(userId: number, customerId: number) {
-  const [cust] = await db.select().from(customers).where(and(eq(customers.id, customerId), eq(customers.userId, userId)));
+export async function getCustomer(userParam: { id: number; role?: string | null; email?: string | null } | number, customerId: number) {
+  const userId = typeof userParam === "number" ? userParam : userParam.id;
+  const role = typeof userParam === "number" ? null : userParam.role;
+  const email = typeof userParam === "number" ? null : userParam.email;
+
+  const [cust] = await db.select().from(customers).where(eq(customers.id, customerId));
   if (!cust) throw new AppError("Customer not found", 404);
+
+  if (role === "customer" && cust.userId !== userId && cust.email !== email) {
+    throw new AppError("Access denied", 403);
+  }
   return cust;
 }
 
 export async function updateCustomer(
   creds: { resellerId: string | null; apiKey: string | null },
-  userId: number,
+  userParam: any,
   customerId: number,
   data: Partial<{
     name: string; email: string; company: string; address: string; city: string; state: string; country: string; zipcode: string; phone: string;
   }>,
 ) {
-  const cust = await getCustomer(userId, customerId);
+  const cust = await getCustomer(userParam, customerId);
   await db.update(customers).set(data).where(eq(customers.id, customerId));
 
   // Sync to LIQUID
   if (cust.liquidCustomerId && creds.resellerId && creds.apiKey) {
-    (async () => {
-      try {
-        const liquid = new LiquidClient(creds.resellerId!, creds.apiKey!);
-        await liquid.updateCustomer(cust.liquidCustomerId!, {
-          name: data.name ?? cust.name,
-          email: data.email ?? cust.email,
-          company: data.company ?? cust.company ?? "",
-          address_line_1: data.address ?? cust.address ?? "",
-          city: data.city ?? cust.city ?? "",
-          state: data.state ?? cust.state ?? "",
-          country_code: (data.country ?? cust.country ?? "ID").slice(0, 2).toUpperCase(),
-          zipcode: data.zipcode ?? cust.zipcode ?? "",
-          tel_cc_no: cust.phone_cc || "62",
-          tel_no: data.phone ?? cust.phone ?? "",
-        });
-      } catch (e) { console.error("[customer] LIQUID update failed:", e); }
-    })();
+    try {
+      const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
+      await liquid.updateCustomer(cust.liquidCustomerId, {
+        name: data.name ?? cust.name,
+        email: data.email ?? cust.email,
+        company: data.company ?? cust.company ?? "",
+        address_line_1: data.address ?? cust.address ?? "",
+        city: data.city ?? cust.city ?? "",
+        state: data.state ?? cust.state ?? "",
+        country_code: (data.country ?? cust.country ?? "ID").slice(0, 2).toUpperCase(),
+        zipcode: data.zipcode ?? cust.zipcode ?? "",
+        tel_cc_no: cust.phone_cc || "62",
+        tel_no: data.phone ?? cust.phone ?? "",
+      });
+    } catch (e: any) {
+      console.error("[customer] LIQUID update failed:", e?.message || e);
+    }
   }
 
   const [updated] = await db.select().from(customers).where(eq(customers.id, customerId));
   return updated!;
 }
 
-export async function deleteCustomer(creds: { resellerId: string | null; apiKey: string | null }, userId: number, customerId: number) {
-  const cust = await getCustomer(userId, customerId);
+export async function deleteCustomer(creds: { resellerId: string | null; apiKey: string | null }, userParam: any, customerId: number) {
+  const cust = await getCustomer(userParam, customerId);
 
   // Check for active domains before deleting
   const [active] = await db.select({ id: domains.id }).from(domains)
@@ -132,7 +140,7 @@ export async function deleteCustomer(creds: { resellerId: string | null; apiKey:
     try {
       const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
       await liquid.deleteCustomer(cust.liquidCustomerId);
-    } catch (e) { console.error("[customer] LIQUID delete failed:", e); }
+    } catch (e: any) { console.error("[customer] LIQUID delete failed:", e?.message || e); }
   }
 
   // Re-verify active domain status before deleting from local DB to avoid FK race condition

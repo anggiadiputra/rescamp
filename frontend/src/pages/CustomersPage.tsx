@@ -86,12 +86,32 @@ export default function CustomersPage() {
   }
 
   async function doDelete() {
-    toast("Delete belum didukung di mode live Resellercamp — edit di dashboard Resellercamp", "info");
+    if (!deleteId) return;
+    try {
+      await api.delete(`/customers/${deleteId}`);
+      toast("Customer deleted successfully");
+      setDeleteId(0);
+      refetch();
+    } catch (e: any) {
+      toast(e.message || "Failed to delete customer", "error");
+    }
   }
 
   function openEdit(c: Customer) {
     setEditId(c.id);
-    toast(`Edit untuk ${c.name} belum didukung di mode live Resellercamp — edit di dashboard Resellercamp`, "info");
+    setForm({
+      name: c.name || "",
+      email: c.email || "",
+      company: c.company || "",
+      address: c.address || "",
+      city: c.city || "",
+      state: c.state || "",
+      country: c.country || "ID",
+      zipcode: c.zipcode || "",
+      phone: c.phone || "",
+    });
+    setEditMode(true);
+    setModalOpen(true);
   }
 
   function openCreate() {

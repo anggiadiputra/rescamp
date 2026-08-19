@@ -38,21 +38,21 @@ export async function list(ctx: any) {
 
 export async function detail(ctx: any) {
   const user = await getUser(ctx);
-  const cust = await svc.getCustomer(user.id, parseInt(ctx.params.id));
+  const cust = await svc.getCustomer(user, parseInt(ctx.params.id));
   return { data: cust };
 }
 
 export async function update(ctx: any) {
   const user = await getUser(ctx);
-  const creds = { resellerId: user.resellerId, apiKey: user.apiKey };
-  const cust = await svc.updateCustomer(creds, user.id, parseInt(ctx.params.id), ctx.body);
+  const creds = await getResellerCreds(ctx);
+  const cust = await svc.updateCustomer(creds, user, parseInt(ctx.params.id), ctx.body);
   return { data: cust };
 }
 
 export async function remove(ctx: any) {
   const user = await getUser(ctx);
-  const creds = { resellerId: user.resellerId, apiKey: user.apiKey };
-  await svc.deleteCustomer(creds, user.id, parseInt(ctx.params.id));
+  const creds = await getResellerCreds(ctx);
+  await svc.deleteCustomer(creds, user, parseInt(ctx.params.id));
   return new Response(null, { status: 204 });
 }
 
