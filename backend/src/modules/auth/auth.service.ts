@@ -610,7 +610,7 @@ export async function verifyLoginOtp(email: string, code: string) {
 }
 
 export async function forgotPassword(email: string) {
-  const cleanEmail = (email || "").trim();
+  const cleanEmail = (email || "").trim().toLowerCase();
   const [user] = await db.select().from(users).where(eq(users.email, cleanEmail));
   // H6 anti-enumeration: same response whether or not the email exists; nothing sent if not
   if (!user) {
@@ -632,11 +632,10 @@ export async function forgotPassword(email: string) {
   await db.insert(otpCodes).values({ email: cleanEmail, code: "", codeEncrypted: encryptedToken, purpose: "reset", expiresAt });
   await db.insert(otpCodes).values({ email: cleanEmail, code: "", codeEncrypted: encryptedOtpCode, purpose: "reset", expiresAt });
 
-  // H9: token goes in the URL fragment (#token=...) so it never hits Referer headers,
-  // browser history entries, or reverse-proxy access logs.
+  // Token in both query string and URL fragment for universal compatibility
   const origins = (env.CORS_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean);
-  const frontendUrl = origins[0] && origins[0] !== "*" ? origins[0] : env.APP_URL || "";
-  const resetLink = `${frontendUrl}/reset-password#token=${token}&email=${encodeURIComponent(cleanEmail)}`;
+  const frontendUrl = (origins[0] && origins[0] !== "*" ? origins[0] : env.APP_URL || "").replace(/\/$/, "");
+  const resetLink = `${frontendUrl}/reset-password?token=${token}&email=${encodeURIComponent(cleanEmail)}#token=${token}&email=${encodeURIComponent(cleanEmail)}`;
 
   await sendEmail(cleanEmail, "reset_password", {
     token,

@@ -53,13 +53,21 @@ function renderEmailHtml(
   }
 
   if (type === "reset_password") {
+    const otpVal = vars.code || vars.otp || vars.token || "";
+    const showOtp = otpVal && String(otpVal).length <= 8;
     return `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; color: #111827;">
         <h2 style="margin-top: 0; font-size: 20px; font-weight: 700; color: #111827;">Reset Password ${brandName}</h2>
         <p style="font-size: 14px; color: #4b5563; line-height: 1.5;">Kami menerima permintaan untuk mereset kata sandi akun Anda. Klik tombol di bawah ini untuk membuat kata sandi baru:</p>
-        <div style="text-align: center; margin: 28px 0;">
+        <div style="text-align: center; margin: 24px 0;">
           <a href="${resetUrl}" style="background-color: #000000; color: #ffffff; text-decoration: none; padding: 12px 28px; font-size: 14px; font-weight: 700; border-radius: 8px; display: inline-block;">Reset Password Sekarang</a>
         </div>
+        ${showOtp ? `
+        <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+          <p style="font-size: 12px; color: #6b7280; margin: 0 0 6px 0;">Atau masukkan Kode OTP berikut pada form reset:</p>
+          <span style="font-family: monospace; font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #000000;">${otpVal}</span>
+        </div>
+        ` : ''}
         <p style="font-size: 12px; color: #6b7280; word-break: break-all;">Atau salin tautan berikut ke browser Anda:<br/><a href="${resetUrl}" style="color: #2563eb;">${resetUrl}</a></p>
       </div>
     `;
