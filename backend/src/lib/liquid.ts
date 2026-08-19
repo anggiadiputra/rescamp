@@ -95,7 +95,7 @@ export class LiquidClient {
     return this.request<any>("GET", `/domains/availability?domain=${encodeURIComponent(clean)}`, undefined, timeoutMs);
   }
 
-  async checkBulkAvailability(domains: string[], timeoutMs: number = 8_000): Promise<Record<string, any>> {
+  async checkBulkAvailability(domains: string[], timeoutMs: number = 10_000): Promise<Record<string, any>> {
     const validDomains = Array.from(new Set(domains.map((d) => String(d || "").trim().toLowerCase()).filter(Boolean)));
     if (validDomains.length === 0) return {};
     
@@ -103,7 +103,8 @@ export class LiquidClient {
       try {
         const single = await this.checkAvailability(validDomains[0], timeoutMs);
         return typeof single === "object" && single !== null ? single : { [validDomains[0]]: single };
-      } catch {
+      } catch (err: any) {
+        console.warn(`[checkBulkAvailability] Single query failed for ${validDomains[0]}:`, err?.message);
         return {};
       }
     }
@@ -113,6 +114,8 @@ export class LiquidClient {
     );
 
     const merged: Record<string, any> = {};
+    const failedDomains: string[] = [];
+
     for (let i = 0; i < results.length; i++) {
       const res = results[i];
       const domainName = validDomains[i];
@@ -143,8 +146,39 @@ export class LiquidClient {
         } else if (typeof val === "string") {
           merged[domainName] = { status: val };
         }
+      } else {
+        console.warn(`[checkBulkAvailability] Initial check failed for ${domainName}:`, (res as PromiseRejectedResult).reason?.message);
+        failedDomains.push(domainName);
       }
     }
+
+    // Quick retry for any failed domains (handles PANDI ccTLD transient lags)
+    if (failedDomains.length > 0) {
+      console.log(`[checkBulkAvailability] Retrying ${failedDomains.length} failed domain(s):`, failedDomains);
+      const retryResults = await Promise.allSettled(
+        failedDomains.map((d) => this.checkAvailability(d, timeoutMs))
+      );
+      for (let i = 0; i < retryResults.length; i++) {
+        const res = retryResults[i];
+        const domainName = failedDomains[i];
+        if (!domainName) continue;
+        if (res && res.status === "fulfilled" && res.value !== undefined && res.value !== null) {
+          let val = res.value;
+          if (Array.isArray(val) && val.length > 0) val = val[0];
+          if (typeof val === "object" && val !== null) {
+            if (val[domainName]) merged[domainName] = val[domainName];
+            else if (val.status || val.classkey) merged[domainName] = val;
+            else merged[domainName] = val;
+          } else if (typeof val === "string") {
+            merged[domainName] = { status: val };
+          }
+          console.log(`[checkBulkAvailability] Retry SUCCEEDED for ${domainName}:`, val);
+        } else {
+          console.warn(`[checkBulkAvailability] Retry also failed for ${domainName}:`, (res as PromiseRejectedResult).reason?.message);
+        }
+      }
+    }
+
     return merged;
   }
 
