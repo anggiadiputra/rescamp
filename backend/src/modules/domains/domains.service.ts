@@ -1089,9 +1089,16 @@ export async function updateNameservers(user: { id?: number; resellerId: string 
     await db.update(domains).set({ nameservers: verifiedNs }).where(eq(domains.id, domain.id));
   } else if (domain.domainName) {
     try {
+      let resolvedCustId: number | null = null;
+      if (domain.customerId) {
+        const [c] = await db.select({ id: customers.id }).from(customers)
+          .where(or(eq(customers.id, domain.customerId), eq(customers.liquidCustomerId, String(domain.customerId))))
+          .limit(1);
+        if (c) resolvedCustId = c.id;
+      }
       await db.insert(domains).values({
         userId: targetUserId || user.id,
-        customerId: domain.customerId || null,
+        customerId: resolvedCustId,
         domainName: domain.domainName,
         tld: domain.tld || domain.domainName.split(".").slice(1).join("."),
         years: domain.years || 1,
@@ -1221,9 +1228,16 @@ export async function toggleSuspend(user: { id?: number; resellerId: string | nu
         const orderIdStr = String(liquidItem.domain_id || liquidItem.order_id || liquidItem.id || "");
         if (fullDomainName) {
           const tld = fullDomainName.split(".").slice(1).join(".");
+          let resolvedCustId: number | null = null;
+          if (liquidItem.customer_id) {
+            const [c] = await db.select({ id: customers.id }).from(customers)
+              .where(or(eq(customers.id, Number(liquidItem.customer_id)), eq(customers.liquidCustomerId, String(liquidItem.customer_id))))
+              .limit(1);
+            if (c) resolvedCustId = c.id;
+          }
           await db.insert(domains).values({
             userId: targetUserId,
-            customerId: liquidItem.customer_id ? Number(liquidItem.customer_id) : null,
+            customerId: resolvedCustId,
             domainName: fullDomainName,
             tld,
             years: Number(liquidItem.no_of_years || 1),
