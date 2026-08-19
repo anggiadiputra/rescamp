@@ -838,19 +838,26 @@ export default function DomainDetailPage() {
                 ? domain.techContact
                 : domain.billingContact) || reg;
 
-            const displayName = activeContact.name || reg.name || domain.customerName || domain.customerEmail || "-";
-            const displayCompany = activeContact.company || reg.company || "-";
-            const displayEmail = activeContact.email || reg.email || domain.customerEmail || "-";
-            const displayAddress = activeContact.address || reg.address || "-";
-            const displayCity = activeContact.city || reg.city;
-            const displayState = activeContact.state || reg.state;
-            const displayCountry = activeContact.country || reg.country;
+            const contactId = activeContact?.contactId || (activeContactTab === "registrant" ? domain.registrantContact?.contactId : undefined);
+            const displayName = activeContact?.name || reg.name || domain.customerName || domain.customerEmail || "-";
+            const displayCompany = activeContact?.company || reg.company || "-";
+            const displayEmail = activeContact?.email || reg.email || domain.customerEmail || "-";
+            const displayAddress = activeContact?.address || reg.address || "-";
+            const displayCity = activeContact?.city || reg.city;
+            const displayState = activeContact?.state || reg.state;
+            const displayCountry = activeContact?.country || reg.country;
             const displayLoc = [displayCity, displayState, displayCountry].filter(Boolean).join(", ") || "-";
-            const displayZip = activeContact.zipcode || reg.zipcode || "-";
-            const displayPhone = activeContact.phone || reg.phone || "-";
+            const displayZip = activeContact?.zipcode || reg.zipcode || "-";
+            const displayPhone = activeContact?.phone || reg.phone || "-";
 
             return (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                {contactId && (
+                  <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
+                    <span className="text-gray-500 block text-xs font-medium">Contact ID</span>
+                    <span className="font-semibold text-gray-900 block font-mono text-xs">#{contactId}</span>
+                  </div>
+                )}
                 <div className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-1">
                   <span className="text-gray-500 block text-xs font-medium">Nama Lengkap</span>
                   <span className="font-semibold text-gray-900 block">{displayName}</span>

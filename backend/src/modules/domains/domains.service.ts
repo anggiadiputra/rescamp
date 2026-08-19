@@ -158,11 +158,17 @@ export function parseDomainContact(raw: any): {
   company?: string;
   email?: string;
   address?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  addressLine3?: string;
   city?: string;
   state?: string;
   country?: string;
   zipcode?: string;
   phone?: string;
+  phoneCc?: string;
+  fax?: string;
+  status?: string;
 } | null {
   if (!raw) return null;
   if (typeof raw !== "object") return null;
@@ -170,18 +176,43 @@ export function parseDomainContact(raw: any): {
   const name = c.name || c.contact_name || c.fullname || c.name_1 || c.registrant_name || c.admin_name || c.tech_name || c.billing_name || c.customer_name || "";
   const email = c.email || c.email_address || c.contact_email || c.registrant_email || c.admin_email || c.tech_email || c.billing_email || c.customer_email || "";
   const company = c.company || c.company_name || c.organization || c.org || undefined;
-  if (!name && !email && !company) return null;
+  const contactId = c.contact_id || c.id || c.registrant_contact_id || c.admin_contact_id || c.tech_contact_id || c.billing_contact_id || undefined;
+  if (!name && !email && !company && !contactId) return null;
+
+  const addr1 = c.address_line_1 || c.address1 || c.address || c.street || c.addr1 || "";
+  const addr2 = c.address_line_2 || c.address2 || "";
+  const addr3 = c.address_line_3 || c.address3 || "";
+  const fullAddress = [addr1, addr2, addr3].filter(Boolean).join(", ") || undefined;
+
+  let phone = c.tel_no || c.phone || c.telephone || c.mobile || c.tel || "";
+  const phoneCc = c.tel_no_cc || c.phone_cc || "";
+  if (phone && phoneCc && !phone.startsWith("+") && !phone.startsWith(phoneCc)) {
+    phone = `+${phoneCc} ${phone}`;
+  }
+
+  let fax = c.fax_no || c.fax || "";
+  const faxCc = c.fax_no_cc || c.fax_cc || "";
+  if (fax && faxCc && !fax.startsWith("+") && !fax.startsWith(faxCc)) {
+    fax = `+${faxCc} ${fax}`;
+  }
+
   return {
-    contactId: c.contact_id || c.id || c.registrant_contact_id || c.admin_contact_id || c.tech_contact_id || c.billing_contact_id || undefined,
+    contactId: contactId ? String(contactId) : undefined,
     name: name || undefined,
     company: company,
     email: email || undefined,
-    address: c.address_line_1 || c.address1 || c.address || c.street || c.addr1 || undefined,
+    address: fullAddress,
+    addressLine1: addr1 || undefined,
+    addressLine2: addr2 || undefined,
+    addressLine3: addr3 || undefined,
     city: c.city || undefined,
     state: c.state || c.province || undefined,
     country: c.country_code || c.country || undefined,
     zipcode: c.zipcode || c.zip || c.postal_code || undefined,
-    phone: c.tel_no || c.phone || c.telephone || c.mobile || c.tel || undefined,
+    phone: phone || undefined,
+    phoneCc: phoneCc || undefined,
+    fax: fax || undefined,
+    status: c.status || undefined,
   };
 }
 

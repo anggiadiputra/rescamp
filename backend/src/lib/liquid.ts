@@ -470,6 +470,15 @@ export class LiquidClient {
     if (authCode) payload.auth_code = authCode;
     return this.request<any>("POST", "/domains/transfer/validity", payload);
   }
+  updateDomainContacts(domainId: string | number, data: {
+    registrant_contact_id: string | number;
+    admin_contact_id: string | number;
+    tech_contact_id: string | number;
+    billing_contact_id: string | number;
+    customer_id?: string | number;
+  }) {
+    return this.request<any>("PUT", `/domains/${domainId}/contacts`, data);
+  }
   updateDomainContactsPending(domainId: string | number, data: Record<string, any>) {
     return this.request<any>("PUT", `/domains/${domainId}/contacts-pending`, {
       ...data,
