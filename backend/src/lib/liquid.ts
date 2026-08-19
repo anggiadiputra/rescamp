@@ -837,7 +837,7 @@ export class LiquidClient {
     }
   }
 
-  async getPrices(forceRefresh = true) {
+  async getPrices(forceRefresh = true, timeoutMs = 8_000) {
     const cacheKey = `prices:${this.authHeader}`;
     if (!forceRefresh) {
       const cached = cacheStore.get(cacheKey);
@@ -846,7 +846,7 @@ export class LiquidClient {
       }
     }
     try {
-      const data = await this.request<any>("GET", "/account/prices");
+      const data = await this.request<any>("GET", "/account/prices", undefined, timeoutMs);
       cacheStore.set(cacheKey, { data, expiresAt: Date.now() + 5 * 60_000 }); // 5 mins cache
       return data;
     } catch (err) {
@@ -856,7 +856,7 @@ export class LiquidClient {
     }
   }
 
-  async getCustomerPrices(forceRefresh = false) {
+  async getCustomerPrices(forceRefresh = false, timeoutMs = 4_000) {
     const cacheKey = `cust_prices:${this.authHeader}`;
     if (!forceRefresh) {
       const cached = cacheStore.get(cacheKey);
@@ -865,7 +865,7 @@ export class LiquidClient {
       }
     }
     try {
-      const data = await this.request<any>("GET", "/customers/prices");
+      const data = await this.request<any>("GET", "/customers/prices", undefined, timeoutMs);
       cacheStore.set(cacheKey, { data, expiresAt: Date.now() + 5 * 60_000 }); // 5 mins cache
       return data;
     } catch (err) {

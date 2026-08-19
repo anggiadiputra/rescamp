@@ -57,12 +57,12 @@ export async function getPrices(user: { id?: number; resellerId: string | null; 
   const creds = await resolveResellerCreds(user?.id || 0);
   const liquid = getLiquid(creds);
 
-  // Always fetch 100% LIVE directly from Resellercamp (GET /customers/prices)
+  // Fetch customer prices from Resellercamp, fall back to account prices
   try {
     const raw = await liquid.getCustomerPrices(forceRefresh);
     return formatCustomerPrices(raw);
-  } catch (err: any) {
-    console.warn("[billing.service] getCustomerPrices live failed, trying account prices:", err?.message || err);
+  } catch {
+    // Falls through to account prices
   }
 
   // Fallback: try reseller account prices live (GET /account/prices)
@@ -70,7 +70,7 @@ export async function getPrices(user: { id?: number; resellerId: string | null; 
     const raw = await liquid.getPrices(forceRefresh);
     return formatCustomerPrices(raw);
   } catch (err: any) {
-    console.warn("[billing.service] getPrices live fallback triggered:", err?.message || err);
+    console.warn("[billing.service] getPrices live fallback warning:", err?.message || err);
     return {};
   }
 }
