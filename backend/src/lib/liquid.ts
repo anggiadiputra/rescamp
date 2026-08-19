@@ -89,22 +89,50 @@ export class LiquidClient {
   }
 
   // --- Domain ---
-  // Per luquid.md (line 1126): `domain` accepts multiple names in one query param.
-  checkAvailability(domains: string | string[], timeoutMs: number = 8_000) {
-    const list = Array.isArray(domains) ? domains : [domains];
-    const param = list.filter(Boolean).map((d) => encodeURIComponent(d)).join(",");
-    return this.request<any>("GET", `/domains/availability?domain=${param}`, undefined, timeoutMs);
+  // Per luquid.md (line 1126): `GET /domains/availability?domain={domain_name}`
+  checkAvailability(domain: string, timeoutMs: number = 8_000) {
+    const clean = String(domain || "").trim().toLowerCase();
+    return this.request<any>("GET", `/domains/availability?domain=${encodeURIComponent(clean)}`, undefined, timeoutMs);
   }
 
   async checkBulkAvailability(domains: string[], timeoutMs: number = 8_000): Promise<Record<string, any>> {
-    const validDomains = domains.filter((d): d is string => Boolean(d));
+    const validDomains = Array.from(new Set(domains.map((d) => String(d || "").trim().toLowerCase()).filter(Boolean)));
     if (validDomains.length === 0) return {};
-    try {
-      const res = await this.checkAvailability(validDomains, timeoutMs);
-      return res && typeof res === "object" && !Array.isArray(res) ? (res as Record<string, any>) : {};
-    } catch {
-      return {};
+    
+    if (validDomains.length === 1 && validDomains[0]) {
+      try {
+        const single = await this.checkAvailability(validDomains[0], timeoutMs);
+        return typeof single === "object" && single !== null ? single : { [validDomains[0]]: single };
+      } catch {
+        return {};
+      }
     }
+
+    const results = await Promise.allSettled(
+      validDomains.map((d) => this.checkAvailability(d, timeoutMs))
+    );
+
+    const merged: Record<string, any> = {};
+    for (let i = 0; i < results.length; i++) {
+      const res = results[i];
+      const domainName = validDomains[i];
+      if (!domainName) continue;
+      if (res && res.status === "fulfilled" && res.value !== undefined && res.value !== null) {
+        const val = res.value;
+        if (typeof val === "object") {
+          if (val[domainName]) {
+            merged[domainName] = val[domainName];
+          } else if (val.status || val.classkey) {
+            merged[domainName] = val;
+          } else {
+            Object.assign(merged, val);
+          }
+        } else {
+          merged[domainName] = { status: String(val) };
+        }
+      }
+    }
+    return merged;
   }
 
   /**
