@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Globe, Search, ShieldCheck, Zap, Server, Lock, HelpCircle, ArrowRight, CheckCircle2,
-  Sliders, FileText, ChevronRight, Award, BarChart3, RefreshCw
+  Sliders, FileText, ChevronRight, Award, BarChart3, RefreshCw, LogIn, UserPlus
 } from "lucide-react";
 import { api } from "../lib/api";
 import { Modal } from "../components/ui";
@@ -573,17 +573,18 @@ export default function LandingPage() {
                 style={{ backgroundColor: settings.primary_color || "#000000" }}
                 className="w-full py-3 hover:opacity-90 text-white font-bold text-xs sm:text-sm rounded-xl transition-opacity shadow-sm flex items-center justify-center gap-2 cursor-pointer"
               >
-                🔑 Masuk ke Akun (Login)
+                <LogIn className="w-4 h-4" />
+                <span>Masuk ke Akun (Login)</span>
               </button>
               <button
                 onClick={() => {
                   const target = `/domains/register?tab=transfer&domain=${encodeURIComponent(authModal.domain)}`;
                   nav(`/register?redirect=${encodeURIComponent(target)}`);
                 }}
-                style={{ backgroundColor: settings.primary_color || "#000000" }}
-                className="w-full py-3 hover:opacity-90 text-white font-bold text-xs sm:text-sm rounded-xl transition-opacity shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-3 border border-gray-200 hover:bg-gray-50 text-gray-800 font-bold text-xs sm:text-sm rounded-xl transition-colors shadow-2xs flex items-center justify-center gap-2 cursor-pointer"
               >
-                📝 Buat Akun Baru (Register)
+                <UserPlus className="w-4 h-4 text-gray-600" />
+                <span>Buat Akun Baru (Register)</span>
               </button>
             </div>
           </div>
