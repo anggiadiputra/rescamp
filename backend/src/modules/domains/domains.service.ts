@@ -902,6 +902,25 @@ export async function getDomain(userParam: any, lookup: string | number) {
 
           const nsFormatted = parseNameservers(domain.nameservers);
 
+          const resolvedCustomerName =
+            cust?.name ||
+            ext.customer_name ||
+            ext.name ||
+            registrantContact?.name ||
+            registrantContact?.company ||
+            (userRole === "customer" ? ((userParam as any)?.name || (userParam as any)?.email) : null) ||
+            reseller?.name ||
+            null;
+
+          const resolvedCustomerEmail =
+            cust?.email ||
+            ext.customer_email ||
+            ext.email ||
+            registrantContact?.email ||
+            (userRole === "customer" ? (userParam as any)?.email : null) ||
+            reseller?.email ||
+            null;
+
           return {
             ...domain,
             nameservers: nsFormatted,
@@ -915,8 +934,8 @@ export async function getDomain(userParam: any, lookup: string | number) {
             liquidOrderId: domain.liquidOrderId || null,
             customerId: domain.customerId || cust?.id || null,
             liquidCustomerId: cust?.liquidCustomerId || null,
-            customerName: cust?.name || reseller?.name || (userParam as any)?.name || (userParam as any)?.email || null,
-            customerEmail: cust?.email || reseller?.email || (userParam as any)?.email || null,
+            customerName: resolvedCustomerName,
+            customerEmail: resolvedCustomerEmail,
             userId: domain.userId,
             resellerId: reseller?.resellerId || user.resellerId || null,
           };
@@ -953,8 +972,8 @@ export async function getDomain(userParam: any, lookup: string | number) {
       liquidOrderId: domain.liquidOrderId || null,
       customerId: domain.customerId || cust?.id || null,
       liquidCustomerId: cust?.liquidCustomerId || null,
-      customerName: cust?.name || reseller?.name || (userParam as any)?.name || (userParam as any)?.email || null,
-      customerEmail: cust?.email || reseller?.email || (userParam as any)?.email || null,
+      customerName: cust?.name || (userRole === "customer" ? ((userParam as any)?.name || (userParam as any)?.email) : null) || reseller?.name || null,
+      customerEmail: cust?.email || (userRole === "customer" ? (userParam as any)?.email : null) || reseller?.email || null,
       userId: domain.userId,
       resellerId: reseller?.resellerId || user.resellerId || null,
     };
@@ -1111,8 +1130,8 @@ export async function getDomain(userParam: any, lookup: string | number) {
     billingContact,
     raaVerification,
     customerId: liquidItem.customer_id ? Number(liquidItem.customer_id) : null,
-    customerName: liquidItem.customer_name || null,
-    customerEmail: liquidItem.customer_email || null,
+    customerName: liquidItem.customer_name || registrantContact?.name || registrantContact?.company || (userRole === "customer" ? ((userParam as any)?.name || (userParam as any)?.email) : null) || null,
+    customerEmail: liquidItem.customer_email || registrantContact?.email || (userRole === "customer" ? (userParam as any)?.email : null) || null,
     userId: userId,
     resellerId: user.resellerId || null,
     createdAt: liquidItem.creation_time || new Date().toISOString(),

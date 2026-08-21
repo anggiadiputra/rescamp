@@ -625,12 +625,26 @@ export default function DomainDetailPage() {
             </div>
           </div>
 
-          {(domain.customerName || domain.customerEmail) && (
-            <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-sm text-gray-700">
-              <span className="flex items-center gap-1.5 text-gray-500"><User className="w-4 h-4" /> Pemilik Domain:</span>
-              <span className="font-semibold text-gray-900">{domain.customerName || domain.customerEmail}</span>
-            </div>
-          )}
+          {/* Domain Owner Information (Pemilik Domain) */}
+          {(() => {
+            const ownerName = domain.customerName || domain.registrantContact?.name || domain.registrantContact?.company;
+            const ownerEmail = domain.customerEmail || domain.registrantContact?.email;
+            const displayOwner = ownerName || ownerEmail || "-";
+
+            return (
+              <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-sm text-gray-700">
+                <span className="flex items-center gap-1.5 text-gray-500 font-medium">
+                  <User className="w-4 h-4 text-blue-600 shrink-0" /> Pemilik Domain:
+                </span>
+                <div className="text-right">
+                  <span className="font-semibold text-gray-900">{displayOwner}</span>
+                  {ownerEmail && ownerName && ownerEmail !== ownerName && (
+                    <span className="text-xs text-gray-500 block font-mono">({ownerEmail})</span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Nameservers Card */}
