@@ -10,10 +10,12 @@
 // apiKeyEncrypted/codeEncrypted value in the DB would be decryptable by anyone.
 // Rotation: run scripts/reencrypt-secrets.ts with OLD_ENCRYPTION_KEY set to the
 // previous key before switching ENCRYPTION_KEY.
-const DEFAULT_LEGACY_KEY = "change-this-in-production-min-32-chars!!";
-const ENC_KEY = process.env.ENCRYPTION_KEY || DEFAULT_LEGACY_KEY;
+// V2-03: the hardcoded legacy default key and the JWT_SECRET fallback were
+// REMOVED from decrypt(). Only the operator-controlled OLD_ENCRYPTION_KEY env
+// remains as the migration path for pre-v2 rows.
+const ENC_KEY = process.env.ENCRYPTION_KEY;
 if (!process.env.ENCRYPTION_KEY || process.env.ENCRYPTION_KEY.length < 32) {
-  console.warn("[security] ENCRYPTION_KEY is not configured in .env or < 32 characters. Falling back to default legacy key. Set ENCRYPTION_KEY in .env for production security.");
+  throw new Error("ENCRYPTION_KEY must be configured and at least 32 characters");
 }
 const LEGACY_SALT = new TextEncoder().encode("resellercamp-salt-v1");
 const SALT_LENGTH = 16; // 128 bits salt for PBKDF2
@@ -50,7 +52,7 @@ async function deriveKeyFromString(keyString: string, salt: Uint8Array = LEGACY_
  * Derive a 256-bit AES key from the active ENCRYPTION_KEY with given salt
  */
 async function getKey(salt: Uint8Array = LEGACY_SALT): Promise<CryptoKey> {
-  return deriveKeyFromString(ENC_KEY, salt);
+  return deriveKeyFromString(ENC_KEY!, salt);
 }
 
 /**
@@ -98,11 +100,10 @@ export async function decrypt(ciphertextBase64: string): Promise<string> {
     return ciphertextBase64;
   }
 
+  // V2-03: only the operator-controlled OLD_ENCRYPTION_KEY may decrypt legacy
+  // rows. No hardcoded default key, no JWT_SECRET cross-purpose fallback.
   const fallbackKeys = [
     process.env.OLD_ENCRYPTION_KEY,
-    DEFAULT_LEGACY_KEY,
-    process.env.JWT_SECRET,
-    ENC_KEY,
   ].filter((k): k is string => Boolean(k && typeof k === "string" && k.length >= 16));
 
   if (isV2) {

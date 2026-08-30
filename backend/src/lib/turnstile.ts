@@ -19,10 +19,17 @@ export async function verifyTurnstileToken(token?: string, remoteip?: string): P
 
   // If Turnstile is not enabled or secret key is missing, bypass verification
   if (!isEnabled || !secretKey) {
-    // H17: warn once — auth endpoints are unprotected against bots in this mode
-    if (!warnedBypass) {
+    // H17: warn once — auth endpoints are unprotected against bots in this mode.
+    // V2-07: escalate to error-grade logging in production so misconfiguration
+    // is visible in log-based alerting. (Hard-fail was deliberately NOT applied:
+    // Turnstile is configured via DB with default off; failing at startup would
+    // brick legitimate deploys. Operator action: enable it in Settings before go-live.)
+    const msg = "[security] Turnstile captcha DISABLED — login/register/OTP endpoints have no bot protection. Set turnstile_enabled=true and turnstile_secret_key in Settings.";
+    if (process.env.NODE_ENV === "production") {
+      console.error(msg);
+    } else if (!warnedBypass) {
       warnedBypass = true;
-      console.warn("[security] Turnstile captcha DISABLED — login/register/OTP endpoints have no bot protection. Set turnstile_enabled=true and turnstile_secret_key in Settings.");
+      console.warn(msg);
     }
     return true;
   }

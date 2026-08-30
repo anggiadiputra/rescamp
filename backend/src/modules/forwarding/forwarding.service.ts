@@ -1,9 +1,23 @@
 import { LiquidClient } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { db } from "../../db";
-import { domains } from "../../db/schema";
+import { domains, users } from "../../db/schema";
 import { eq } from "drizzle-orm";
 import { getDomain } from "../domains/domains.service";
+
+// V2-01: forwarding service previously built userParam from the caller-supplied
+// userId WITHOUT role/email, so getDomain() defaulted the role to "reseller"
+// and the H11 live-fallback ownership check never ran for customers (IDOR).
+// Always load the real principal here so the role flows into getDomain().
+async function buildUserParam(userId: number): Promise<{ id: number; role?: string | null; email?: string | null }> {
+  const [u] = await db
+    .select({ id: users.id, role: users.role, email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  // Fail closed: an unknown principal is treated as the most restrictive role.
+  return u ?? { id: userId, role: "customer", email: "" };
+}
 
 function getLiquid(creds: { resellerId?: string | null; apiKey?: string | null }): LiquidClient {
   return new LiquidClient(creds.resellerId || "", creds.apiKey || "");
@@ -40,7 +54,7 @@ async function resolveDomainRef(liquid: LiquidClient, domain: any): Promise<stri
 
 // Domain forwarding
 export async function getDomainForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string) {
-  const userParam = { id: userId, resellerId: user.resellerId, apiKey: user.apiKey };
+  const userParam = await buildUserParam(userId);
   const domain = await getDomain(userParam, domainId);
   const liquid = getLiquid(user);
   const domainRef = await resolveDomainRef(liquid, domain);
@@ -48,7 +62,7 @@ export async function getDomainForwarding(user: { resellerId: string | null; api
 }
 
 export async function updateDomainForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string, data: { destination_url: string; enabled: boolean }) {
-  const userParam = { id: userId, resellerId: user.resellerId, apiKey: user.apiKey };
+  const userParam = await buildUserParam(userId);
   const domain = await getDomain(userParam, domainId);
   assertNotSuspended(domain);
   const liquid = getLiquid(user);
@@ -58,7 +72,7 @@ export async function updateDomainForwarding(user: { resellerId: string | null; 
 
 // Email forwarding
 export async function getEmailForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string) {
-  const userParam = { id: userId, resellerId: user.resellerId, apiKey: user.apiKey };
+  const userParam = await buildUserParam(userId);
   const domain = await getDomain(userParam, domainId);
   const liquid = getLiquid(user);
   const domainRef = await resolveDomainRef(liquid, domain);
@@ -66,7 +80,7 @@ export async function getEmailForwarding(user: { resellerId: string | null; apiK
 }
 
 export async function createEmailForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string, data: { email: string; forward_to: string }) {
-  const userParam = { id: userId, resellerId: user.resellerId, apiKey: user.apiKey };
+  const userParam = await buildUserParam(userId);
   const domain = await getDomain(userParam, domainId);
   assertNotSuspended(domain);
   const liquid = getLiquid(user);
@@ -75,7 +89,7 @@ export async function createEmailForwarding(user: { resellerId: string | null; a
 }
 
 export async function deleteEmailForwarding(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string, email: string) {
-  const userParam = { id: userId, resellerId: user.resellerId, apiKey: user.apiKey };
+  const userParam = await buildUserParam(userId);
   const domain = await getDomain(userParam, domainId);
   assertNotSuspended(domain);
   const liquid = getLiquid(user);
@@ -85,7 +99,7 @@ export async function deleteEmailForwarding(user: { resellerId: string | null; a
 
 // Privacy
 export async function getPrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string) {
-  const userParam = { id: userId, resellerId: user.resellerId, apiKey: user.apiKey };
+  const userParam = await buildUserParam(userId);
   const domain = await getDomain(userParam, domainId);
   const liquid = getLiquid(user);
   const domainRef = await resolveDomainRef(liquid, domain);
@@ -93,7 +107,7 @@ export async function getPrivacy(user: { resellerId: string | null; apiKey: stri
 }
 
 export async function enablePrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string) {
-  const userParam = { id: userId, resellerId: user.resellerId, apiKey: user.apiKey };
+  const userParam = await buildUserParam(userId);
   const domain = await getDomain(userParam, domainId);
   assertNotSuspended(domain);
   const liquid = getLiquid(user);
@@ -106,7 +120,7 @@ export async function enablePrivacy(user: { resellerId: string | null; apiKey: s
 }
 
 export async function disablePrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string) {
-  const userParam = { id: userId, resellerId: user.resellerId, apiKey: user.apiKey };
+  const userParam = await buildUserParam(userId);
   const domain = await getDomain(userParam, domainId);
   assertNotSuspended(domain);
   const liquid = getLiquid(user);
@@ -119,7 +133,7 @@ export async function disablePrivacy(user: { resellerId: string | null; apiKey: 
 }
 
 export async function buyPrivacy(user: { resellerId: string | null; apiKey: string | null }, userId: number, domainId: number | string) {
-  const userParam = { id: userId, resellerId: user.resellerId, apiKey: user.apiKey };
+  const userParam = await buildUserParam(userId);
   const domain = await getDomain(userParam, domainId);
   assertNotSuspended(domain);
   const liquid = getLiquid(user);

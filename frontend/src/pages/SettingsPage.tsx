@@ -7,6 +7,7 @@ import {
 
 import { useSettings } from "../contexts/SettingsContext";
 import { useAuth } from "../contexts/AuthContext";
+import { hasResellerCapabilities } from "../lib/types";
 
 const SECTION_FIELDS: Record<string, string[]> = {
   brand: ["brand_name", "site_tagline", "seo_title", "seo_description", "seo_keywords", "og_image_url"],
@@ -1703,8 +1704,8 @@ export default function SettingsPage() {
               )}
             </Card>
 
-            {/* Resellercamp Liquid API Configuration — only for reseller role */}
-            {user?.role === "reseller" && (
+            {/* Resellercamp Liquid API Configuration — admin retains reseller capabilities */}
+            {hasResellerCapabilities(user?.role) && (
               <Card className="p-6 bg-white border border-gray-200 shadow-xs rounded-xl space-y-6">
                 <div className="flex items-center justify-between border-b border-gray-100 pb-4">
                   <div className="flex items-center gap-3">
@@ -1808,8 +1809,8 @@ export default function SettingsPage() {
               </Card>
             )}
 
-            {/* Reseller API Sync — only for reseller role */}
-            {user?.role === "reseller" && (
+            {/* Reseller API Sync — admin retains reseller capabilities */}
+            {hasResellerCapabilities(user?.role) && (
               <Card className="p-6 bg-white border border-gray-200 shadow-xs rounded-xl space-y-4">
                 <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
                   <RefreshCw className="w-5 h-5 text-indigo-600" />

@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { loginSchema, registerSchema, customerRegisterSchema, sendRegisterOtpSchema, sendOtpSchema, resetPasswordSchema } from "./auth.schema";
+import { registerSchema, customerRegisterSchema, sendRegisterOtpSchema, sendOtpSchema, resetPasswordSchema } from "./auth.schema";
 import * as h from "./auth.handler";
 import { authGuard } from "../../middleware/auth";
 import { otpRateLimiter, authRateLimiter, rateLimit } from "../../lib/rate-limit";
@@ -31,14 +31,11 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
     detail: { tags: ["Auth"], summary: "Reset password with token" },
   })
   .post("/logout", h.logout, {
+    beforeHandle: authGuard,
     detail: { tags: ["Auth"], summary: "Logout and clear session cookie" },
   })
-  // Login and register - standard limit (10/minute)
-  .post("/login", h.login, {
-    body: loginSchema,
-    beforeHandle: rateLimit(authRateLimiter, "Terlalu banyak permintaan login. Silakan coba lagi dalam 1 menit."),
-    detail: { tags: ["Auth"], summary: "Login" },
-  })
+  // Registration - standard limit (10/minute). Login sessions are issued only
+  // after the /send-otp -> /verify-otp flow; there is no password-only route.
   .post("/register", h.register, {
     body: registerSchema,
     beforeHandle: rateLimit(authRateLimiter, "Terlalu banyak permintaan registrasi. Silakan coba lagi dalam 1 menit."),
@@ -67,6 +64,6 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
     detail: { tags: ["Auth"], summary: "Get reseller data (balance, id, api key)" },
   })
   .post("/check-whatsapp", h.checkWa, {
-    beforeHandle: rateLimit(authRateLimiter, "Terlalu banyak permintaan. Silakan coba lagi dalam 1 menit."),
+    beforeHandle: [authGuard, rateLimit(authRateLimiter, "Terlalu banyak permintaan. Silakan coba lagi dalam 1 menit.")],
     detail: { tags: ["Auth"], summary: "Check if phone is registered on WhatsApp" },
   });

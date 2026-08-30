@@ -42,7 +42,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   };
 
   const isCustomer = user?.role === "customer";
-  const currentNavItems = isCustomer ? customerNavItems : resellerNavItems;
+  const currentNavItems = isCustomer
+    ? customerNavItems
+    : resellerNavItems.filter((item) => item.href !== "/settings" || user?.role === "admin");
 
   return (
     <div className="min-h-screen bg-[#f0f2f5] flex flex-col font-sans antialiased selection:bg-black selection:text-white">

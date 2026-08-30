@@ -5,6 +5,7 @@ import { sumopodClient } from "../../lib/sumopod";
 import { LiquidClient } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { resolveResellerCreds } from "../../lib/reseller-creds";
+import { canAccessTenantResource, loadTenantScope } from "../../lib/tenant-access";
 
 export interface CreateDomainOrderPayload {
   userId: number;
@@ -81,6 +82,10 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
 
   if (validCustomerId) {
     [custRecord] = await db.select().from(customers).where(eq(customers.id, validCustomerId));
+    const scope = await loadTenantScope(user);
+    if (!custRecord || !canAccessTenantResource(scope, { userId: custRecord.userId, customerId: custRecord.id })) {
+      throw new AppError("Customer not found", 404);
+    }
   }
 
   if (!custRecord && payload.userId) {

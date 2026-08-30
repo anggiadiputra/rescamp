@@ -1,8 +1,8 @@
 import { Elysia, t } from "elysia";
-import { sumopodClient } from "../../lib/sumopod";
+import { buildWebhookReceiptId, isDuplicateKeyError, sumopodClient } from "../../lib/sumopod";
 import { processWebhookPayload } from "./payments.service";
 import { db } from "../../db";
-import { transactions, domains, customers } from "../../db/schema";
+import { transactions, domains, customers, webhookReceipts } from "../../db/schema";
 import { eq, and, or } from "drizzle-orm";
 import { authGuard } from "../../middleware/auth";
 import { webhookRateLimiter, paymentStatusRateLimiter, rateLimit } from "../../lib/rate-limit";
@@ -16,6 +16,7 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
       const svixTimestamp = headers["svix-timestamp"] as string;
       const svixSignature = headers["svix-signature"] as string;
       const tokenHeader = headers["x-webhook-token"] as string;
+      const rawBody = typeof body === "string" ? body : JSON.stringify(body);
 
       // Verify authentication via token header or Svix HMAC signature
       const isTokenValid = await sumopodClient.verifyWebhookToken(tokenHeader);
@@ -27,7 +28,6 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
       const webhookSecret = settings.sumopod_webhook_secret || process.env.SUMOPOD_WEBHOOK_SECRET || "";
 
       if (webhookSecret && svixId && svixTimestamp && svixSignature) {
-        const rawBody = typeof body === "string" ? body : JSON.stringify(body);
         isSigValid = sumopodClient.verifyWebhookSignature(
           webhookSecret,
           svixId,
@@ -45,8 +45,26 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
       }
 
       const payload = typeof body === "string" ? JSON.parse(body) : body;
-      const result = await processWebhookPayload(payload);
-      return { received: true, result };
+      const receiptId = buildWebhookReceiptId(svixId, rawBody);
+      try {
+        await db.insert(webhookReceipts).values({ id: receiptId });
+      } catch (error: any) {
+        if (!isDuplicateKeyError(error)) throw error;
+        // Duplicate receipt: either a concurrent delivery is processing this event,
+        // or a previous attempt crashed after inserting its receipt but before
+        // finishing. Do NOT blind-ACK — a blind 200 would permanently skip an event
+        // whose processing never ran (crash window). Fall through and let the CAS
+        // status transition inside processWebhookPayload admit exactly one winner;
+        // any losing attempt bails as a no-op, so falling through is safe.
+      }
+
+      try {
+        const result = await processWebhookPayload(payload);
+        return { received: true, result };
+      } catch (error) {
+        await db.delete(webhookReceipts).where(eq(webhookReceipts.id, receiptId)).catch(() => {});
+        throw error;
+      }
     },
     {
       beforeHandle: rateLimit(webhookRateLimiter, "Terlalu banyak request webhook."),
@@ -105,7 +123,7 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
         // H10: ownership check — a user may only read their own transaction.
         // Resellers may read transactions of their own customers.
         if (tx.userId !== userId) {
-          let ownedByCustomer = false;
+          let ownedByCustomer = role === "admin";
           if (role === "reseller" && tx.customerId) {
             const [childCust] = await db.select({ id: customers.id }).from(customers)
               .where(and(eq(customers.id, tx.customerId), eq(customers.userId, userId)))

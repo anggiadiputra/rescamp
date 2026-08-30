@@ -1,10 +1,11 @@
 import { db } from "../../db";
 import { customers, users } from "../../db/schema";
 import { domains } from "../../db/schema/domains";
-import { eq, and, like, sql } from "drizzle-orm";
+import { eq, and, like, sql, inArray } from "drizzle-orm";
 import { LiquidClient } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { resolveResellerCreds } from "../../lib/reseller-creds";
+import { canAccessTenantResource, loadTenantScope, type TenantPrincipal } from "../../lib/tenant-access";
 
 function getLiquid(creds: { resellerId: string; apiKey: string }): LiquidClient {
   return new LiquidClient(creds.resellerId || "", creds.apiKey || "");
@@ -60,17 +61,14 @@ export async function createCustomer(
   return cust!;
 }
 
-export async function listCustomers(userId: number, search?: string, page = 1, perPage = 20) {
-  const [user] = await db.select({ role: users.role, email: users.email }).from(users).where(eq(users.id, userId));
-  if (user?.role === "customer") {
-    let rows = await db.select().from(customers).where(eq(customers.email, user.email));
-    if (rows.length === 0) {
-      rows = await db.select().from(customers).where(eq(customers.userId, userId));
-    }
-    return { data: rows, meta: { total: rows.length, page: 1, perPage: rows.length } };
-  }
-  let where: any = undefined;
-  if (search) where = like(customers.name, `%${search}%`);
+export async function listCustomers(userParam: TenantPrincipal | number, search?: string, page = 1, perPage = 20) {
+  const user = typeof userParam === "number"
+    ? (await db.select().from(users).where(eq(users.id, userParam)))[0]
+    : userParam;
+  if (!user) throw new AppError("User not found", 404);
+  const scope = await loadTenantScope(user);
+  let where: any = scope.unrestricted ? undefined : inArray(customers.id, scope.customerIds.length > 0 ? scope.customerIds : [-1]);
+  if (search) where = where ? and(where, like(customers.name, `%${search}%`)) : like(customers.name, `%${search}%`);
   const offset = (page - 1) * perPage;
   const rows = await db.select().from(customers).where(where).orderBy(sql`${customers.createdAt} desc`).limit(perPage).offset(offset);
   const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(customers).where(where);
@@ -78,16 +76,17 @@ export async function listCustomers(userId: number, search?: string, page = 1, p
 }
 
 export async function getCustomer(userParam: { id: number; role?: string | null; email?: string | null } | number, customerId: number) {
-  const userId = typeof userParam === "number" ? userParam : userParam.id;
-  const role = typeof userParam === "number" ? null : userParam.role;
-  const email = typeof userParam === "number" ? null : userParam.email;
+  const user = typeof userParam === "number"
+    ? (await db.select().from(users).where(eq(users.id, userParam)))[0]
+    : userParam;
+  if (!user) throw new AppError("User not found", 404);
 
   const [cust] = await db.select().from(customers).where(eq(customers.id, customerId));
   if (!cust) throw new AppError("Customer not found", 404);
 
-  if (role === "customer" && cust.userId !== userId && cust.email !== email) {
-    throw new AppError("Access denied", 403);
-  }
+  const scope = await loadTenantScope(user);
+  if (!canAccessTenantResource(scope, { userId: cust.userId, customerId: cust.id }))
+    throw new AppError("Customer not found", 404);
   return cust;
 }
 

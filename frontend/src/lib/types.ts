@@ -4,6 +4,10 @@ export interface User {
   name: string;
 }
 
+export function hasResellerCapabilities(role: string | null | undefined): boolean {
+  return role === "reseller" || role === "admin";
+}
+
 export interface DomainContact {
   contactId?: string | number;
   name?: string;

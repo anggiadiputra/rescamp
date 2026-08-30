@@ -4,6 +4,7 @@ import { eq, and, sql, inArray, or, isNotNull } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { resolveResellerCreds, resolveCredsFromUser } from "../../lib/reseller-creds";
+import { loadTenantScope } from "../../lib/tenant-access";
 
 const MAX_ACTION_REQUIRED_RETRIES = 5;
 
@@ -345,16 +346,8 @@ export async function listTransactions(
   const perPage = Number(params?.per_page) || 20;
   const offset = (page - 1) * perPage;
 
-  let allowedUserIds = [userId];
-  if (userRole === "reseller") {
-    const childUsers = await db.select({ id: users.id }).from(users).where(
-      or(
-        eq(users.parentResellerId, userId),
-        eq(users.role, "customer")
-      )
-    );
-    allowedUserIds = Array.from(new Set([userId, ...childUsers.map((c) => c.id)]));
-  }
+  const scope = await loadTenantScope({ id: userId, role: userRole });
+  const allowedUserIds = scope.unrestricted ? [userId] : scope.userIds;
 
   // Auto-expire retail pending_payment transactions whose expires_at has passed (excluding Resellercamp synced rows
   // and rows with a Sumopod paymentId — those are reclaimed via /payments/status/:orderId proactive check).
@@ -394,17 +387,17 @@ export async function listTransactions(
     console.warn("[billing] auto-expire check failed:", e);
   }
 
-  let userCondition = inArray(transactions.userId, allowedUserIds);
+  let userCondition: any = scope.unrestricted
+    ? sql`1 = 1`
+    : or(
+        inArray(transactions.userId, allowedUserIds),
+        ...(scope.customerIds.length > 0 ? [inArray(transactions.customerId, scope.customerIds)] : []),
+      );
   if (userRole === "customer") {
     // Customer ONLY sees local retail invoices created between customer & reseller in DB
     userCondition = and(
       inArray(transactions.userId, allowedUserIds),
       sql`(${transactions.metadata} IS NULL OR ${transactions.metadata} NOT LIKE '%"syncedFromLiquid":true%')`
-    ) as any;
-  } else if (userRole === "reseller" && params?.category === "retail") {
-    userCondition = or(
-      inArray(transactions.userId, allowedUserIds),
-      isNotNull(transactions.customerId)
     ) as any;
   }
   let where = userCondition;
@@ -545,30 +538,18 @@ export async function getTransaction(userParam: number | { id: number; role?: st
   const userId = typeof userParam === "object" ? userParam.id : userParam;
   const userRole = typeof userParam === "object" ? userParam.role : "reseller";
 
-  const { users, customers } = await import("../../db/schema");
-
-  let allowedUserIds = [userId];
-  if (userRole === "reseller") {
-    const childUsers = await db.select({ id: users.id }).from(users).where(eq(users.parentResellerId, userId));
-    const allCustomerUserIds = await db.select({ userId: customers.userId }).from(customers);
-    allowedUserIds = [
-      userId,
-      ...childUsers.map((c) => c.id),
-      ...allCustomerUserIds.map((c) => c.userId).filter((id): id is number => typeof id === "number"),
-    ];
-  }
+  const scope = await loadTenantScope({ id: userId, role: userRole });
 
   const strTxnId = String(txnId).trim();
   const numTxnId = Number(strTxnId);
 
   // 1. Try finding in local DB by integer id or liquidTransactionId
-  let accessCondition: any = inArray(transactions.userId, allowedUserIds);
-  if (userRole === "reseller") {
-    accessCondition = or(
-      inArray(transactions.userId, allowedUserIds),
-      isNotNull(transactions.customerId)
-    );
-  }
+  const accessCondition: any = scope.unrestricted
+    ? sql`1 = 1`
+    : or(
+        inArray(transactions.userId, scope.userIds),
+        ...(scope.customerIds.length > 0 ? [inArray(transactions.customerId, scope.customerIds)] : []),
+      );
 
   let [txn] = await db.select().from(transactions).where(
     and(
@@ -719,7 +700,7 @@ export async function getTransaction(userParam: number | { id: number; role?: st
       if (parentReseller) resellerUser = parentReseller;
     }
     if (!resellerUser || resellerUser.role === "customer") {
-      const [primaryReseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
+      const [primaryReseller] = await db.select().from(users).where(sql`${users.role} IN ('admin', 'reseller')`).limit(1);
       if (primaryReseller) resellerUser = primaryReseller;
     }
   }

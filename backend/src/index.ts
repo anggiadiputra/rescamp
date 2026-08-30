@@ -13,36 +13,21 @@ import { sweepExpiredTransactions, sweepActionRequiredRetries } from "./modules/
 import { ensureDatabaseSchema } from "./db";
 import { AppError } from "./lib/error";
 import { securityHeaders } from "./lib/security-headers";
+import { assertSafeCorsConfig, isOriginAllowed, parseAllowedOrigins } from "./lib/cors-policy";
 
 // Ensure MySQL database schema (ENUMS) match codebase
-ensureDatabaseSchema().catch((e) => console.warn("[db] ensureDatabaseSchema failed:", e));
+await ensureDatabaseSchema();
 
-const allowedOrigins = (env.CORS_ORIGIN || "*")
-  .split(",")
-  .map((o) => o.trim())
-  .filter(Boolean);
+const isProduction = process.env.NODE_ENV === "production";
+const allowedOrigins = parseAllowedOrigins(env.CORS_ORIGIN || "");
+assertSafeCorsConfig(allowedOrigins, isProduction);
 
 const app = new Elysia()
   .use(
     cors({
       origin: (request: Request): boolean => {
         const origin = request.headers.get("origin");
-        if (!origin) return true; // same-origin or non-browser clients
-        // Exact match from CORS_ORIGIN env var
-        if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) return true;
-        // Strict subdomain match for ekstensi.id (HTTPS only)
-        try {
-          const url = new URL(origin);
-          if (url.protocol === "https:" &&
-              (url.hostname === "ekstensi.id" || url.hostname.endsWith(".ekstensi.id"))) {
-            return true;
-          }
-          // Local development only
-          if (process.env.NODE_ENV !== "production" &&
-              (url.hostname === "localhost" || url.hostname === "127.0.0.1")) {
-            return true;
-          }
-        } catch {}
+        if (isOriginAllowed(origin, allowedOrigins, isProduction)) return true;
         console.warn(`[CORS] Rejected origin: ${origin}`);
         return false;
       },

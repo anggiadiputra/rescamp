@@ -7,11 +7,18 @@ const SECRET = new TextEncoder().encode(env.JWT_SECRET);
 export interface JwtPayload {
   sub: string;
   email: string;
+  role?: string;
+  sv: number;
 }
 
-export async function signToken(payload: { sub: number; email: string; role?: string }): Promise<string> {
-  const expSeconds = parseExpiry(env.JWT_EXPIRY);
-  return new SignJWT({ sub: String(payload.sub), email: payload.email, role: payload.role || "reseller" })
+export async function signToken(payload: { sub: number; email: string; role?: string; sessionVersion?: number }): Promise<string> {
+  const expSeconds = getJwtExpirySeconds();
+  return new SignJWT({
+    sub: String(payload.sub),
+    email: payload.email,
+    role: payload.role || "customer",
+    sv: payload.sessionVersion ?? 0,
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${expSeconds}s`)
@@ -38,4 +45,10 @@ function parseExpiry(expiry: string): number {
     case "d": return val * 86400;
     default: return 86400;
   }
+}
+
+// V2-08: shared by signToken and the auth-cookie handler so cookie Max-Age
+// always matches the token exp derived from JWT_EXPIRY.
+export function getJwtExpirySeconds(): number {
+  return parseExpiry(env.JWT_EXPIRY);
 }

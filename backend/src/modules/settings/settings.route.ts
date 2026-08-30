@@ -1,7 +1,7 @@
 import { Elysia } from "elysia";
 import { getSystemSettings, updateSystemSettings, testKirisanConnection, testEmailConnection, testLiquidConnection } from "./settings.service";
 import { AppError } from "../../lib/error";
-import { authGuard, resellerGuard } from "../../middleware/auth";
+import { adminGuard, authGuard } from "../../middleware/auth";
 import { settingsRateLimiter, rateLimit } from "../../lib/rate-limit";
 
 // Field yang aman untuk publik (tidak ada secret/API key)
@@ -101,8 +101,8 @@ async function handleTestLiquid(ctx: any) {
 export const settingsRoutes = new Elysia({ prefix: "/settings" })
   // Endpoint publik — tidak butuh login
   .get("/public", handleGetPublicSettings as any)
-  // Semua endpoint lain wajib auth reseller + rate limit
-  .guard({ beforeHandle: [authGuard, resellerGuard, rateLimit(settingsRateLimiter, "Terlalu banyak permintaan pengaturan.")] }, (app) =>
+  // Semua endpoint lain mengelola konfigurasi global dan hanya boleh diakses admin.
+  .guard({ beforeHandle: [authGuard, adminGuard, rateLimit(settingsRateLimiter, "Terlalu banyak permintaan pengaturan.")] }, (app) =>
     app
       .get("/", handleGetSettings as any)
       .get("", handleGetSettings as any)

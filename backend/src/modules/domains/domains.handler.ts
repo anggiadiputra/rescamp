@@ -4,6 +4,7 @@ import { db } from "../../db";
 import { users } from "../../db/schema";
 import { eq, or } from "drizzle-orm";
 import { AppError } from "../../lib/error";
+import { resolveOrderCustomerId } from "../../lib/tenant-access";
 
 async function getUser(ctx: any) {
   const userId = Number(ctx.store?.user?.sub);
@@ -68,12 +69,8 @@ export async function suggestions(ctx: any) {
 export async function register(ctx: any) {
   const creds = await getResellerCreds(ctx);
   const u = await getUser(ctx);
-  // For customer: auto-resolve their LIQUID customer_id
-  if (u.role === "customer" && !ctx.body.customer_id) {
-    const cid = await resolveCustomerId(u);
-    if (!cid) throw new AppError("Complete your profile first: /complete-profile", 400);
-    ctx.body.customer_id = cid;
-  }
+  const ownCustomerId = u.role === "customer" ? await resolveCustomerId(u) : undefined;
+  ctx.body.customer_id = resolveOrderCustomerId(u.role, ctx.body.customer_id, ownCustomerId);
   const result = await svc.orderRegisterDomain(creds, ctx.body);
   ctx.set.status = 201;
   return { data: result };
@@ -82,11 +79,8 @@ export async function register(ctx: any) {
 export async function transfer(ctx: any) {
   const creds = await getResellerCreds(ctx);
   const u = await getUser(ctx);
-  if (u.role === "customer" && !ctx.body.customer_id) {
-    const cid = await resolveCustomerId(u);
-    if (!cid) throw new AppError("Complete your profile first: /complete-profile", 400);
-    ctx.body.customer_id = cid;
-  }
+  const ownCustomerId = u.role === "customer" ? await resolveCustomerId(u) : undefined;
+  ctx.body.customer_id = resolveOrderCustomerId(u.role, ctx.body.customer_id, ownCustomerId);
   const result = await svc.orderTransferDomain(creds, ctx.body);
   ctx.set.status = 201;
   return { data: result };

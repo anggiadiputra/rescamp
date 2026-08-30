@@ -5,11 +5,12 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 255 }).notNull().unique(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
-  role: mysqlEnum("role", ["reseller", "customer"]).default("reseller"),
+  role: mysqlEnum("role", ["admin", "reseller", "customer"]).default("customer"),
   resellerId: varchar("reseller_id", { length: 100 }),
   apiKey: varchar("api_key", { length: 255 }),
   apiKeyEncrypted: text("api_key_encrypted"),
   parentResellerId: int("parent_reseller_id"),
+  sessionVersion: int("session_version").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });

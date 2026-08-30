@@ -3,6 +3,7 @@ import { appSettings, users } from "../../db/schema";
 import { eq, sql } from "drizzle-orm";
 import { env } from "../../config/env";
 import { AppError } from "../../lib/error";
+import { decrypt, encrypt } from "../../lib/encryption";
 
 export interface SettingsData {
   // Brand & SEO
@@ -135,6 +136,23 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   reseller_api_key: env.RESELLER_API_KEY || "",
 };
 
+const SECRET_SETTING_FIELDS = new Set([
+  "sumopod_api_key", "sumopod_webhook_secret", "sumopod_webhook_token",
+  "kirisan_token", "kirisan_channel_key", "smtp_pass", "brevo_api_key",
+  "fonnte_token", "s3_access_key", "s3_secret_key", "turnstile_secret_key",
+  "reseller_api_key", "liquid_api_key",
+]);
+
+export async function encodeSettingValue(key: string, value: string): Promise<string> {
+  if (!SECRET_SETTING_FIELDS.has(key) || !value || value.startsWith("v2:")) return value;
+  return encrypt(value);
+}
+
+export async function decodeSettingValue(key: string, value: string): Promise<string> {
+  if (!SECRET_SETTING_FIELDS.has(key) || !value || !value.startsWith("v2:")) return value;
+  return decrypt(value);
+}
+
 let isTableInitialized = false;
 
 export async function ensureSettingsTableExists() {
@@ -155,9 +173,19 @@ export async function ensureSettingsTableExists() {
       for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
         await db.insert(appSettings).values({
           key,
-          value,
+          value: await encodeSettingValue(key, value),
           category: getCategoryForKey(key),
         }).catch(() => {});
+      }
+    }
+
+    // Transparently migrate legacy plaintext secrets at startup.
+    const currentRows = await db.select().from(appSettings);
+    for (const row of currentRows) {
+      if (row.key && row.value && SECRET_SETTING_FIELDS.has(row.key) && !row.value.startsWith("v2:")) {
+        await db.update(appSettings)
+          .set({ value: await encodeSettingValue(row.key, row.value) })
+          .where(eq(appSettings.key, row.key));
       }
     }
 
@@ -176,7 +204,7 @@ export async function getSystemSettings(): Promise<Record<string, string>> {
     // Populate dynamic values directly from database rows
     for (const r of rows) {
       if (r.key && r.value !== null) {
-        settingsMap[r.key] = r.value;
+        settingsMap[r.key] = await decodeSettingValue(r.key, r.value);
       }
     }
 
@@ -204,8 +232,9 @@ const URL_FIELD_ALLOWED_HOSTS: Record<string, string[]> = {
   sumopod_base_url: ["api-pay.sumopod.com", "api-pay-sandbox.sumopod.com", "api.sumopod.com"],
 };
 
-function validateSettingUrl(key: string, value: string) {
-  if (!key.endsWith("_url")) return; // non-URL fields unchecked
+export function validateSettingUrl(key: string, value: string) {
+  const allowed = URL_FIELD_ALLOWED_HOSTS[key];
+  if (!key.endsWith("_url") && !key.endsWith("_endpoint") && !allowed) return;
   if (!value || value.trim() === "") return; // allow empty optional URL fields
   let parsed: URL;
   try {
@@ -213,12 +242,22 @@ function validateSettingUrl(key: string, value: string) {
   } catch {
     throw new AppError(`URL tidak valid untuk pengaturan "${key}"`, 400);
   }
-  const isLocalHost = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
-  if (parsed.protocol !== "https:" && !isLocalHost) {
+  const hostname = parsed.hostname.toLowerCase();
+  const isPrivateHost = hostname === "localhost"
+    || hostname === "127.0.0.1"
+    || hostname === "::1"
+    || hostname === "0.0.0.0"
+    || /^10\./.test(hostname)
+    || /^192\.168\./.test(hostname)
+    || /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
+    || /^169\.254\./.test(hostname);
+  if (parsed.protocol !== "https:") {
     throw new AppError(`Pengaturan "${key}" harus menggunakan https://`, 400);
   }
-  const allowed = URL_FIELD_ALLOWED_HOSTS[key];
-  if (allowed && !allowed.includes(parsed.hostname) && !isLocalHost) {
+  if (parsed.username || parsed.password || isPrivateHost) {
+    throw new AppError(`Host "${parsed.hostname}" tidak diizinkan untuk pengaturan "${key}"`, 400);
+  }
+  if (allowed && !allowed.includes(hostname)) {
     throw new AppError(`Host "${parsed.hostname}" tidak diizinkan untuk pengaturan "${key}"`, 400);
   }
 }
@@ -231,7 +270,12 @@ export async function updateSystemSettings(data: Record<string, any>): Promise<R
   let updatedResellerId = "";
   let updatedResellerApiKey = "";
 
+  const allowedKeys = new Set(Object.keys(DEFAULT_SETTINGS));
+
   for (const [key, value] of Object.entries(data)) {
+    if (!allowedKeys.has(key)) {
+      throw new AppError(`Pengaturan "${key}" tidak dikenal`, 400);
+    }
     const stringVal = typeof value === "boolean" ? (value ? "true" : "false") : String(value ?? "");
 
     // Do not overwrite existing secret values with masked placeholders
@@ -240,6 +284,7 @@ export async function updateSystemSettings(data: Record<string, any>): Promise<R
     }
 
     validateSettingUrl(key, stringVal);
+    const storedValue = await encodeSettingValue(key, stringVal);
 
     if (key === "reseller_id" && stringVal.trim()) {
       updatedResellerId = stringVal.trim();
@@ -251,9 +296,9 @@ export async function updateSystemSettings(data: Record<string, any>): Promise<R
     const [existing] = await db.select().from(appSettings).where(eq(appSettings.key, key));
 
     if (existing) {
-      await db.update(appSettings).set({ value: stringVal }).where(eq(appSettings.key, key));
+      await db.update(appSettings).set({ value: storedValue }).where(eq(appSettings.key, key));
     } else {
-      await db.insert(appSettings).values({ key, value: stringVal, category: getCategoryForKey(key) });
+      await db.insert(appSettings).values({ key, value: storedValue, category: getCategoryForKey(key) });
     }
   }
 
@@ -442,7 +487,7 @@ export async function testLiquidConnection(resellerId?: string, apiKey?: string)
 
   if (!rId || !key) {
     const { resolveResellerCreds } = await import("../../lib/reseller-creds");
-    const [reseller] = await db.select().from(users).where(eq(users.role, "reseller")).limit(1);
+    const [reseller] = await db.select().from(users).where(sql`${users.role} IN ('admin', 'reseller')`).limit(1);
     if (reseller) {
       const creds = await resolveResellerCreds(reseller.id);
       rId = creds.resellerId;

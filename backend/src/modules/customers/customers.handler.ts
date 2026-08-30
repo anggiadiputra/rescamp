@@ -33,7 +33,7 @@ export async function create(ctx: any) {
 export async function list(ctx: any) {
   const user = await getUser(ctx);
   const { search, page, per_page } = ctx.query;
-  return svc.listCustomers(user.id, search, Number(page) || 1, Number(per_page) || 20);
+  return svc.listCustomers(user, search, Number(page) || 1, Number(per_page) || 20);
 }
 
 export async function detail(ctx: any) {

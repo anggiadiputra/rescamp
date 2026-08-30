@@ -25,13 +25,21 @@ async function main() {
     database: process.env.DB_NAME || "domain_dashboard",
   });
 
+  const userUpdates: Array<{ id: number; current: string; next: string }> = [];
+  const otpUpdates: Array<{ id: number; current: string; next: string }> = [];
   let usersUpdated = 0;
   let usersSkipped = 0;
   let usersFailed = 0;
+  let otpUpdated = 0;
+  let otpSkipped = 0;
+  let otpFailed = 0;
 
   try {
+    if (isExecute) await conn.beginTransaction();
+
+    const lockClause = isExecute ? " FOR UPDATE" : "";
     const [userRows] = await conn.query(
-      "SELECT id, email, api_key_encrypted FROM users WHERE api_key_encrypted IS NOT NULL AND api_key_encrypted != ''"
+      "SELECT id, api_key_encrypted FROM users WHERE api_key_encrypted IS NOT NULL AND api_key_encrypted != ''" + lockClause
     );
 
     for (const row of userRows as any[]) {
@@ -43,29 +51,21 @@ async function main() {
 
       try {
         const plain = await decrypt(current);
-        const v2Cipher = await encrypt(plain);
-
-        if (isExecute) {
-          await conn.query("UPDATE users SET api_key_encrypted = ? WHERE id = ?", [v2Cipher, row.id]);
+        if (!plain || plain === current) {
+          throw new Error("ciphertext could not be decrypted with ENCRYPTION_KEY or OLD_ENCRYPTION_KEY");
         }
+        const next = await encrypt(plain);
+        if (!next.startsWith("v2:")) throw new Error("encryption did not produce v2 ciphertext");
+        userUpdates.push({ id: Number(row.id), current, next });
         usersUpdated++;
-        console.log(`[migrate-encryption] User #${row.id} (${row.email}): v1 -> v2 successfully prepared`);
       } catch (err: any) {
         usersFailed++;
-        console.error(`[migrate-encryption] User #${row.id} (${row.email}) decryption failed:`, err?.message || err);
+        console.error(`[migrate-encryption] User #${row.id} decryption failed:`, err?.message || err);
       }
     }
-  } catch (err: any) {
-    console.warn("[migrate-encryption] users table query failed:", err?.message || err);
-  }
 
-  let otpUpdated = 0;
-  let otpSkipped = 0;
-  let otpFailed = 0;
-
-  try {
     const [otpRows] = await conn.query(
-      "SELECT id, email, code_encrypted FROM otp_codes WHERE code_encrypted IS NOT NULL AND code_encrypted != '' AND used = false"
+      "SELECT id, code_encrypted FROM otp_codes WHERE code_encrypted IS NOT NULL AND code_encrypted != ''" + lockClause
     );
 
     for (const row of otpRows as any[]) {
@@ -77,26 +77,51 @@ async function main() {
 
       try {
         const plain = await decrypt(current);
-        const v2Cipher = await encrypt(plain);
-
-        if (isExecute) {
-          await conn.query("UPDATE otp_codes SET code_encrypted = ? WHERE id = ?", [v2Cipher, row.id]);
+        if (!plain || plain === current) {
+          throw new Error("ciphertext could not be decrypted with ENCRYPTION_KEY or OLD_ENCRYPTION_KEY");
         }
+        const next = await encrypt(plain);
+        if (!next.startsWith("v2:")) throw new Error("encryption did not produce v2 ciphertext");
+        otpUpdates.push({ id: Number(row.id), current, next });
         otpUpdated++;
       } catch (err: any) {
         otpFailed++;
         console.error(`[migrate-encryption] otp_codes #${row.id} decryption failed:`, err?.message || err);
       }
     }
-  } catch (err: any) {
-    console.warn("[migrate-encryption] otp_codes table query failed:", err?.message || err);
+
+    if (usersFailed > 0 || otpFailed > 0) {
+      throw new Error("migration aborted because one or more rows could not be decrypted; no rows were changed");
+    }
+
+    if (isExecute) {
+      for (const update of userUpdates) {
+        const [result] = await conn.query(
+          "UPDATE users SET api_key_encrypted = ? WHERE id = ? AND api_key_encrypted = ?",
+          [update.next, update.id, update.current]
+        );
+        if ((result as any).affectedRows !== 1) throw new Error(`users.id=${update.id} changed during migration`);
+      }
+      for (const update of otpUpdates) {
+        const [result] = await conn.query(
+          "UPDATE otp_codes SET code_encrypted = ? WHERE id = ? AND code_encrypted = ?",
+          [update.next, update.id, update.current]
+        );
+        if ((result as any).affectedRows !== 1) throw new Error(`otp_codes.id=${update.id} changed during migration`);
+      }
+      await conn.commit();
+    }
+  } catch (err) {
+    if (isExecute) await conn.rollback();
+    throw err;
+  } finally {
+    await conn.end();
   }
 
-  await conn.end();
-
   console.log("\n================ MIGRATION SUMMARY ================");
-  console.log(`Users:     ${usersUpdated} migrated to v2, ${usersSkipped} already v2, ${usersFailed} failed`);
-  console.log(`OTP Codes: ${otpUpdated} migrated to v2, ${otpSkipped} already v2, ${otpFailed} failed`);
+  const action = isExecute ? "migrated" : "ready to migrate";
+  console.log(`Users:     ${usersUpdated} ${action}, ${usersSkipped} already v2, ${usersFailed} failed`);
+  console.log(`OTP Codes: ${otpUpdated} ${action}, ${otpSkipped} already v2, ${otpFailed} failed`);
   if (!isExecute) {
     console.log("\n[NOTE] Dry-run completed. Re-run with --execute to commit changes to database.");
   } else {

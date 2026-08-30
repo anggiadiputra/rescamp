@@ -21,8 +21,10 @@ const envVars = {
   APP_URL: process.env.APP_URL || "https://dash.ekstensi.id",
 } as const;
 
-if (!envVars.JWT_SECRET || envVars.JWT_SECRET.length < 16) {
-  throw new Error("JWT_SECRET must be set in .env and at least 16 characters");
+// V2-06: HS256 secrets under 32 chars are offline-brute-forceable; align the
+// startup gate with current guidance (32+ chars, OWASP-recommended for HS256).
+if (!envVars.JWT_SECRET || envVars.JWT_SECRET.length < 32) {
+  throw new Error("JWT_SECRET must be set in .env and at least 32 characters");
 }
 
 if (envVars.SUMOPOD_WEBHOOK_SECRET && envVars.SUMOPOD_WEBHOOK_SECRET.trim().length > 0 && envVars.SUMOPOD_WEBHOOK_SECRET.trim().length < 24) {

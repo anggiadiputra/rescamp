@@ -8,7 +8,6 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string, cfTurnstileResponse?: string) => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => void;
 }
@@ -37,10 +36,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => controller.abort();
   }, []);
 
-  async function login(email: string, password: string, cfTurnstileResponse?: string) {
-    const res = await api.post<{ user: User; token: string }>("/auth/login", { email, password, cfTurnstileResponse });
-    setUser(res.user);
-  }
 
   async function register(data: { email: string; password: string; name: string; reseller_id?: string; api_key?: string; cfTurnstileResponse?: string; company?: string; address?: string; city?: string; state?: string; country?: string; zipcode?: string; phone_cc?: string; phone?: string; code?: string }) {
     const body: any = {
@@ -61,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
-  return <AuthContext.Provider value={{ user, loading, login, register, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, register, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

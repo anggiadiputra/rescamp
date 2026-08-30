@@ -5,6 +5,7 @@ import { SettingsProvider } from "./contexts/SettingsContext";
 import { DataCacheProvider } from "./contexts/DataCacheContext";
 import { DashboardLayout } from "./components/layout/DashboardLayout";
 import { PublicLayout } from "./components/layout/PublicLayout";
+import { hasResellerCapabilities } from "./lib/types";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
@@ -49,7 +50,15 @@ function ResellerRoute({ children }: { children: React.ReactNode }) {
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role === "customer" && !user.hasProfile) return <Navigate to="/complete-profile" replace />;
-  if (user.role !== "reseller") return <Navigate to="/dashboard" replace />;
+  if (!hasResellerCapabilities(user.role)) return <Navigate to="/dashboard" replace />;
+  return <DashboardLayout>{children}</DashboardLayout>;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <PageLoader />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== "admin") return <Navigate to="/dashboard" replace />;
   return <DashboardLayout>{children}</DashboardLayout>;
 }
 
@@ -86,7 +95,7 @@ export default function App() {
                 <Route path="/billing/pay/:orderId" element={<BillingPayPage />} />
                 <Route path="/prices" element={<ProtectedRoute><PricesPage /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-                <Route path="/settings" element={<ResellerRoute><SettingsPage /></ResellerRoute>} />
+                <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
                 <Route path="/complete-profile" element={<CompleteProfilePage />} />
                 <Route path="/verify/:param1?/:param2?/:param3?" element={<VerifyPage />} />
                 <Route path="/verify/*" element={<VerifyPage />} />

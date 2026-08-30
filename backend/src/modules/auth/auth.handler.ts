@@ -1,14 +1,17 @@
 import * as svc from "./auth.service";
 import { checkWhatsApp } from "../../lib/fonnte";
 import type { JwtPayload } from "../../lib/jwt";
+import { getJwtExpirySeconds } from "../../lib/jwt";
 import { verifyTurnstileToken } from "../../lib/turnstile";
 import { AppError } from "../../lib/error";
 
 // H8: JWT rides in an httpOnly cookie instead of frontend localStorage.
 // Bearer header still accepted for non-browser clients.
+// V2-08: Max-Age derived from JWT_EXPIRY so cookie expiry always matches token exp.
 function setAuthCookie(ctx: any, token: string) {
   const secure = (process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true") ? "; Secure" : "";
-  ctx.set.headers["Set-Cookie"] = `token=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Strict; Max-Age=86400${secure}`;
+  const maxAge = getJwtExpirySeconds();
+  ctx.set.headers["Set-Cookie"] = `token=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Strict; Max-Age=${maxAge}${secure}`;
 }
 
 function clearAuthCookie(ctx: any) {
@@ -23,7 +26,9 @@ export async function register(ctx: any) {
   const result = await svc.register(ctx.body);
   setAuthCookie(ctx, result.token);
   ctx.set.status = 201;
-  return { data: result };
+  // V2-04: token stays out of the response body — the httpOnly cookie is the
+  // only browser session channel; body export would negate httpOnly's benefit.
+  return { data: { user: result.user } };
 }
 
 export async function registerCustomer(ctx: any) {
@@ -33,17 +38,20 @@ export async function registerCustomer(ctx: any) {
   const result = await svc.register({ ...ctx.body, api_key: undefined });
   setAuthCookie(ctx, result.token);
   ctx.set.status = 201;
-  return { data: result };
+  return { data: { user: result.user } };
 }
 
 export async function login(ctx: any) {
   await verifyTurnstileToken(ctx.body?.cfTurnstileResponse || ctx.headers?.["cf-turnstile-response"]);
   const result = await svc.login(ctx.body);
   setAuthCookie(ctx, result.token);
-  return { data: result };
+  // V2-04: session flows only through the httpOnly cookie.
+  return { data: { user: result.user } };
 }
 
 export async function logout(ctx: any) {
+  const userId = Number(ctx.store?.user?.sub);
+  if (userId) await svc.revokeSessions(userId);
   clearAuthCookie(ctx);
   return { success: true, message: "Logged out" };
 }
@@ -90,7 +98,8 @@ export async function verifyOtp(ctx: any) {
   const { email, code } = ctx.body;
   const result = await svc.verifyLoginOtp(email, code);
   setAuthCookie(ctx, result.token);
-  return { data: result };
+  // V2-04: session flows only through the httpOnly cookie.
+  return { data: { user: result.user } };
 }
 
 export async function forgotPassword(ctx: any) {

@@ -50,6 +50,13 @@
       "when": 1786298976730,
       "tag": "0006_privacy_purchased",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1788066175609,
+      "tag": "0007_security_admin_sessions_webhooks",
+      "breakpoints": true
     }
   ]
 }

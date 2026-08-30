@@ -45,7 +45,7 @@ export const registerSchema = t.Object({
   phone_cc: t.Optional(t.String()),
   phone: t.Optional(t.String()),
   cfTurnstileResponse: t.Optional(t.String()),
-  code: t.Optional(t.String()),
+  code: t.String({ minLength: 6, maxLength: 6, pattern: "^\\d{6}$" }),
 });
 
 export const customerRegisterSchema = t.Object({
@@ -93,7 +93,7 @@ export const customerRegisterSchema = t.Object({
     transform: (v: string) => sanitizePhone(v),
   }),
   cfTurnstileResponse: t.Optional(t.String()),
-  code: t.Optional(t.String()),
+  code: t.String({ minLength: 6, maxLength: 6, pattern: "^\\d{6}$" }),
 });
 
 export const loginSchema = t.Object({

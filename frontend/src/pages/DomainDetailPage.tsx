@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { Button, CardSkeleton, Modal, InfoBanner, ConfirmDialog, toast, PaymentModal } from "../components/ui";
 import { api } from "../lib/api";
-import type { Domain } from "../lib/types";
+import { hasResellerCapabilities, type Domain } from "../lib/types";
 import { useAuth } from "../contexts/AuthContext";
 import { useSettings } from "../contexts/SettingsContext";
 
@@ -29,7 +29,7 @@ export default function DomainDetailPage() {
   const { settings } = useSettings();
   const { id } = useParams();
   const { user } = useAuth();
-  const isReseller = user?.role === "reseller";
+  const isReseller = hasResellerCapabilities(user?.role);
   const [domain, setDomain] = useState<Domain | null>(null);
   const isIdDomain = (domain?.tld || "").toLowerCase().endsWith("id");
   const [loading, setLoading] = useState(true);

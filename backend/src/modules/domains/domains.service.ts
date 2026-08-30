@@ -4,6 +4,7 @@ import { eq, and, like, inArray, or, sql, ne } from "drizzle-orm";
 import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { resolveResellerCreds } from "../../lib/reseller-creds";
+import { loadTenantScope } from "../../lib/tenant-access";
 import dns from "node:dns/promises";
 
 async function checkDnsAvailability(domain: string): Promise<boolean> {
@@ -727,15 +728,11 @@ export async function listDomains(
   const offset = (page - 1) * perPage;
 
   const conditions: any[] = [];
-
-  if (user.role === "customer") {
-    const custs = await db.select({ id: customers.id }).from(customers).where(or(eq(customers.userId, user.id), eq(customers.email, user.email || "")));
-    const allowedCustomerIds = custs.map((c) => c.id);
-
-    const accessCondition = allowedCustomerIds.length > 0
-      ? or(eq(domains.userId, user.id), inArray(domains.customerId, allowedCustomerIds))
-      : eq(domains.userId, user.id);
-    conditions.push(accessCondition);
+  const scope = await loadTenantScope(user);
+  if (!scope.unrestricted) {
+    const owned: any[] = [inArray(domains.userId, scope.userIds)];
+    if (scope.customerIds.length > 0) owned.push(inArray(domains.customerId, scope.customerIds));
+    conditions.push(or(...owned));
   }
 
   if (params?.search) conditions.push(like(domains.domainName, `%${params.search}%`));
@@ -786,15 +783,11 @@ export async function getDomain(userParam: any, lookup: string | number) {
   const userRole = user.role || "reseller";
 
   const conditions: any[] = [];
-
-  if (userRole === "customer") {
-    const custs = await db.select({ id: customers.id }).from(customers).where(or(eq(customers.userId, userId), eq(customers.email, user.email || "")));
-    const allowedCustomerIds = custs.map((c) => c.id);
-
-    const accessCondition = allowedCustomerIds.length > 0
-      ? or(eq(domains.userId, userId), inArray(domains.customerId, allowedCustomerIds))
-      : eq(domains.userId, userId);
-    conditions.push(accessCondition);
+  const scope = await loadTenantScope(user);
+  if (!scope.unrestricted) {
+    const owned: any[] = [inArray(domains.userId, scope.userIds)];
+    if (scope.customerIds.length > 0) owned.push(inArray(domains.customerId, scope.customerIds));
+    conditions.push(or(...owned));
   }
 
   // Support lookup by local id, liquidOrderId, or domainName

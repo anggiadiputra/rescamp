@@ -7,6 +7,7 @@ import {
   Globe, LogIn, UserPlus, LogOut, User, Menu, ChevronDown, Wallet, X, Eye, EyeOff, LayoutDashboard,
 } from "lucide-react";
 import { Button } from "../ui";
+import { hasResellerCapabilities } from "../../lib/types";
 
 export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const { user, logout } = useAuth();
@@ -24,7 +25,7 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const brand = settings.brand_name || "Ekstensi.id";
 
   useEffect(() => {
-    if (user && user.role === "reseller") {
+    if (user && hasResellerCapabilities(user.role)) {
       api.get<any>("/billing/balance")
         .then((res) => {
           const raw = typeof res?.balance === "number" ? res.balance : (typeof res === "number" ? res : null);
@@ -135,7 +136,7 @@ export function Navbar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
               )}
 
               {/* Balance Badge (Reseller Only - Dashboard Layout Only) */}
-              {user?.role === "reseller" && onToggleSidebar && typeof balance === "number" && (
+              {hasResellerCapabilities(user?.role) && onToggleSidebar && typeof balance === "number" && (
                 <div className="hidden sm:flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl bg-gray-50 border border-gray-200/80 text-sm font-extrabold text-gray-900 shadow-2xs">
                   <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
                     <Wallet className="w-3.5 h-3.5" />

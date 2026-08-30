@@ -9,7 +9,7 @@ interface RateLimitStore {
   lastRefill: number;
 }
 
-const store = new Map<string, RateLimitStore>();
+const stores = new Set<Map<string, RateLimitStore>>();
 
 interface RateLimitOptions {
   maxRequests: number;
@@ -18,6 +18,8 @@ interface RateLimitOptions {
 
 export function createRateLimiter(options: RateLimitOptions) {
   const { maxRequests, windowMs } = options;
+  const store = new Map<string, RateLimitStore>();
+  stores.add(store);
 
   return {
     /**
@@ -155,9 +157,11 @@ export function rateLimit(
 // Eviction: drop stale buckets so spoofed/unbounded keys can't grow memory forever
 setInterval(() => {
   const now = Date.now();
-  for (const [key, record] of store) {
-    if (now - record.lastRefill > 30 * 60 * 1000) {
-      store.delete(key);
+  for (const store of stores) {
+    for (const [key, record] of store) {
+      if (now - record.lastRefill > 30 * 60 * 1000) {
+        store.delete(key);
+      }
     }
   }
 }, 5 * 60 * 1000);

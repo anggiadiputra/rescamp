@@ -3,6 +3,23 @@ import { env } from "../config/env";
 import { AppError } from "./error";
 import { getSystemSettings } from "../modules/settings/settings.service";
 
+export function isWebhookTimestampFresh(timestamp: string, nowMs = Date.now(), toleranceSeconds = 300): boolean {
+  const seconds = Number(timestamp);
+  if (!Number.isFinite(seconds)) return false;
+  return Math.abs(Math.floor(nowMs / 1000) - seconds) <= toleranceSeconds;
+}
+
+export function isDuplicateKeyError(error: any): boolean {
+  return error?.errno === 1062
+    || String(error?.code || "").includes("ER_DUP_ENTRY")
+    || String(error?.message || "").includes("Duplicate entry");
+}
+
+export function buildWebhookReceiptId(svixId: string | undefined, rawBody: string): string {
+  if (svixId?.trim()) return svixId.trim();
+  return `sha256:${crypto.createHash("sha256").update(rawBody).digest("hex")}`;
+}
+
 /**
  * Read Sumopod credentials from DB (app_settings) with env fallback.
  * DB values take precedence — env is fallback when DB row missing/empty.
@@ -151,6 +168,7 @@ export class SumopodClient {
       if (!secret || !svixId || !svixTimestamp || !svixSignature) {
         return false;
       }
+      if (!isWebhookTimestampFresh(svixTimestamp)) return false;
       const secretBytes = Buffer.from(secret.replace("whsec_", ""), "base64");
       const signedContent = `${svixId}.${svixTimestamp}.${rawBody}`;
 
@@ -164,7 +182,11 @@ export class SumopodClient {
         return parts.length > 1 ? parts[1] : parts[0];
       });
 
-      return signatures.includes(expectedSignature);
+      const expected = Buffer.from(expectedSignature);
+      return signatures.some((signature) => {
+        const candidate = Buffer.from(signature || "");
+        return candidate.length === expected.length && crypto.timingSafeEqual(candidate, expected);
+      });
     } catch (e) {
       console.error("Webhook signature verification failed with error:", e);
       return false;

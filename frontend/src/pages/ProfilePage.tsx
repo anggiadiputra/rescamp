@@ -3,6 +3,7 @@ import { Card, Button, InfoBanner, LoadingSpinner, toast } from "../components/u
 import { api } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import { User, Lock, Building, MapPin, Mail, ShieldCheck, CreditCard, EyeOff, Pencil, X, CheckCircle2, AlertCircle } from "lucide-react";
+import { hasResellerCapabilities } from "../lib/types";
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -62,7 +63,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetchProfile();
-    if (user?.role === "reseller") fetchResellerData();
+    if (hasResellerCapabilities(user?.role)) fetchResellerData();
   }, [fetchProfile, fetchResellerData, user?.role]);
 
   function startEdit() {
@@ -155,7 +156,7 @@ export default function ProfilePage() {
         </Card>
 
         {/* Reseller Info */}
-        {user?.role === "reseller" && (
+        {hasResellerCapabilities(user?.role) && (
           <Card className="p-6 bg-white border border-indigo-200 shadow-xs rounded-xl space-y-4">
             <div className="flex items-center gap-2 border-b border-indigo-100 pb-3">
               <CreditCard className="w-5 h-5 text-indigo-600" />
