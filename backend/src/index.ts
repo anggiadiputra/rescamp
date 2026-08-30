@@ -15,9 +15,6 @@ import { AppError } from "./lib/error";
 import { securityHeaders } from "./lib/security-headers";
 import { assertSafeCorsConfig, isOriginAllowed, parseAllowedOrigins } from "./lib/cors-policy";
 
-// Ensure MySQL database schema (ENUMS) match codebase
-await ensureDatabaseSchema();
-
 const isProduction = process.env.NODE_ENV === "production";
 const allowedOrigins = parseAllowedOrigins(env.CORS_ORIGIN || "");
 assertSafeCorsConfig(allowedOrigins, isProduction);
@@ -102,13 +99,10 @@ const app = new Elysia()
       .use(forwardingRoutes)
       .use(paymentRoutes)
       .use(settingsRoutes)
-  )
-  .listen(env.PORT);
-
-console.log(`🚀 Server running on port ${env.PORT}`);
+  );
 
 // Background sweeper: expire pending_payment + retry action_required every 15 minutes
-let sweepTimer: Timer | null = null;
+let sweepTimer: any = null;
 function startAutoExpireSweeper() {
   if (sweepTimer) return;
   sweepExpiredTransactions().catch((e) => console.warn("[sweeper] initial run failed:", e));
@@ -118,4 +112,22 @@ function startAutoExpireSweeper() {
     sweepActionRequiredRetries().catch((e) => console.warn("[sweeper] action_required run failed:", e));
   }, 15 * 60 * 1000);
 }
-startAutoExpireSweeper();
+
+async function bootstrap() {
+  // Ensure MySQL database schema (ENUMS) match codebase
+  try {
+    await ensureDatabaseSchema();
+  } catch (err: any) {
+    console.warn("[db] ensureDatabaseSchema error during bootstrap:", err?.message || err);
+  }
+
+  app.listen(env.PORT);
+  console.log(`🚀 Server running on port ${env.PORT}`);
+
+  startAutoExpireSweeper();
+}
+
+bootstrap().catch((err) => {
+  console.error("[FATAL] Server bootstrap failed:", err);
+  process.exit(1);
+});
