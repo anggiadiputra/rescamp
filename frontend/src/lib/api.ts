@@ -14,7 +14,6 @@ const PUBLIC_PATHS = [
   "/register",
   "/forgot-password",
   "/reset-password",
-  "/register-reseller",
   "/prices",
   "/verify",
 ];

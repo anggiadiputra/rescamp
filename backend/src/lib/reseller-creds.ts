@@ -80,7 +80,7 @@ export async function resolveResellerCreds(userId?: number): Promise<ResellerCre
         if (!parentUser) {
           const [master] = await db.select().from(users).where(
             and(
-              sql`${users.role} IN ('reseller', 'admin')`,
+              sql`${users.role} = 'admin'`,
               sql`(${users.apiKey} IS NOT NULL OR ${users.apiKeyEncrypted} IS NOT NULL)`
             )
           ).limit(1);
@@ -115,7 +115,7 @@ export async function resolveResellerCreds(userId?: number): Promise<ResellerCre
   if (!resellerId || !apiKey) {
     const [master] = await db.select().from(users).where(
       and(
-        sql`${users.role} IN ('reseller', 'admin')`,
+        sql`${users.role} = 'admin'`,
         sql`(${users.apiKey} IS NOT NULL OR ${users.apiKeyEncrypted} IS NOT NULL)`
       )
     ).limit(1);
@@ -205,7 +205,7 @@ export async function resolveCredsFromUser(user: {
     if (!parentUser) {
       const [master] = await db.select().from(users).where(
         and(
-          sql`${users.role} IN ('reseller', 'admin')`,
+          sql`${users.role} = 'admin'`,
           sql`(${users.apiKey} IS NOT NULL OR ${users.apiKeyEncrypted} IS NOT NULL)`
         )
       ).limit(1);
@@ -249,7 +249,7 @@ export async function resolveCredsFromUser(user: {
   if (!resellerId || !apiKey) {
     const [master] = await db.select().from(users).where(
       and(
-        sql`${users.role} IN ('reseller', 'admin')`,
+        sql`${users.role} = 'admin'`,
         sql`(${users.apiKey} IS NOT NULL OR ${users.apiKeyEncrypted} IS NOT NULL)`
       )
     ).limit(1);

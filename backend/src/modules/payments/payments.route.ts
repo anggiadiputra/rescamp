@@ -121,10 +121,11 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
         }
 
         // H10: ownership check — a user may only read their own transaction.
-        // Resellers may read transactions of their own customers.
+        // Operators (admin, the normalized reseller role) may read transactions
+        // of their own customers. B-6: legacy "reseller" role no longer exists.
         if (tx.userId !== userId) {
           let ownedByCustomer = role === "admin";
-          if (role === "reseller" && tx.customerId) {
+          if (role === "admin" && tx.customerId) {
             const [childCust] = await db.select({ id: customers.id }).from(customers)
               .where(and(eq(customers.id, tx.customerId), eq(customers.userId, userId)))
               .limit(1);

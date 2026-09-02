@@ -4,9 +4,15 @@ export interface User {
   name: string;
 }
 
-export function hasResellerCapabilities(role: string | null | undefined): boolean {
-  return role === "reseller" || role === "admin";
+// B-6 role normalization: a reseller IS an admin (the platform operator).
+// Exactly two roles exist: admin (operator) and customer (buyer). The legacy
+// "reseller" role is no longer accepted anywhere.
+export function hasOperatorCapabilities(role: string | null | undefined): boolean {
+  return role === "admin";
 }
+
+// Alias kept for any remaining call sites.
+export const hasResellerCapabilities = hasOperatorCapabilities;
 
 export interface DomainContact {
   contactId?: string | number;

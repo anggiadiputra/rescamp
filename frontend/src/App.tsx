@@ -5,7 +5,7 @@ import { SettingsProvider } from "./contexts/SettingsContext";
 import { DataCacheProvider } from "./contexts/DataCacheContext";
 import { DashboardLayout } from "./components/layout/DashboardLayout";
 import { PublicLayout } from "./components/layout/PublicLayout";
-import { hasResellerCapabilities } from "./lib/types";
+import { hasOperatorCapabilities } from "./lib/types";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
@@ -25,7 +25,6 @@ const PricesPage = lazy(() => import("./pages/PricesPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const CompleteProfilePage = lazy(() => import("./pages/CompleteProfilePage"));
-const RegisterResellerPage = lazy(() => import("./pages/RegisterResellerPage"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const VerifyPage = lazy(() => import("./pages/VerifyPage"));
 
@@ -45,20 +44,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <DashboardLayout>{children}</DashboardLayout>;
 }
 
-function ResellerRoute({ children }: { children: React.ReactNode }) {
+// B-6: OperatorRoute replaces ResellerRoute+AdminRoute. A reseller IS an
+// admin (the platform operator); the legacy third role no longer exists.
+function OperatorRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <PageLoader />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role === "customer" && !user.hasProfile) return <Navigate to="/complete-profile" replace />;
-  if (!hasResellerCapabilities(user.role)) return <Navigate to="/dashboard" replace />;
-  return <DashboardLayout>{children}</DashboardLayout>;
-}
-
-function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
-  if (loading) return <PageLoader />;
-  if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== "admin") return <Navigate to="/dashboard" replace />;
+  if (!hasOperatorCapabilities(user.role)) return <Navigate to="/dashboard" replace />;
   return <DashboardLayout>{children}</DashboardLayout>;
 }
 
@@ -82,7 +75,6 @@ export default function App() {
                 <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
                 <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
                 <Route path="/reset-password" element={<PublicLayout><ResetPasswordPage /></PublicLayout>} />
-                <Route path="/register-reseller" element={<PublicRoute><RegisterResellerPage /></PublicRoute>} />
                 <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
                 <Route path="/domains" element={<ProtectedRoute><DomainsPage /></ProtectedRoute>} />
                 <Route path="/domains/register" element={<ProtectedRoute><DomainRegisterPage /></ProtectedRoute>} />
@@ -90,12 +82,12 @@ export default function App() {
                 <Route path="/domains/:id/dns" element={<ProtectedRoute><DnsManagePage /></ProtectedRoute>} />
                 <Route path="/domains/:id/forwarding" element={<ProtectedRoute><ForwardingPage /></ProtectedRoute>} />
                 <Route path="/domains/transfer" element={<ProtectedRoute><DomainTransferPage /></ProtectedRoute>} />
-                <Route path="/customers" element={<ResellerRoute><CustomersPage /></ResellerRoute>} />
+                <Route path="/customers" element={<OperatorRoute><CustomersPage /></OperatorRoute>} />
                 <Route path="/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />
                 <Route path="/billing/pay/:orderId" element={<BillingPayPage />} />
                 <Route path="/prices" element={<ProtectedRoute><PricesPage /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-                <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
+                <Route path="/settings" element={<OperatorRoute><SettingsPage /></OperatorRoute>} />
                 <Route path="/complete-profile" element={<CompleteProfilePage />} />
                 <Route path="/verify/:param1?/:param2?/:param3?" element={<VerifyPage />} />
                 <Route path="/verify/*" element={<VerifyPage />} />

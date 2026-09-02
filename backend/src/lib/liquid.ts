@@ -3,6 +3,25 @@ import { env } from "../config/env";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 
+// B-3: map provider failures to generic client-facing messages. The exact
+// provider error stays in server logs only. Path is used (not returned) to
+// pick a category-appropriate message.
+function mapLiquidErrorToClient(status: number, path: string): string {
+  if (status === 401 || status === 403) {
+    return "Koneksi ke registrar gagal. Silakan coba lagi nanti.";
+  }
+  if (status === 404 || path.includes("/availability")) {
+    return "Layanan domain tidak dapat dihubungi saat ini. Silakan coba lagi.";
+  }
+  if (status === 429) {
+    return "Terlalu banyak permintaan ke registrar. Silakan coba beberapa saat lagi.";
+  }
+  if (status >= 500) {
+    return "Registrar sedang mengalami gangguan. Silakan coba beberapa saat lagi.";
+  }
+  return "Permintaan ke registrar gagal. Periksa kembali data Anda atau coba lagi nanti.";
+}
+
 export class LiquidClient {
   private baseURL: string;
   private authHeader: string;
@@ -46,7 +65,10 @@ export class LiquidClient {
           console.error(`[Resellercamp API Error] ${method} ${path} [HTTP ${res.status}]:`, typeof data === "object" ? JSON.stringify(data) : data);
         }
         const status = res.status === 401 || res.status === 403 ? 502 : res.status;
-        throw new AppError(errMsg, status);
+        // B-3: provider error text can leak internals (endpoints, account
+        // structure, quota/balance info). Full detail stays in the server log
+        // above; the client gets a generic, actionable message instead.
+        throw new AppError(mapLiquidErrorToClient(res.status, path), status);
       }
 
       // Detect silent failures: HTTP 200 but response is just {"message":""} with no payload keys.

@@ -1,17 +1,18 @@
 import { useState, useEffect } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Card, Button, InfoBanner, PasswordInput } from "../components/ui";
 import { api } from "../lib/api";
 import { Lock, Key, Mail, CheckCircle2, ShieldCheck, RefreshCw } from "lucide-react";
 
 export default function ResetPasswordPage() {
-  const [searchParams] = useSearchParams();
+  // SECURITY (audit B-item): the reset token is ONLY read from the URL FRAGMENT
+  // (#token=...&email=...), never from the query string — fragments are not
+  // sent to servers/proxies and don't leak into Referer headers or logs.
+  // buildResetLink (backend) already emits hash-fragment links.
   const hashParams = new URLSearchParams(window.location.hash.slice(1));
-  const hashToken = hashParams.get("token") || "";
-  const hashEmail = hashParams.get("email") || "";
-  const initialToken = searchParams.get("token") || searchParams.get("code") || hashToken;
-  const initialEmail = searchParams.get("email") || hashEmail;
-  const wasSent = searchParams.get("sent") === "true";
+  const initialToken = hashParams.get("token") || "";
+  const initialEmail = hashParams.get("email") || "";
+  const wasSent = hashParams.get("sent") === "true";
 
   const [email, setEmail] = useState(initialEmail);
   const [inputToken, setInputToken] = useState(initialToken);
@@ -26,19 +27,8 @@ export default function ResetPasswordPage() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
 
-  // Sync from URL params or hash if present
-  useEffect(() => {
-    const qToken = searchParams.get("token") || searchParams.get("code") || searchParams.get("otp");
-    const qEmail = searchParams.get("email");
-    const hParams = new URLSearchParams(window.location.hash.slice(1));
-    const hToken = hParams.get("token");
-    const hEmail = hParams.get("email");
-
-    const t = qToken || hToken;
-    const em = qEmail || hEmail;
-    if (t) setInputToken(t);
-    if (em) setEmail(em);
-  }, [searchParams]);
+  // No URL-sync effect: the token/email arrive only via the hash fragment,
+  // which is read once at mount (see hashParams above).
 
   // Countdown timer for resend OTP
   useEffect(() => {

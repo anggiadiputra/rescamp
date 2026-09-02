@@ -503,8 +503,10 @@ export function buildResetLink(frontendUrl: string, token: string, email: string
   return `${frontendUrl.replace(/\/$/, "")}/reset-password#${fragment}`;
 }
 
-// H7: OTPs are stored encrypted only; this helper decrypts-and-compares with a
-// legacy fallback for rows written before encryption was enforced.
+// H7: OTPs are stored encrypted ONLY. The legacy plaintext fallback
+// (record.code === input) was removed after migrating the 58 historical
+// plaintext rows (all already used=1) — the `code` column is now kept empty
+// for every row and never compared. See B-1 in securityoptimation.md.
 async function otpCodeMatches(record: any, input: string): Promise<boolean> {
   if (record.codeEncrypted) {
     try {
@@ -513,7 +515,8 @@ async function otpCodeMatches(record: any, input: string): Promise<boolean> {
       return false;
     }
   }
-  return record.code === input.trim();
+  // No encrypted code: row is legacy/expired — reject. Never compare plaintext.
+  return false;
 }
 
 export async function sendLoginOtp(email: string, password: string) {

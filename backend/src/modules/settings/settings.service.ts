@@ -306,7 +306,7 @@ export async function updateSystemSettings(data: Record<string, any>): Promise<R
   if (updatedResellerId || updatedResellerApiKey) {
     clearCredsCache();
     try {
-      const [master] = await db.select().from(users).where(sql`${users.role} IN ('reseller', 'admin')`).limit(1);
+      const [master] = await db.select().from(users).where(sql`${users.role} = 'admin'`).limit(1);
       if (master) {
         const updatePayload: Record<string, any> = {};
         if (updatedResellerId) updatePayload.resellerId = updatedResellerId;
@@ -487,7 +487,7 @@ export async function testLiquidConnection(resellerId?: string, apiKey?: string)
 
   if (!rId || !key) {
     const { resolveResellerCreds } = await import("../../lib/reseller-creds");
-    const [reseller] = await db.select().from(users).where(sql`${users.role} IN ('admin', 'reseller')`).limit(1);
+    const [reseller] = await db.select().from(users).where(sql`${users.role} = 'admin'`).limit(1);
     if (reseller) {
       const creds = await resolveResellerCreds(reseller.id);
       rId = creds.resellerId;

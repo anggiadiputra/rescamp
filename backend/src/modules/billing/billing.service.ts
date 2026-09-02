@@ -344,7 +344,7 @@ export async function listTransactions(
   params?: { type?: string; status?: string; category?: string; search?: string; page?: number | string; per_page?: number | string },
 ) {
   const userId = typeof userParam === "object" ? userParam.id : userParam;
-  const userRole = typeof userParam === "object" ? userParam.role : "reseller";
+  const userRole = typeof userParam === "object" ? userParam.role : "admin";
 
   const page = Number(params?.page) || 1;
   const perPage = Number(params?.per_page) || 20;
@@ -407,9 +407,10 @@ export async function listTransactions(
   let where = userCondition;
   if (params?.type) where = and(where, eq(transactions.type, params.type as any)) as any;
   if (params?.status) where = and(where, eq(transactions.status, params.status as any)) as any;
-  if (userRole === "reseller" && params?.category === "retail") {
+  // B-6: "reseller" is the legacy name for the operator (admin) role.
+  if (userRole === "admin" && params?.category === "retail") {
     where = and(where, sql`(${transactions.metadata} IS NULL OR ${transactions.metadata} NOT LIKE '%"syncedFromLiquid":true%')`) as any;
-  } else if (userRole === "reseller" && params?.category === "wholesale") {
+  } else if (userRole === "admin" && params?.category === "wholesale") {
     where = and(where, sql`${transactions.metadata} LIKE '%"syncedFromLiquid":true%'`) as any;
   }
   if (params?.search && String(params.search).trim()) {
@@ -540,7 +541,7 @@ export async function listTransactionsFromLiquid(
 
 export async function getTransaction(userParam: number | { id: number; role?: string | null }, txnId: number | string) {
   const userId = typeof userParam === "object" ? userParam.id : userParam;
-  const userRole = typeof userParam === "object" ? userParam.role : "reseller";
+  const userRole = typeof userParam === "object" ? userParam.role : "admin";
 
   const scope = await loadTenantScope({ id: userId, role: userRole });
 
@@ -566,7 +567,7 @@ export async function getTransaction(userParam: number | { id: number; role?: st
   );
 
   // 2. If not found in DB and user is a reseller, try live fetch from Resellercamp API
-  if (!txn && userRole === "reseller") {
+  if (!txn && userRole === "admin") {
     try {
       const syncCreds = await resolveResellerCreds(userId);
       if (syncCreds.resellerId && syncCreds.apiKey) {
