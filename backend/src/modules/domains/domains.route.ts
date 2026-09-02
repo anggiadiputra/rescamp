@@ -10,7 +10,11 @@ export const domainRoutes = new Elysia({ prefix: "/domains" })
   .get("/availability", h.checkAvailability as any, { beforeHandle: rateLimit(domainCheckRateLimiter, "Terlalu banyak permintaan cek domain."), detail: { tags: ["Domains"], summary: "Check availability" } })
   .get("/bulk-availability", h.bulkAvailability as any, { beforeHandle: rateLimit(domainCheckRateLimiter, "Terlalu banyak permintaan cek domain."), detail: { tags: ["Domains"], summary: "Bulk availability across TLDs" } })
   .get("/suggestion", h.suggestions as any, { beforeHandle: rateLimit(domainCheckRateLimiter, "Terlalu banyak permintaan rekomendasi domain."), detail: { tags: ["Domains"], summary: "Suggestions" } })
-  .post("/verify-contact", h.verifyContactPublic as any, { beforeHandle: rateLimit(authRateLimiter, "Terlalu banyak permintaan verifikasi kontak."), detail: { tags: ["Domains"], summary: "Public ICANN RAA / Contact verification" } })
+  // A-1 REMOVED: public POST /verify-contact was a fake verification endpoint —
+  // it always returned status:"verified" and probed reseller master credentials
+  // (hardcoded user 1) with arbitrary IDs (enumeration oracle). If public contact
+  // verification is ever needed, it must use a signed single-use token issued
+  // when the RAA email is sent. See test/verify-contact-removed.test.ts.
   .guard({ beforeHandle: [authGuard, rateLimit(authenticatedRateLimiter, "Terlalu banyak permintaan domain. Silakan coba lagi nanti.")] }, (app) =>
     app
       .post("/", h.register as any, { body: domainRegisterSchema, detail: { tags: ["Domains"], summary: "Register domain" } })

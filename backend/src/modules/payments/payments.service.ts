@@ -1,6 +1,7 @@
 import { db } from "../../db";
 import { transactions, domains, users, customers } from "../../db/schema";
 import { eq, and, sql, or } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import { sumopodClient } from "../../lib/sumopod";
 import { LiquidClient } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
@@ -25,9 +26,89 @@ export interface CreateDomainOrderPayload {
 export async function createDomainOrderPayment(payload: CreateDomainOrderPayload) {
   const years = payload.years || 1;
   const tld = payload.tld || payload.domainName.split(".").slice(1).join(".") || "com";
-  const fullDomain = (payload.domainName.includes(".") 
-    ? payload.domainName 
+  const fullDomain = (payload.domainName.includes(".")
+    ? payload.domainName
     : `${payload.domainName}.${tld}`).toLowerCase().trim();
+
+  // A-4 (race condition fix): the idempotency key is derived from the ORDER
+  // INTENT (user + type + domain + years + customer), NOT from this attempt.
+  // Concurrent identical submissions therefore compute the SAME orderId, and
+  // the UNIQUE index on order_id turns the INSERT into the atomic gate.
+  // The loser of the race gets ER_DUP_ENTRY and returns the winner's payment
+  // link instead of creating a second Sumopod payment + transaction.
+  const intentKey = `${payload.userId}:${payload.type}:${fullDomain}:${years}:${payload.customerId ?? 0}:${payload.domainId ?? 0}`;
+  const intentHash = createHash("sha256").update(intentKey).digest("hex").slice(0, 24);
+  const orderId = `INV-${payload.type.toUpperCase().slice(0, 3)}-${intentHash}`;
+
+  // Claim gate: try to insert a placeholder transaction row FIRST (before any
+  // external API call). Only the winner proceeds to create the payment link.
+  let txId: number;
+  let winnerRow: typeof transactions.$inferSelect | null = null;
+  try {
+    const [claim] = await db.insert(transactions).values({
+      userId: payload.userId,
+      customerId: payload.customerId ?? null,
+      type: payload.type,
+      amount: String(payload.amount),
+      currency: "IDR",
+      paymentGateway: "sumopod",
+      orderId,
+      status: "pending_payment" as const,
+      paymentStatus: "pending" as const,
+      description: `Domain ${payload.type} - ${fullDomain} (${years} yr) - ${orderId}`,
+      metadata: JSON.stringify({ orderId, domainName: fullDomain, tld, years, type: payload.type }),
+    });
+    txId = Number((claim as any).insertId);
+  } catch (err: any) {
+    const isDup = err?.errno === 1062 || String(err?.code || "").includes("ER_DUP_ENTRY") || String(err?.message || "").includes("Duplicate entry");
+    if (!isDup) throw err;
+    // Lost the race: fetch the winner's transaction. If it already has a
+    // payment link, return it directly. If the winner is still mid-flight
+    // (no link yet), wait briefly and re-read before falling back.
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const [existing] = await db.select().from(transactions).where(eq(transactions.orderId, orderId)).limit(1);
+      if (existing?.paymentLinkUrl) {
+        return {
+          transaction_id: existing.id,
+          transactionId: existing.id,
+          order_id: existing.orderId || "",
+          orderId: existing.orderId || "",
+          payment_id: existing.paymentId || "",
+          paymentId: existing.paymentId || "",
+          payment_link_url: existing.paymentLinkUrl,
+          paymentLinkUrl: existing.paymentLinkUrl,
+          amount: Number(existing.amount),
+          status: existing.status,
+          expires_at: existing.expiresAt ? new Date(existing.expiresAt).toISOString() : "",
+          expiresAt: existing.expiresAt ? new Date(existing.expiresAt).toISOString() : "",
+        };
+      }
+      if (existing && existing.status !== "pending_payment") {
+        // winner finished with a terminal state — return it as-is
+        winnerRow = existing;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    const [finalRow] = winnerRow
+      ? [winnerRow]
+      : await db.select().from(transactions).where(eq(transactions.orderId, orderId)).limit(1);
+    if (!finalRow) throw err;
+    return {
+      transaction_id: finalRow.id,
+      transactionId: finalRow.id,
+      order_id: finalRow.orderId || "",
+      orderId: finalRow.orderId || "",
+      payment_id: finalRow.paymentId || "",
+      paymentId: finalRow.paymentId || "",
+      payment_link_url: finalRow.paymentLinkUrl || "",
+      paymentLinkUrl: finalRow.paymentLinkUrl || "",
+      amount: Number(finalRow.amount),
+      status: finalRow.status,
+      expires_at: finalRow.expiresAt ? new Date(finalRow.expiresAt).toISOString() : "",
+      expiresAt: finalRow.expiresAt ? new Date(finalRow.expiresAt).toISOString() : "",
+    };
+  }
 
   // Deduplication & Concurrent Double-Submit Lock:
   // If user submits exact same domain order within 10s and has active pending_payment transaction, return existing payment link.
@@ -41,7 +122,9 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
         eq(transactions.type, payload.type),
         eq(transactions.status, "pending_payment"),
         sql`JSON_UNQUOTE(JSON_EXTRACT(${transactions.metadata}, '$.domainName')) = ${fullDomain}`,
-        sql`${transactions.createdAt} >= ${tenSecondsAgo}`
+        sql`${transactions.createdAt} >= ${tenSecondsAgo}`,
+        // A-4: the claim row we just inserted must not match itself
+        sql`${transactions.id} <> ${txId}`
       )
     )
     .limit(1);
@@ -201,9 +284,9 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
   }
 
   // --- Step 3: Create Payment Link on Sumopod Payment Gateway ---
-  // N21: append UUID entropy so concurrent same-ms submits never collide
-  // Unified prefix INV- across all invoice generations (retail + wholesale).
-  const orderId = `INV-${payload.type.toUpperCase().slice(0, 3)}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+  // A-4: orderId was already derived from the order INTENT at the top of this
+  // function (deterministic hash), so a concurrent duplicate submission can
+  // never create a second payment link for the same intent.
   const sumopodRes = await sumopodClient.createPayment({
     orderId,
     amount: payload.amount,
@@ -217,14 +300,13 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
         : `${sumopodRes.expires_at.replace(" ", "T")}Z`)
     : new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
-  // --- Step 4: Save Transaction to Local DB ---
+  // --- Step 4: Update the claimed transaction row with payment details ---
   // Use customer's userId (not reseller) so customer sees invoice in their billing
   let transactionUserId = payload.userId;
   if (validCustomerId) {
     const [cust] = await db.select({ userId: customers.userId }).from(customers).where(eq(customers.id, validCustomerId));
     if (cust?.userId) transactionUserId = cust.userId;
   }
-  let txId: number;
   const transactionData = {
     userId: transactionUserId,
     customerId: validCustomerId,
@@ -260,32 +342,8 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     }),
   };
 
-  const [existingTx] = liquidTransactionId
-    ? await db.select({ id: transactions.id }).from(transactions).where(eq(transactions.liquidTransactionId, String(liquidTransactionId))).limit(1)
-    : [null];
-
-  if (existingTx) {
-    await db.update(transactions).set(transactionData).where(eq(transactions.id, existingTx.id));
-    txId = existingTx.id;
-  } else {
-    try {
-      const [insertRes] = await db.insert(transactions).values(transactionData);
-      txId = Number((insertRes as any).insertId);
-    } catch (err: any) {
-      const isDup = err?.errno === 1062 || String(err?.code || "").includes("ER_DUP_ENTRY") || String(err?.message || "").includes("Duplicate entry");
-      if (isDup && liquidTransactionId) {
-        const [dupTx] = await db.select({ id: transactions.id }).from(transactions).where(eq(transactions.liquidTransactionId, String(liquidTransactionId))).limit(1);
-        if (dupTx) {
-          await db.update(transactions).set(transactionData).where(eq(transactions.id, dupTx.id));
-          txId = dupTx.id;
-        } else {
-          throw err;
-        }
-      } else {
-        throw err;
-      }
-    }
-  }
+  // A-4: we own the claim row (txId) — UPDATE it instead of inserting a new one.
+  await db.update(transactions).set(transactionData).where(eq(transactions.id, txId));
 
   return {
     transaction_id: txId,

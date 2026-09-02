@@ -1,14 +1,15 @@
-import { db } from "../db";
-import { appSettings } from "../db/schema";
 import { env } from "../config/env";
+import { getSystemSettings } from "../modules/settings/settings.service";
 
 async function getFonnteConfig(): Promise<{ token: string; apiUrl: string }> {
-  const rows = await db.select().from(appSettings);
-  const map: Record<string, string> = {};
-  for (const r of rows) map[r.key] = r.value || "";
+  // Read through the settings service so the ENCRYPTED fonnte_token stored in
+  // app_settings (v2:ciphertext) is DECRYPTED before use. Same bug class as the
+  // Turnstile/Brevo fixes: reading app_settings directly submits raw ciphertext
+  // as the provider credential, which the provider always rejects.
+  const settings = await getSystemSettings();
   return {
-    token: map.fonnte_token || "",
-    apiUrl: map.fonnte_api_url || env.FONNTE_API_URL,
+    token: settings.fonnte_token?.trim() || "",
+    apiUrl: settings.fonnte_api_url || env.FONNTE_API_URL,
   };
 }
 
@@ -28,7 +29,7 @@ export async function checkWhatsApp(phone: string): Promise<{ registered: boolea
     const res = await fetch(`${apiUrl}/device`, {
       method: "POST",
       headers: {
-        Authorization: token,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ device_token: normalized }),

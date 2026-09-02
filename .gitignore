@@ -33,6 +33,16 @@ coverage
 *.lcov
 test
 **/test
+!backend/test/
+backend/test/*
+!backend/test/turnstile.test.ts
+!backend/test/email.test.ts
+!backend/test/security.test.ts
+!backend/test/session-probe.test.ts
+!backend/test/fonnte.test.ts
+!backend/test/verify-contact-removed.test.ts
+!backend/test/order-race.test.ts
+!backend/test/billing-invoice-option.test.ts
 
 # Databases & local sqlite
 *.db

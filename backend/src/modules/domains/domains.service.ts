@@ -1963,24 +1963,8 @@ export async function resendRaaVerification(user: { id?: number; resellerId: str
   return liquid.resendRaaVerification(domainRef);
 }
 
-export async function verifyContactPublicService(params: { customerId: string; contactId: string; email: string; rawParams: any }) {
-  console.log(`[domains.service] Executing public contact verification:`, params);
-  
-  try {
-    const creds = await resolveResellerCreds(1);
-    if (creds.resellerId && creds.apiKey && params.customerId) {
-      const liquid = await getLiquid(creds);
-      if (liquid && params.contactId) {
-        await liquid.getContactDetails(params.customerId, params.contactId).catch(() => null);
-      }
-    }
-  } catch (e) {
-    console.warn("[domains.service] liquid verify probe warning:", e);
-  }
-
-  return {
-    verifiedAt: new Date().toISOString(),
-    status: "verified",
-    email: params.email || undefined,
-  };
-}
+// A-1 REMOVED: verifyContactPublicService always returned status:"verified"
+// while probing reseller master credentials (resolveResellerCreds(1)) with
+// arbitrary customer/contact IDs. Deleted intentionally — a real public
+// verification flow requires a signed single-use token issued with the RAA
+// email. See test/verify-contact-removed.test.ts.

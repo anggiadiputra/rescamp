@@ -1,9 +1,23 @@
 import * as svc from "./auth.service";
 import { checkWhatsApp } from "../../lib/fonnte";
 import type { JwtPayload } from "../../lib/jwt";
-import { getJwtExpirySeconds } from "../../lib/jwt";
+import { getJwtExpirySeconds, verifyToken } from "../../lib/jwt";
 import { verifyTurnstileToken } from "../../lib/turnstile";
 import { AppError } from "../../lib/error";
+import { db } from "../../db";
+import { users } from "../../db/schema";
+import { eq } from "drizzle-orm";
+
+// Shared cookie reader (httpOnly session cookie) — same parsing rules as
+// the authGuard in middleware/auth.ts.
+function readCookie(cookieHeader: string | undefined, name: string): string | undefined {
+  if (!cookieHeader) return undefined;
+  for (const part of cookieHeader.split(";")) {
+    const [key, ...rest] = part.trim().split("=");
+    if (key === name && rest.length) return decodeURIComponent(rest.join("="));
+  }
+  return undefined;
+}
 
 // H8: JWT rides in an httpOnly cookie instead of frontend localStorage.
 // Bearer header still accepted for non-browser clients.
@@ -59,6 +73,52 @@ export async function logout(ctx: any) {
 export async function me(ctx: any) {
   const result = await svc.me(Number(ctx.store.user?.sub));
   return { data: result };
+}
+
+/**
+ * Bootstrap session probe for the SPA: ALWAYS 200.
+ * - No session  -> { data: { authenticated: false } } (no user data leaked)
+ * - Valid token -> { data: { authenticated: true, user: ... } }
+ * Unlike /auth/me it never answers 401, so a public page load produces no
+ * console noise. Short-circuits anonymous requests BEFORE token verification
+ * and DB access, so it cannot become a cheap DoS vector.
+ * Same security posture as /auth/me: httpOnly cookie/Bearer session,
+ * sessionVersion revocation applies, and it is idempotent (read-only).
+ */
+export async function session(ctx: any) {
+  const header = ctx.headers?.["authorization"] || ctx.headers?.["Authorization"];
+  let token: string | null = null;
+  if (typeof header === "string" && header.startsWith("Bearer ")) {
+    token = header.slice(7).trim();
+  } else {
+    const cookieHeader = ctx.headers?.["cookie"];
+    if (typeof cookieHeader === "string") {
+      token = readCookie(cookieHeader, "token") || null;
+    }
+  }
+
+  // Anonymous short-circuit: no token -> never 401, never touch the DB.
+  if (!token) {
+    return { data: { authenticated: false } };
+  }
+
+  try {
+    const payload = await verifyToken(token);
+    const userId = Number(payload.sub);
+    const [user] = await db.select({ sessionVersion: users.sessionVersion }).from(users).where(eq(users.id, userId)).limit(1);
+    if (!user || user.sessionVersion !== Number(payload.sv ?? 0)) {
+      return { data: { authenticated: false } };
+    }
+    const result = await svc.me(userId);
+    return { data: { authenticated: true, user: (result as any).user } };
+  } catch (err: any) {
+    // Invalid/expired/revoked token is indistinguishable from "no session":
+    // same 200 false envelope, no session oracle beyond what status codes exposed.
+    if (process.env.SESSION_PROBE_DEBUG === '1') {
+      console.error('[session probe] swallowed:', err?.message || err)
+    }
+    return { data: { authenticated: false } };
+  }
 }
 
 export async function getProfile(ctx: any) {

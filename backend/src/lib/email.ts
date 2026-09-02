@@ -1,11 +1,11 @@
-import { db } from "../db";
-import { appSettings } from "../db/schema";
 import { env } from "../config/env";
+import { getSystemSettings } from "../modules/settings/settings.service";
+import { AppError } from "./error";
 
 async function getEmailConfig() {
-  const rows = await db.select().from(appSettings);
-  const map: Record<string, string> = {};
-  for (const r of rows) map[r.key] = r.value || "";
+  // Read through the settings service so encrypted provider credentials are
+  // decrypted before they are sent to Kirisan or Brevo.
+  const map = await getSystemSettings();
 
   return {
     provider: (map.email_provider || "kirisan").toLowerCase(),
@@ -134,7 +134,7 @@ export async function sendEmail(
   const apiKey = cfg.brevoApiKey || cfg.smtpPass;
   if (!apiKey) {
     console.warn("[email] Brevo API Key / SMTP Password not configured, skipped send to", to);
-    return;
+    throw new AppError("Gagal mengirim email. Silakan coba lagi.", 503);
   }
 
   const subjectMap = {
@@ -165,6 +165,7 @@ export async function sendEmail(
   if (!res.ok) {
     const text = await res.text();
     console.error("[email] Brevo send failed:", text);
+    throw new AppError("Gagal mengirim email. Silakan coba lagi.", 502);
   } else {
     console.log(`[email] Successfully sent ${type} email via Brevo API to ${to}`);
   }

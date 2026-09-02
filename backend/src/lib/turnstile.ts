@@ -1,17 +1,13 @@
-import { db } from "../db";
-import { appSettings } from "../db/schema";
 import { AppError } from "./error";
 import { env } from "../config/env";
+import { getSystemSettings } from "../modules/settings/settings.service";
 
 let warnedBypass = false;
 
 export async function verifyTurnstileToken(token?: string, remoteip?: string): Promise<boolean> {
-  // Retrieve settings
-  const settingsRows = await db.select().from(appSettings);
-  const settings: Record<string, string> = {};
-  for (const row of settingsRows) {
-    if (row.key && row.value) settings[row.key] = row.value;
-  }
+  // Read through the settings service so encrypted secrets are decrypted before
+  // being submitted to Cloudflare Siteverify.
+  const settings = await getSystemSettings();
 
   const isEnabled = settings.turnstile_enabled === "true";
   const secretKey = settings.turnstile_secret_key?.trim();

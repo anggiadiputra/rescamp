@@ -51,6 +51,12 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
     beforeHandle: authGuard,
     detail: { tags: ["Auth"], summary: "Current user" },
   })
+  // Bootstrap session probe — public, ALWAYS 200 (authenticated true/false).
+  // Keeps the browser console clean on public pages; no session oracle beyond
+  // what 401-vs-200 on /auth/me already exposed.
+  .get("/session", h.session, {
+    detail: { tags: ["Auth"], summary: "Session bootstrap probe (always 200)" },
+  })
   .get("/profile", h.getProfile, {
     beforeHandle: authGuard,
     detail: { tags: ["Auth"], summary: "Get profile" },

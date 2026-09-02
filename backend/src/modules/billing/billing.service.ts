@@ -250,7 +250,11 @@ export async function sweepActionRequiredRetries() {
               ns: (meta.nameservers || []).join(","),
               customer_id: liquidCustomerId,
               privacy_protection: meta.privacyProtection || false,
-              invoice_option: "keep_invoice",
+              // A-5: MUST match the webhook success path (payments.service.ts),
+              // which uses "no_invoice" — wholesale cost is deducted from the
+              // reseller balance. "keep_invoice" caused Resellercamp to also
+              // invoice the reseller on retry = double-billing risk.
+              invoice_option: "no_invoice",
             });
             liquidTxnId = String(
               liquidRes?.transaction_id || liquidRes?.invoice_id || liquidRes?.entity_id || liquidRes?.id || ""

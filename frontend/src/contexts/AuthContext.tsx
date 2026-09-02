@@ -19,11 +19,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // H8: session is in an httpOnly cookie — just ask /auth/me, no localStorage
+    // H8: session is in an httpOnly cookie — ask the session probe, no localStorage.
+    // /auth/session ALWAYS answers 200 ({authenticated:false} when logged out),
+    // so a public page load produces no 401 noise in the browser console.
     const controller = new AbortController();
-    api.get<{ user: User }>("/auth/me", { signal: controller.signal })
+    api.get<{ authenticated: boolean; user?: User }>("/auth/session", { signal: controller.signal })
       .then((res) => {
-        setUser(res.user);
+        if (res?.authenticated && res.user) {
+          setUser(res.user);
+        }
       })
       .catch((err: any) => {
         if (err?.name === "AbortError" || err?.message?.includes("aborted")) return;

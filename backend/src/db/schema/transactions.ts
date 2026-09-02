@@ -24,5 +24,7 @@ export const transactions = mysqlTable("transactions", {
   expiresAt: timestamp("expires_at"),
 }, (table) => ({
   liquidTxnIdUnique: uniqueIndex("liquid_transaction_id_unique").on(table.liquidTransactionId),
-  orderIdIdx: index("order_id_idx").on(table.orderId),
+  // A-4: UNIQUE — this is the atomic claim gate that makes concurrent
+  // double-submit of the same order intent collapse into one transaction.
+  orderIdUnique: uniqueIndex("order_id_unique").on(table.orderId),
 }));

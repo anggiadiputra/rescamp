@@ -115,11 +115,14 @@ export const settingsRateLimiter = createRateLimiter({
  */
 export function getClientIP(request: Request, server?: any): string {
   if (process.env.TRUST_PROXY === "true") {
-    const cfIp = request.headers.get("cf-connecting-ip");
-    if (cfIp) return cfIp.trim();
-
+    // nginx overwrites X-Real-IP from its trusted real-ip chain. Prefer it over
+    // client-supplied forwarding headers so direct-origin callers cannot rotate
+    // their rate-limit identity by spoofing CF-Connecting-IP.
     const realIp = request.headers.get("x-real-ip");
     if (realIp) return realIp.trim();
+
+    const cfIp = request.headers.get("cf-connecting-ip");
+    if (cfIp) return cfIp.trim();
 
     const forwarded = request.headers.get("x-forwarded-for");
     if (forwarded) {
