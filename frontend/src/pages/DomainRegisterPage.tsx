@@ -79,6 +79,10 @@ export default function DomainRegisterPage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    // GET /customers is operator-only (resellerGuard). A customer ordering a
+    // domain gets their contact auto-resolved server-side (resolveOrderCustomerId),
+    // so skip the call entirely — it would just 403 and be swallowed anyway.
+    if (user?.role === "customer") return () => controller.abort();
     api.get<any>("/customers", { signal: controller.signal }).then((res) => {
       const list = res?.data || res || [];
       const custArr = Array.isArray(list) ? list : [];
@@ -88,7 +92,7 @@ export default function DomainRegisterPage() {
       }
     }).catch(() => {});
     return () => controller.abort();
-  }, []);
+  }, [user?.role]);
 
   async function check(query?: string) {
     const targetSearch = (query !== undefined ? query : search).trim();

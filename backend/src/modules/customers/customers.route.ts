@@ -6,8 +6,11 @@ import { authenticatedRateLimiter, rateLimit } from "../../lib/rate-limit";
 
 export const customerRoutes = new Elysia({ prefix: "/customers" })
   .post("/complete-profile", h.completeProfile as any, { beforeHandle: [authGuard, rateLimit(authenticatedRateLimiter, "Terlalu banyak permintaan.")], body: completeProfileSchema, detail: { tags: ["Customers"], summary: "Complete profile + create LIQUID customer" } })
-  .get("/", h.list as any, { beforeHandle: [authGuard, rateLimit(authenticatedRateLimiter, "Terlalu banyak permintaan.")], detail: { tags: ["Customers"], summary: "List customers" } })
-  .get("/remote", h.listRemote as any, { beforeHandle: [authGuard, rateLimit(authenticatedRateLimiter, "Terlalu banyak permintaan.")], detail: { tags: ["Customers"], summary: "List customers live from Resellercamp (no DB cache)" } })
+  // Hardening: / and /remote are operator surfaces — resellerGuard at the route
+  // layer (defense in depth on top of the tenant scope already applied in the
+  // service). Customers use /customers/me-style flows via complete-profile.
+  .get("/", h.list as any, { beforeHandle: [authGuard, resellerGuard, rateLimit(authenticatedRateLimiter, "Terlalu banyak permintaan.")], detail: { tags: ["Customers"], summary: "List customers (operators)" } })
+  .get("/remote", h.listRemote as any, { beforeHandle: [authGuard, resellerGuard, rateLimit(authenticatedRateLimiter, "Terlalu banyak permintaan.")], detail: { tags: ["Customers"], summary: "List customers live from Resellercamp (operators, no DB cache)" } })
   .post("/sync", h.sync as any, { beforeHandle: [authGuard, resellerGuard, rateLimit(authenticatedRateLimiter, "Terlalu banyak permintaan.")], detail: { tags: ["Customers"], summary: "Sync customers from Resellercamp into local DB" } })
   .guard({ beforeHandle: [authGuard, resellerGuard, rateLimit(authenticatedRateLimiter, "Terlalu banyak permintaan.")] }, (app) =>
     app
