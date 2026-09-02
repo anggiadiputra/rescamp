@@ -35,7 +35,7 @@ export async function sendRegisterOtp(email: string) {
   );
 
   const encryptedCode = await encryptOtpCode(code);
-  await db.insert(otpCodes).values({ email: cleanEmail, code: "", codeEncrypted: encryptedCode, purpose: "register", expiresAt });
+  await db.insert(otpCodes).values({ email: cleanEmail, codeEncrypted: encryptedCode, purpose: "register", expiresAt });
 
   await sendEmail(cleanEmail, "register_otp", { otp: code, code, expiry_minutes: 5 });
 
@@ -540,7 +540,7 @@ export async function sendLoginOtp(email: string, password: string) {
   );
 
   const encryptedCode = await encryptOtpCode(code);
-  await db.insert(otpCodes).values({ email: cleanEmail, code: "", codeEncrypted: encryptedCode, purpose: "login", expiresAt });
+  await db.insert(otpCodes).values({ email: cleanEmail, codeEncrypted: encryptedCode, purpose: "login", expiresAt });
 
   otpAttempts.clear(`login:${cleanEmail}`);
 
@@ -605,8 +605,8 @@ export async function forgotPassword(email: string) {
   // Insert both token and 6-digit OTP code so user can reset via link OR OTP code
   const encryptedToken = await encryptOtpCode(token);
   const encryptedOtpCode = await encryptOtpCode(otpCode);
-  await db.insert(otpCodes).values({ email: cleanEmail, code: "", codeEncrypted: encryptedToken, purpose: "reset", expiresAt });
-  await db.insert(otpCodes).values({ email: cleanEmail, code: "", codeEncrypted: encryptedOtpCode, purpose: "reset", expiresAt });
+  await db.insert(otpCodes).values({ email: cleanEmail, codeEncrypted: encryptedToken, purpose: "reset", expiresAt });
+  await db.insert(otpCodes).values({ email: cleanEmail, codeEncrypted: encryptedOtpCode, purpose: "reset", expiresAt });
 
   // Keep the one-time credential in the fragment so it is not sent in HTTP requests.
   const origins = (env.CORS_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean);
