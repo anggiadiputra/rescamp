@@ -57,7 +57,13 @@ export async function withMutexLock<T>(
     return await fn();
   } finally {
     if (acquired) {
-      await conn.query("SELECT RELEASE_LOCK(?)", [name]).catch(() => {});
+      // Must release THE SAME lock name that was acquired (lockName, which for
+      // R1 callers is `lock:<name>` where name is already `lock:order:<domain>`,
+      // i.e. "lock:lock:order:<domain>"). Releasing with the unprefixed `name`
+      // frees a lock that was never taken — the real lock then leaks on this
+      // pooled connection, and every later order for the same domain that lands
+      // on a different pooled connection is wrongly rejected with 409 lock-busy.
+      await conn.query("SELECT RELEASE_LOCK(?)", [lockName]).catch(() => {});
     }
     conn.release();
   }
