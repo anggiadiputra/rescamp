@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Card, Button, InfoBanner, PasswordInput } from "../components/ui";
+import { Card, Button, InfoBanner, PasswordInput, TurnstileWidget } from "../components/ui";
 import { api } from "../lib/api";
 import { Lock, CheckCircle2 } from "lucide-react";
 
@@ -16,6 +16,7 @@ export default function ResetPasswordPage() {
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [cfTurnstileToken, setCfTurnstileToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
@@ -34,12 +35,17 @@ export default function ResetPasswordPage() {
       setError("Password minimal 8 karakter dan harus mengandung kombinasi huruf & angka");
       return;
     }
+    if (!cfTurnstileToken) {
+      setError("Silakan selesaikan verifikasi Turnstile terlebih dahulu.");
+      return;
+    }
     setError("");
     setLoading(true);
     try {
-      await api.post("/auth/reset-password", { token: finalToken, password, email: cleanEmail });
+      await api.post("/auth/reset-password", { token: finalToken, password, email: cleanEmail, cfTurnstileResponse: cfTurnstileToken });
       setDone(true);
     } catch (err: any) {
+      setCfTurnstileToken("");
       setError(err.message || "Gagal mengatur password baru. Pastikan tautan reset valid.");
     }
     setLoading(false);
@@ -127,6 +133,12 @@ export default function ResetPasswordPage() {
               placeholder="Ulangi password baru"
             />
           </div>
+
+          <TurnstileWidget
+            onVerify={(token) => { setCfTurnstileToken(token); setError(""); }}
+            onExpire={() => setCfTurnstileToken("")}
+            onError={() => setCfTurnstileToken("")}
+          />
 
           <Button type="submit" disabled={loading} className="w-full">
             {loading ? "Menyimpan Password Baru..." : "Simpan Password Baru"}

@@ -72,3 +72,21 @@
     font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif !important;
   }
 }
+
+/* Turnstile skeleton loading animations */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}

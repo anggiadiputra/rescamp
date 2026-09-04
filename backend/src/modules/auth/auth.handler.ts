@@ -173,12 +173,14 @@ export async function verifyOtp(ctx: any) {
 }
 
 export async function forgotPassword(ctx: any) {
+  await verifyTurnstileToken(ctx.body?.cfTurnstileResponse || ctx.headers?.["cf-turnstile-response"]);
   const { email } = ctx.body;
   const result = await svc.forgotPassword(email);
   return { data: result };
 }
 
 export async function resetPassword(ctx: any) {
+  await verifyTurnstileToken(ctx.body?.cfTurnstileResponse || ctx.headers?.["cf-turnstile-response"]);
   const { token, password, email } = ctx.body;
   const result = await svc.resetPassword(token, password, email);
   return { data: result };

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Card, Button, InfoBanner } from "../components/ui";
+import { Card, Button, InfoBanner, TurnstileWidget } from "../components/ui";
 import { api } from "../lib/api";
 import { Mail, MailCheck } from "lucide-react";
 
@@ -9,6 +9,7 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
+  const [cfTurnstileToken, setCfTurnstileToken] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -18,12 +19,17 @@ export default function ForgotPasswordPage() {
       setError("Masukkan alamat email Anda");
       return;
     }
+    if (!cfTurnstileToken) {
+      setError("Silakan selesaikan verifikasi Turnstile terlebih dahulu.");
+      return;
+    }
     setError("");
     setLoading(true);
     try {
-      await api.post("/auth/forgot-password", { email: cleanEmail });
+      await api.post("/auth/forgot-password", { email: cleanEmail, cfTurnstileResponse: cfTurnstileToken });
       setSent(true);
     } catch (err: any) {
+      setCfTurnstileToken("");
       setError(err.message || "Gagal mengirim link reset");
     }
     setLoading(false);
@@ -81,6 +87,11 @@ export default function ForgotPasswordPage() {
               required
             />
           </div>
+          <TurnstileWidget
+            onVerify={(token) => { setCfTurnstileToken(token); setError(""); }}
+            onExpire={() => setCfTurnstileToken("")}
+            onError={() => setCfTurnstileToken("")}
+          />
           <Button type="submit" disabled={loading} className="w-full">
             {loading ? "Mengirim Link Reset..." : "Kirim Link Reset Password"}
           </Button>

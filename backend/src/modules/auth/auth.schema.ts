@@ -113,4 +113,5 @@ export const resetPasswordSchema = t.Object({
     format: "email",
     transform: (v: string) => (v || "").trim().toLowerCase(),
   }),
+  cfTurnstileResponse: t.Optional(t.String()),
 });

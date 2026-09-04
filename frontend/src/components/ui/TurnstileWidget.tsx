@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSettings } from "../../contexts/SettingsContext";
 
 interface TurnstileWidgetProps {
@@ -31,6 +31,7 @@ export function TurnstileWidget({ onVerify, onError, onExpire, className }: Turn
   const { settings } = useSettings();
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const isEnabled = settings.turnstile_enabled === true || settings.turnstile_enabled === "true";
   const siteKey = settings.turnstile_site_key?.trim();
@@ -60,18 +61,27 @@ export function TurnstileWidget({ onVerify, onError, onExpire, className }: Turn
         widgetIdRef.current = window.turnstile.render(containerRef.current, {
           sitekey: siteKey,
           callback: (token: string) => {
-            if (isMounted) onVerifyRef.current(token);
+            if (isMounted) {
+              setLoading(false);
+              onVerifyRef.current(token);
+            }
           },
           "error-callback": () => {
-            if (isMounted && onErrorRef.current) onErrorRef.current();
+            if (isMounted) {
+              setLoading(false);
+              if (onErrorRef.current) onErrorRef.current();
+            }
           },
           "expired-callback": () => {
             if (isMounted && onExpireRef.current) onExpireRef.current();
           },
           theme: "light",
         });
+        // Widget rendered into the container — hide the skeleton.
+        setLoading(false);
       } catch (err) {
         console.warn("[TurnstileWidget] render error:", err);
+        setLoading(false);
       }
     }
 
@@ -116,7 +126,26 @@ export function TurnstileWidget({ onVerify, onError, onExpire, className }: Turn
 
   return (
     <div className={`my-3 flex justify-center ${className || ""}`}>
-      <div ref={containerRef} />
+      {loading && (
+        <div className="relative w-[300px] h-[65px] overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+          {/* Skeleton shimmer */}
+          <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+          {/* Ripple water effect */}
+          <div className="absolute left-4 top-1/2 -translate-y-1/2">
+            <div className="relative w-8 h-8">
+              <span className="absolute inset-0 rounded-full bg-gray-300/60 animate-[ripple_1.6s_ease-out_infinite]" />
+              <span className="absolute inset-0 rounded-full bg-gray-300/60 animate-[ripple_1.6s_ease-out_infinite_0.4s]" />
+              <span className="absolute inset-0 rounded-full bg-gray-300/60 animate-[ripple_1.6s_ease-out_infinite_0.8s]" />
+              <span className="absolute inset-0 rounded-full bg-gray-200" />
+            </div>
+          </div>
+          <div className="absolute left-16 top-1/2 -translate-y-1/2 space-y-1.5">
+            <div className="h-2.5 w-40 rounded bg-gray-200" />
+            <div className="h-2 w-32 rounded bg-gray-200" />
+          </div>
+        </div>
+      )}
+      <div ref={containerRef} className={loading ? "hidden" : ""} />
     </div>
   );
 }
