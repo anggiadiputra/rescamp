@@ -85,6 +85,7 @@ export async function ensureDatabaseSchema() {
     await db.execute(sql`ALTER TABLE domains ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMP NULL`);
     await db.execute(sql`ALTER TABLE users MODIFY COLUMN role ENUM('admin','reseller','customer') DEFAULT 'customer'`);
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INT NOT NULL DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP NULL`);
     await db.execute(sql`ALTER TABLE users MODIFY COLUMN api_key_encrypted TEXT NULL`);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS webhook_receipts (

@@ -8,6 +8,9 @@ const envVars = {
   DB_NAME: process.env.DB_NAME || "domain_dashboard",
   JWT_SECRET: process.env.JWT_SECRET as string,
   JWT_EXPIRY: process.env.JWT_EXPIRY || "24h",
+  // Sliding-session inactivity timeout (minutes). A user is auto-logged-out
+  // after this many minutes without any authenticated request. Default 30.
+  SESSION_TIMEOUT_MIN: parseInt(process.env.SESSION_TIMEOUT_MIN || "30", 10),
   DEFAULT_RESELLER_ID: process.env.DEFAULT_RESELLER_ID || "",
   RESELLER_API_KEY: process.env.RESELLER_API_KEY || process.env.LIQUID_API_KEY || "",
   SUMOPOD_API_KEY: process.env.SUMOPOD_API_KEY || "",

@@ -33,12 +33,19 @@ function clearAuthCookie(ctx: any) {
   ctx.set.headers["Set-Cookie"] = `token=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0${secure}`;
 }
 
+// Sliding-session: stamp last_active_at at login so the inactivity clock starts
+// from the moment the session is created (not from a stale/old value).
+async function touchLastActive(userId: number) {
+  await db.update(users).set({ lastActiveAt: new Date() }).where(eq(users.id, userId)).catch(() => {});
+}
+
 export async function register(ctx: any) {
   if (!ctx.body?.code) {
     await verifyTurnstileToken(ctx.body?.cfTurnstileResponse || ctx.headers?.["cf-turnstile-response"]);
   }
   const result = await svc.register(ctx.body);
   setAuthCookie(ctx, result.token);
+  touchLastActive(result.user.id);
   ctx.set.status = 201;
   // V2-04: token stays out of the response body — the httpOnly cookie is the
   // only browser session channel; body export would negate httpOnly's benefit.
@@ -51,6 +58,7 @@ export async function registerCustomer(ctx: any) {
   }
   const result = await svc.register({ ...ctx.body, api_key: undefined });
   setAuthCookie(ctx, result.token);
+  touchLastActive(result.user.id);
   ctx.set.status = 201;
   return { data: { user: result.user } };
 }
@@ -59,6 +67,7 @@ export async function login(ctx: any) {
   await verifyTurnstileToken(ctx.body?.cfTurnstileResponse || ctx.headers?.["cf-turnstile-response"]);
   const result = await svc.login(ctx.body);
   setAuthCookie(ctx, result.token);
+  touchLastActive(result.user.id);
   // V2-04: session flows only through the httpOnly cookie.
   return { data: { user: result.user } };
 }
@@ -158,6 +167,7 @@ export async function verifyOtp(ctx: any) {
   const { email, code } = ctx.body;
   const result = await svc.verifyLoginOtp(email, code);
   setAuthCookie(ctx, result.token);
+  touchLastActive(result.user.id);
   // V2-04: session flows only through the httpOnly cookie.
   return { data: { user: result.user } };
 }

@@ -11,6 +11,7 @@ export const users = mysqlTable("users", {
   apiKeyEncrypted: text("api_key_encrypted"),
   parentResellerId: int("parent_reseller_id"),
   sessionVersion: int("session_version").notNull().default(0),
+  lastActiveAt: timestamp("last_active_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
