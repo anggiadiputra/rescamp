@@ -389,8 +389,18 @@ export async function sweepExpiredTransactions() {
   }
 
   // Notify owners of the expired transactions (best-effort, non-blocking).
+  // IMPORTANT: re-verify each row's CURRENT status before emailing. Between the
+  // SELECT above and this point, a Sumopod webhook may have completed the
+  // payment — the bulk UPDATE would have skipped it (WHERE status='pending_payment'
+  // no longer matches), but the row is still in our `expiring` snapshot. Emailing
+  // "expired" for a payment that actually succeeded would be wrong, so we only
+  // notify rows that are STILL in the expired state.
   for (const row of expiring) {
     try {
+      const [current] = await db.select({ status: transactions.status }).from(transactions)
+        .where(eq(transactions.id, row.id)).limit(1);
+      if (!current || current.status !== "expired") continue; // completed/reclaimed — skip
+
       const [u] = await db.select({ email: users.email }).from(users).where(eq(users.id, row.userId)).limit(1);
       let domainName = "";
       try { domainName = (typeof row.metadata === "string" ? JSON.parse(row.metadata) : row.metadata)?.domainName || ""; } catch {}
