@@ -127,22 +127,9 @@ export function TurnstileWidget({ onVerify, onError, onExpire, className }: Turn
   return (
     <div className={`my-3 flex justify-center ${className || ""}`}>
       {loading && (
-        <div className="relative w-[300px] h-[65px] overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
-          {/* Skeleton shimmer */}
-          <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/60 to-transparent" />
-          {/* Ripple water effect */}
-          <div className="absolute left-4 top-1/2 -translate-y-1/2">
-            <div className="relative w-8 h-8">
-              <span className="absolute inset-0 rounded-full bg-gray-300/60 animate-[ripple_1.6s_ease-out_infinite]" />
-              <span className="absolute inset-0 rounded-full bg-gray-300/60 animate-[ripple_1.6s_ease-out_infinite_0.4s]" />
-              <span className="absolute inset-0 rounded-full bg-gray-300/60 animate-[ripple_1.6s_ease-out_infinite_0.8s]" />
-              <span className="absolute inset-0 rounded-full bg-gray-200" />
-            </div>
-          </div>
-          <div className="absolute left-16 top-1/2 -translate-y-1/2 space-y-1.5">
-            <div className="h-2.5 w-40 rounded bg-gray-200" />
-            <div className="h-2 w-32 rounded bg-gray-200" />
-          </div>
+        <div className="flex items-center gap-2 px-4 w-[300px] h-[65px] rounded-lg border border-gray-200 bg-gray-50">
+          <div className="h-3.5 w-3.5 rounded-full bg-gray-300" />
+          <span className="text-xs text-gray-400">Memuat verifikasi keamanan…</span>
         </div>
       )}
       <div ref={containerRef} className={loading ? "hidden" : ""} />
