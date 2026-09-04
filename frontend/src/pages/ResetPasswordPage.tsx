@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, Button, InfoBanner, PasswordInput } from "../components/ui";
 import { api } from "../lib/api";
-import { Lock, CheckCircle2, ShieldCheck } from "lucide-react";
+import { Lock, CheckCircle2 } from "lucide-react";
 
 export default function ResetPasswordPage() {
   // SECURITY (audit B-item): the reset token is ONLY read from the URL FRAGMENT
@@ -84,13 +84,6 @@ export default function ResetPasswordPage() {
         {error && (
           <div className="mb-4">
             <InfoBanner type="error" message={error} />
-          </div>
-        )}
-
-        {hasDirectToken && (
-          <div className="mb-4 flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs font-medium">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>Token keamanan reset password terdeteksi dari email</span>
           </div>
         )}
 
