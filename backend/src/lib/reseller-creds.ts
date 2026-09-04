@@ -76,15 +76,16 @@ export async function resolveResellerCreds(userId?: number): Promise<ResellerCre
             }
           }
         }
-        // 3. Fallback to any reseller/admin in DB with credentials
+        // SECURITY (fail-closed): a customer MUST have a resolvable parent
+        // reseller. Do NOT fall back to the master/admin reseller here — that
+        // would hand every customer the operator's API key, and any future
+        // endpoint that uses these creds without an ownership check would let
+        // a customer act as the reseller. If no parent resolves, throw.
         if (!parentUser) {
-          const [master] = await db.select().from(users).where(
-            and(
-              sql`${users.role} = 'admin'`,
-              sql`(${users.apiKey} IS NOT NULL OR ${users.apiKeyEncrypted} IS NOT NULL)`
-            )
-          ).limit(1);
-          if (master) parentUser = master;
+          throw new AppError(
+            "Akun customer tidak terhubung ke reseller. Hubungi penyedia layanan.",
+            403,
+          );
         }
 
         if (parentUser) targetUser = parentUser;
@@ -202,14 +203,15 @@ export async function resolveCredsFromUser(user: {
         }
       }
     }
+    // SECURITY (fail-closed): a customer MUST have a resolvable parent
+    // reseller. Do NOT fall back to the master/admin reseller here — that
+    // would hand every customer the operator's API key. If no parent resolves,
+    // throw instead of silently using operator credentials.
     if (!parentUser) {
-      const [master] = await db.select().from(users).where(
-        and(
-          sql`${users.role} = 'admin'`,
-          sql`(${users.apiKey} IS NOT NULL OR ${users.apiKeyEncrypted} IS NOT NULL)`
-        )
-      ).limit(1);
-      if (master) parentUser = master;
+      throw new AppError(
+        "Akun customer tidak terhubung ke reseller. Hubungi penyedia layanan.",
+        403,
+      );
     }
 
     if (parentUser) {

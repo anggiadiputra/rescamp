@@ -15,22 +15,22 @@ async function getUser(ctx: any) {
 
 import { resolveResellerCreds, resolveCredsFromUser } from "../../lib/reseller-creds";
 
-// For customer or public visitor: resolve the reseller's API credentials
+// For customer or public visitor: resolve the reseller's API credentials.
+// SECURITY: a logged-in user (customer/admin) must resolve their OWN (or their
+// parent reseller's) credentials — never fall back to the master/admin key. If
+// resolution fails (e.g. a customer with no parent reseller), the error
+// propagates (fail-closed) instead of silently handing the operator's API key
+// to a customer. Only an unauthenticated visitor may use the master reseller
+// key, and only for public availability/pricing checks.
 async function getResellerCreds(ctx: any) {
   const userId = Number(ctx.store?.user?.sub);
   if (userId && !isNaN(userId)) {
-    try {
-      const u = await getUser(ctx);
-      const creds = await resolveResellerCreds(u.id);
-      if (creds.resellerId && creds.apiKey) {
-        return { id: u.id, resellerId: creds.resellerId, apiKey: creds.apiKey, role: u.role || "customer" };
-      }
-    } catch (e: any) {
-      console.warn("[getResellerCreds] resolveResellerCreds for logged in user failed, falling back to master:", e?.message);
-    }
+    const u = await getUser(ctx);
+    const creds = await resolveResellerCreds(u.id);
+    return { id: u.id, resellerId: creds.resellerId, apiKey: creds.apiKey, role: u.role || "customer" };
   }
 
-  // Visitor or fallback to master reseller
+  // Visitor: fall back to master reseller for public availability/pricing checks
   try {
     const creds = await resolveResellerCreds(0);
     return { id: 0, resellerId: creds.resellerId || "", apiKey: creds.apiKey || "", role: "visitor" };
