@@ -1,14 +1,14 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Card, Button, InfoBanner } from "../components/ui";
 import { api } from "../lib/api";
-import { Mail } from "lucide-react";
+import { Mail, MailCheck } from "lucide-react";
 
 export default function ForgotPasswordPage() {
-  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [sent, setSent] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,19 +22,48 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     try {
       await api.post("/auth/forgot-password", { email: cleanEmail });
-      // Langsung arahkan ke form pengaturan password baru dengan email yang sudah terisi
-      navigate(`/reset-password?email=${encodeURIComponent(cleanEmail)}&sent=true`);
+      setSent(true);
     } catch (err: any) {
-      setError(err.message || "Gagal mengirim kode reset");
-      setLoading(false);
+      setError(err.message || "Gagal mengirim link reset");
     }
+    setLoading(false);
+  }
+
+  if (sent) {
+    return (
+      <div className="max-w-md mx-auto mt-16 px-4">
+        <Card>
+          <div className="text-center py-4">
+            <MailCheck className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
+            <h1 className="text-xl font-bold text-gray-900">Link Reset Terkirim!</h1>
+            <p className="text-sm text-gray-600 mt-2">
+              Kami telah mengirim tautan reset password ke <strong>{email.trim().toLowerCase()}</strong>.
+            </p>
+            <p className="text-sm text-gray-600 mt-2">
+              Silakan buka email Anda dan klik tautan tersebut untuk mengatur password baru.
+              Jika tidak muncul, periksa folder spam.
+            </p>
+            <div className="mt-6">
+              <Link
+                to="/login"
+                className="inline-flex items-center justify-center w-full px-4 py-2.5 bg-black text-white text-sm font-semibold rounded-lg hover:bg-gray-800 transition"
+              >
+                Kembali ke Login
+              </Link>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   return (
     <div className="max-w-md mx-auto mt-16 px-4">
       <Card>
         <h1 className="text-xl font-bold text-gray-900 mb-1">Lupa Password</h1>
-        <p className="text-sm text-gray-500 mb-6">Masukkan email Anda untuk menerima kode OTP & link reset password.</p>
+        <p className="text-sm text-gray-500 mb-6">
+          Masukkan email Anda. Kami akan mengirimkan tautan untuk mengatur ulang password.
+        </p>
 
         {error && <div className="mb-4"><InfoBanner type="error" message={error} /></div>}
 
@@ -64,4 +93,3 @@ export default function ForgotPasswordPage() {
     </div>
   );
 }
-
