@@ -23,6 +23,25 @@ export interface CreateDomainOrderPayload {
   amount: number;
 }
 
+/** Map a transactions row to the uniform payment-response shape returned by
+ *  createDomainOrderPayment across all its idempotency/race branches. */
+function toPaymentResponse(t: any) {
+  return {
+    transaction_id: t.id,
+    transactionId: t.id,
+    order_id: t.orderId || "",
+    orderId: t.orderId || "",
+    payment_id: t.paymentId || "",
+    paymentId: t.paymentId || "",
+    payment_link_url: t.paymentLinkUrl || "",
+    paymentLinkUrl: t.paymentLinkUrl || "",
+    amount: Number(t.amount),
+    status: t.status,
+    expires_at: t.expiresAt ? new Date(t.expiresAt).toISOString() : "",
+    expiresAt: t.expiresAt ? new Date(t.expiresAt).toISOString() : "",
+  };
+}
+
 export async function createDomainOrderPayment(payload: CreateDomainOrderPayload) {
   const years = payload.years || 1;
   const tld = payload.tld || payload.domainName.split(".").slice(1).join(".") || "com";
@@ -30,15 +49,27 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     ? payload.domainName
     : `${payload.domainName}.${tld}`).toLowerCase().trim();
 
-  // R1: The cross-user protection below is entirely SELECT-then-INSERT with no
-  // atomicity — two different users can both pass the "is this domain already
-  // being ordered?" pre-check before either inserts a claim row, and because
-  // orderId is derived from intent that includes userId, the order_id UNIQUE
-  // gate only collapses duplicate submissions from the SAME user. Wrap the
-  // pre-check + claim INSERT in a per-domain MySQL advisory lock (works across
-  // processes/instances) so the second concurrent user sees the first one's
-  // fresh claim row and gets a 409 instead of a second payment link.
-  return withMutexLock(`lock:order:${fullDomain}`, async () => {
+  // R1: wrap ONLY the cross-user critical section — the "is this domain already
+  // being ordered?" pre-check plus the claim INSERT — in a per-domain MySQL
+  // advisory lock (works across processes/instances) so two different users
+  // can't both pass the pre-check before either has inserted a claim row (and,
+  // since orderId embeds userId, the order_id UNIQUE gate only collapses same-user
+  // double-submits). Once a claim row exists it is committed, so any concurrent
+  // user's pre-check sees it and is rejected with 409 — everything AFTER the claim
+  // (external Sumopod/Liquid calls, the final UPDATE) can safely run outside the
+  // lock. Keeping the lock short avoids pinning a pooled DB connection and forcing
+  // other same-domain orders to wait on network latency.
+  let txId: number = 0;
+  // Shared result handed back by the idempotency/claim branches inside the
+  // lock; if set, the caller returns it immediately (no payment-link creation).
+  let lockOut: any = null;
+  // orderId depends only on order intent — compute it up-front, before any
+  // lock, so every idempotency branch inside the critical section can hand it
+  // back via the shared result object.
+  const intentKey = `${payload.userId}:${payload.type}:${fullDomain}:${years}:${payload.customerId ?? 0}:${payload.domainId ?? 0}`;
+  const intentHash = createHash("sha256").update(intentKey).digest("hex").slice(0, 24);
+  const orderId = `INV-${payload.type.toUpperCase().slice(0, 3)}-${intentHash}`;
+  const lockResult = await withMutexLock(`lock:order:${fullDomain}`, async () => {
     // Check if there's already an active transaction for this domain and order type
     const allowedTypes: ("register" | "renew" | "transfer" | "restore" | "privacy" | "fund" | "debit")[] =
     (payload.type === "register" || payload.type === "transfer")
@@ -61,39 +92,15 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
   if (existingActiveTx) {
     if (existingActiveTx.userId === payload.userId && existingActiveTx.paymentLinkUrl) {
       // Same user, return existing payment link (idempotency)
-      return {
-        transaction_id: existingActiveTx.id,
-        transactionId: existingActiveTx.id,
-        order_id: existingActiveTx.orderId || "",
-        orderId: existingActiveTx.orderId || "",
-        payment_id: existingActiveTx.paymentId || "",
-        paymentId: existingActiveTx.paymentId || "",
-        payment_link_url: existingActiveTx.paymentLinkUrl,
-        paymentLinkUrl: existingActiveTx.paymentLinkUrl,
-        amount: Number(existingActiveTx.amount),
-        status: existingActiveTx.status,
-        expires_at: existingActiveTx.expiresAt ? new Date(existingActiveTx.expiresAt).toISOString() : "",
-        expiresAt: existingActiveTx.expiresAt ? new Date(existingActiveTx.expiresAt).toISOString() : "",
-      };
+      lockOut = toPaymentResponse(existingActiveTx);
+      return;
     } else if (existingActiveTx.userId === payload.userId) {
       // Same user, mid-flight without paymentLinkUrl yet — wait briefly
       for (let attempt = 0; attempt < 10; attempt++) {
         const [refreshed] = await db.select().from(transactions).where(eq(transactions.id, existingActiveTx.id)).limit(1);
         if (refreshed?.paymentLinkUrl) {
-          return {
-            transaction_id: refreshed.id,
-            transactionId: refreshed.id,
-            order_id: refreshed.orderId || "",
-            orderId: refreshed.orderId || "",
-            payment_id: refreshed.paymentId || "",
-            paymentId: refreshed.paymentId || "",
-            payment_link_url: refreshed.paymentLinkUrl,
-            paymentLinkUrl: refreshed.paymentLinkUrl,
-            amount: Number(refreshed.amount),
-            status: refreshed.status,
-            expires_at: refreshed.expiresAt ? new Date(refreshed.expiresAt).toISOString() : "",
-            expiresAt: refreshed.expiresAt ? new Date(refreshed.expiresAt).toISOString() : "",
-          };
+          lockOut = toPaymentResponse(refreshed);
+          return;
         }
         await new Promise((r) => setTimeout(r, 200));
       }
@@ -109,13 +116,9 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
   // the UNIQUE index on order_id turns the INSERT into the atomic gate.
   // The loser of the race gets ER_DUP_ENTRY and returns the winner's payment
   // link instead of creating a second Sumopod payment + transaction.
-  const intentKey = `${payload.userId}:${payload.type}:${fullDomain}:${years}:${payload.customerId ?? 0}:${payload.domainId ?? 0}`;
-  const intentHash = createHash("sha256").update(intentKey).digest("hex").slice(0, 24);
-  const orderId = `INV-${payload.type.toUpperCase().slice(0, 3)}-${intentHash}`;
 
   // Claim gate: try to insert a placeholder transaction row FIRST (before any
   // external API call). Only the winner proceeds to create the payment link.
-  let txId: number;
   let winnerRow: typeof transactions.$inferSelect | null = null;
   try {
     const [claim] = await db.insert(transactions).values({
@@ -141,20 +144,8 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     for (let attempt = 0; attempt < 10; attempt++) {
       const [existing] = await db.select().from(transactions).where(eq(transactions.orderId, orderId)).limit(1);
       if (existing?.paymentLinkUrl) {
-        return {
-          transaction_id: existing.id,
-          transactionId: existing.id,
-          order_id: existing.orderId || "",
-          orderId: existing.orderId || "",
-          payment_id: existing.paymentId || "",
-          paymentId: existing.paymentId || "",
-          payment_link_url: existing.paymentLinkUrl,
-          paymentLinkUrl: existing.paymentLinkUrl,
-          amount: Number(existing.amount),
-          status: existing.status,
-          expires_at: existing.expiresAt ? new Date(existing.expiresAt).toISOString() : "",
-          expiresAt: existing.expiresAt ? new Date(existing.expiresAt).toISOString() : "",
-        };
+        lockOut = toPaymentResponse(existing);
+        return;
       }
       if (existing && existing.status !== "pending_payment") {
         // winner finished with a terminal state — return it as-is
@@ -167,20 +158,8 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
       ? [winnerRow]
       : await db.select().from(transactions).where(eq(transactions.orderId, orderId)).limit(1);
     if (!finalRow) throw err;
-    return {
-      transaction_id: finalRow.id,
-      transactionId: finalRow.id,
-      order_id: finalRow.orderId || "",
-      orderId: finalRow.orderId || "",
-      payment_id: finalRow.paymentId || "",
-      paymentId: finalRow.paymentId || "",
-      payment_link_url: finalRow.paymentLinkUrl || "",
-      paymentLinkUrl: finalRow.paymentLinkUrl || "",
-      amount: Number(finalRow.amount),
-      status: finalRow.status,
-      expires_at: finalRow.expiresAt ? new Date(finalRow.expiresAt).toISOString() : "",
-      expiresAt: finalRow.expiresAt ? new Date(finalRow.expiresAt).toISOString() : "",
-    };
+    lockOut = toPaymentResponse(finalRow);
+    return;
   }
 
   // Deduplication & Concurrent Double-Submit Lock:
@@ -203,21 +182,19 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     .limit(1);
 
   if (recentPendingTx && recentPendingTx.paymentLinkUrl) {
-    return {
-      transaction_id: recentPendingTx.id,
-      transactionId: recentPendingTx.id,
-      order_id: recentPendingTx.orderId || "",
-      orderId: recentPendingTx.orderId || "",
-      payment_id: recentPendingTx.paymentId || "",
-      paymentId: recentPendingTx.paymentId || "",
-      payment_link_url: recentPendingTx.paymentLinkUrl,
-      paymentLinkUrl: recentPendingTx.paymentLinkUrl,
-      amount: Number(recentPendingTx.amount),
-      status: recentPendingTx.status,
-      expires_at: recentPendingTx.expiresAt ? new Date(recentPendingTx.expiresAt).toISOString() : "",
-      expiresAt: recentPendingTx.expiresAt ? new Date(recentPendingTx.expiresAt).toISOString() : "",
-    };
+    lockOut = toPaymentResponse(recentPendingTx);
+    return;
   }
+  // Critical section (cross-user pre-check + claim INSERT) is done — we own the
+  // claim row via closure variable txId. Release the per-domain lock and do the
+  // slow external work (Liquid/Sumopod calls, final UPDATE) OUTSIDE it, so a
+  // long network call never pins a pooled connection or blocks other
+  // same-domain orders.
+  }); // end withMutexLock (R1) — lock released here
+
+  // If an idempotency/race branch already produced the answer, hand it back
+  // without creating a new payment link.
+  if (lockOut) return lockOut;
 
   // --- Step 1: Resolve Liquid credentials & customer ---
   const [user] = await db.select().from(users).where(eq(users.id, payload.userId));
@@ -432,7 +409,6 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     expires_at: formattedExpiresAt,
     expiresAt: formattedExpiresAt,
   };
-  }); // end withMutexLock (R1)
 }
 
 /**

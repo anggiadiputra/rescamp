@@ -12,6 +12,12 @@ const pool = mysql.createPool({
   user: env.DB_USER,
   password: env.DB_PASSWORD,
   database: env.DB_NAME,
+  // Bound how many connections may wait for a free pool slot. withMutexLock
+  // holds one dedicated connection per in-flight critical section; without a
+  // cap, a burst of concurrent same-domain orders could build an unbounded
+  // wait queue and pile up latency/timeouts (R1 hardening). Exceeding the cap
+  // makes the caller error out fast instead of hanging.
+  queueLimit: 12,
 });
 
 export const db = drizzle(pool);
