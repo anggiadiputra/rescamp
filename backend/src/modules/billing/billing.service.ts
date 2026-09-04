@@ -5,7 +5,7 @@ import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { resolveResellerCreds, resolveCredsFromUser } from "../../lib/reseller-creds";
 import { loadTenantScope } from "../../lib/tenant-access";
-import { sendEmail } from "../../lib/email";
+import { sendOrderNotification } from "../../lib/email";
 
 const MAX_ACTION_REQUIRED_RETRIES = 5;
 
@@ -404,20 +404,10 @@ export async function sweepExpiredTransactions() {
       const [u] = await db.select({ email: users.email }).from(users).where(eq(users.id, row.userId)).limit(1);
       let domainName = "";
       try { domainName = (typeof row.metadata === "string" ? JSON.parse(row.metadata) : row.metadata)?.domainName || ""; } catch {}
-      const recipients = new Set<string>();
-      if (u?.email?.trim()) recipients.add(u.email.trim().toLowerCase());
-      const [admin] = await db.select({ email: users.email }).from(users).where(eq(users.role, "admin")).limit(1);
-      if (admin?.email?.trim()) recipients.add(admin.email.trim().toLowerCase());
-      for (const email of recipients) {
-        try {
-          await sendEmail(email, "payment_expired", {
-            domainName,
-            orderId: row.orderId || "",
-          });
-        } catch (e) {
-          console.warn(`[sweeper] payment_expired email to ${email} failed (non-blocking):`, (e as any)?.message || e);
-        }
-      }
+      await sendOrderNotification("payment_expired", u?.email, {
+        domainName,
+        orderId: row.orderId || "",
+      });
     } catch (e) {
       console.warn(`[sweeper] payment_expired notify failed for tx ${row.id}:`, (e as any)?.message || e);
     }

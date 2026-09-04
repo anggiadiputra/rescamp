@@ -239,3 +239,40 @@ export async function sendEmail(
     console.log(`[email] Successfully sent ${type} email via Brevo API to ${to}`);
   }
 }
+
+/**
+ * Send a transactional email to the customer who placed the order AND to every
+ * operator (admin) account, so neither side misses the notification. Delivery
+ * is best-effort: a failure to send must never break the order/payment flow,
+ * so errors are logged and swallowed.
+ *
+ * `db` is imported lazily to avoid a circular import (email.ts is imported by
+ * modules that also import the db module).
+ */
+export async function sendOrderNotification(
+  type: "order_invoice" | "payment_success" | "payment_failed" | "payment_expired",
+  customerEmail: string | null | undefined,
+  vars: Record<string, any>,
+) {
+  const { db } = await import("../db");
+  const { users } = await import("../db/schema");
+  const { eq } = await import("drizzle-orm");
+
+  const recipients = new Set<string>();
+  if (customerEmail && customerEmail.trim()) recipients.add(customerEmail.trim().toLowerCase());
+  try {
+    const admins = await db.select({ email: users.email }).from(users).where(eq(users.role, "admin"));
+    for (const a of admins) {
+      if (a.email && a.email.trim()) recipients.add(a.email.trim().toLowerCase());
+    }
+  } catch (e) {
+    console.warn("[email] sendOrderNotification: admin lookup failed:", (e as any)?.message || e);
+  }
+  for (const email of recipients) {
+    try {
+      await sendEmail(email, type, vars);
+    } catch (e) {
+      console.warn(`[email] ${type} to ${email} failed (non-blocking):`, (e as any)?.message || e);
+    }
+  }
+}
