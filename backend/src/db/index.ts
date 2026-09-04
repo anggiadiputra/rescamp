@@ -3,6 +3,8 @@ import mysql from "mysql2/promise";
 import { env } from "../config/env";
 
 import { sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { AppError } from "../lib/error";
 
 const pool = mysql.createPool({
   host: env.DB_HOST,
@@ -13,6 +15,53 @@ const pool = mysql.createPool({
 });
 
 export const db = drizzle(pool);
+
+/**
+ * Run `fn` while holding a MySQL named advisory lock on a single dedicated
+ * connection. `GET_LOCK`/`RELEASE_LOCK` are connection-scoped, so we acquire
+ * and release on ONE retained connection while `fn` issues its reads/writes
+ * through the normal pool. This serialises a critical section ACROSS
+ * processes/instances (unlike an in-memory flag), which is what we need for
+ * cross-user domain ordering (R1): the pre-check + claim INSERT must be
+ * atomic so two different users can never both pass the "is this domain
+ * taken?" check before either has inserted a claim row.
+ *
+ * On lock timeout (resource busy) an AppError(409) is thrown. `fn` may throw;
+ * the lock is always released (and the connection returned to the pool) via
+ * the finally block.
+ */
+export async function withMutexLock<T>(
+  name: string,
+  fn: () => Promise<T>,
+  timeoutSec = 5,
+): Promise<T> {
+  // MySQL GET_LOCK names are limited to 64 chars; anything longer returns NULL
+  // (acquisition always fails) for EVERY caller. A raw domain name can exceed
+  // 255 chars, so always hash the lock name to a bounded, collision-resistant
+  // key — hashing is mandatory, not optional, to keep the lock usable for
+  // resource names of unbounded length.
+  const lockName = `lock:${name}`.length > 60
+    ? `lock:${createHash("sha256").update(name).digest("hex").slice(0, 40)}`
+    : `lock:${name}`;
+  const conn = await pool.getConnection();
+  let acquired = false;
+  try {
+    const [rows]: any = await conn.query("SELECT GET_LOCK(?, ?) AS ok", [lockName, timeoutSec]);
+    acquired = rows?.[0]?.ok === 1;
+    if (!acquired) {
+      throw new AppError(
+        "Sumber daya sedang diproses pengguna lain. Silakan coba beberapa saat lagi.",
+        409,
+      );
+    }
+    return await fn();
+  } finally {
+    if (acquired) {
+      await conn.query("SELECT RELEASE_LOCK(?)", [name]).catch(() => {});
+    }
+    conn.release();
+  }
+}
 
 export async function ensureDatabaseSchema() {
   try {

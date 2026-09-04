@@ -461,6 +461,50 @@ export async function checkAvailability(user: { id?: number; resellerId: string 
     }
   }
 
+  // Overlay local database check: if domain is already registered or in active order locally
+  try {
+    const [existingLocal] = await db
+      .select({ id: domains.id })
+      .from(domains)
+      .where(and(eq(domains.domainName, fullDomain), ne(domains.status, "cancelled")))
+      .limit(1);
+
+    let isLocallyReserved = !!existingLocal;
+
+    if (!isLocallyReserved) {
+      const [activeTx] = await db
+        .select({ id: transactions.id })
+        .from(transactions)
+        .where(
+          and(
+            inArray(transactions.type, ["register", "transfer"]),
+            sql`JSON_UNQUOTE(JSON_EXTRACT(${transactions.metadata}, '$.domainName')) = ${fullDomain}`,
+            or(
+              eq(transactions.status, "pending_payment"),
+              eq(transactions.status, "processing_domain"),
+              eq(transactions.status, "completed")
+            ),
+            sql`(${transactions.expiresAt} IS NULL OR ${transactions.expiresAt} > NOW())`,
+            sql`${transactions.createdAt} >= ${new Date(Date.now() - 60 * 60 * 1000)}`
+          )
+        )
+        .limit(1);
+      if (activeTx) isLocallyReserved = true;
+    }
+
+    if (isLocallyReserved) {
+      const target = Array.isArray(res) ? res[0] : res;
+      if (target && typeof target === "object") {
+        const key = Object.keys(target)[0];
+        if (key && target[key] && typeof target[key] === "object") {
+          target[key].status = "unavailable";
+        }
+      }
+    }
+  } catch (dbErr) {
+    console.warn(`[checkAvailability] Local domain overlay check error for ${fullDomain}:`, dbErr);
+  }
+
   console.log(`[checkAvailability] Final result for ${fullDomain}:`, JSON.stringify(res));
   return res;
 }
@@ -1446,6 +1490,31 @@ interface CachedSearchResult {
 const searchResultCache = new Map<string, CachedSearchResult>();
 const SEARCH_CACHE_TTL_MS = 60_000;
 
+export function invalidateDomainSearchCache(domainOrKeyword?: string): void {
+  if (!domainOrKeyword) {
+    searchResultCache.clear();
+    return;
+  }
+  const clean = domainOrKeyword.trim().toLowerCase();
+  const base = clean.split(".")[0];
+  for (const key of Array.from(searchResultCache.keys())) {
+    if (key.includes(clean) || (base && key.includes(base))) {
+      searchResultCache.delete(key);
+    }
+  }
+}
+
+// Periodic cleanup of expired cache entries to prevent memory leak
+const cacheCleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of searchResultCache.entries()) {
+    if (now >= v.expiresAt) {
+      searchResultCache.delete(k);
+    }
+  }
+}, 60_000);
+cacheCleanupTimer.unref?.();
+
 const DEFAULT_TLD_PRICES: Record<string, any> = {
   "com": { price_new: 180000, price_renew: 209000, price_transfer: 209000 },
   "id": { price_new: 241500, price_renew: 241500, price_transfer: 241500 },
@@ -1613,14 +1682,65 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     console.warn("[bulkAvailability] No Liquid client — all domains will be marked 'unknown'");
   }
 
-  // 4. Resolve each TLD status directly from Resellercamp API response
+  // 4. Query local active domains and active transactions for baseKeyword to overlay availability
+  const locallyReservedDomains = new Set<string>();
+  try {
+    const localDomains = await db
+      .select({ domainName: domains.domainName })
+      .from(domains)
+      .where(
+        and(
+          like(domains.domainName, `${baseKeyword}.%`),
+          ne(domains.status, "cancelled")
+        )
+      );
+    for (const ld of localDomains) {
+      if (ld.domainName) locallyReservedDomains.add(ld.domainName.toLowerCase().trim());
+    }
+
+    const activeTxs = await db
+      .select({ metadata: transactions.metadata })
+      .from(transactions)
+      .where(
+        and(
+          inArray(transactions.type, ["register", "transfer"]),
+          or(
+            eq(transactions.status, "pending_payment"),
+            eq(transactions.status, "processing_domain"),
+            eq(transactions.status, "completed")
+          ),
+          sql`(${transactions.expiresAt} IS NULL OR ${transactions.expiresAt} > NOW())`,
+          sql`${transactions.createdAt} >= ${new Date(Date.now() - 60 * 60 * 1000)}`
+        )
+      );
+    for (const atx of activeTxs) {
+      if (atx.metadata) {
+        try {
+          const meta = JSON.parse(atx.metadata);
+          const dom = (meta.domainName || "").toLowerCase().trim();
+          if (dom.startsWith(`${baseKeyword}.`)) {
+            locallyReservedDomains.add(dom);
+          }
+        } catch {}
+      }
+    }
+  } catch (e) {
+    console.warn("[bulkAvailability] Local reservation check warning:", e);
+  }
+
+  // 5. Resolve each TLD status directly from Resellercamp API response
   const results = tldsToQuery.map((tld) => {
     const fullDomain = `${baseKeyword}.${tld}`.toLowerCase();
     let isAvailable = false;
     let statusResolved = false;
     let finalStatus = "unknown";
 
-    if (apiData) {
+    if (locallyReservedDomains.has(fullDomain)) {
+      isAvailable = false;
+      statusResolved = true;
+      finalStatus = "unavailable";
+      console.log(`[bulkAvailability] ${fullDomain} → locally reserved/active → unavailable`);
+    } else if (apiData) {
       const rawStatus = extractDomainStatus(apiData, fullDomain);
       if (rawStatus) {
         const st = rawStatus.toLowerCase().trim();
@@ -1669,7 +1789,22 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
   return results;
 }
 
+// In-memory mutex to prevent concurrent sync operations across users/tabs
+let isDomainSyncInProgress = false;
+
 export async function syncDomainsFromLiquid(userParam: { id: number; role?: string | null; resellerId?: string | null; apiKey?: string | null }) {
+  if (isDomainSyncInProgress) {
+    throw new AppError("Sinkronisasi domain sedang berjalan. Harap tunggu hingga proses selesai.", 409);
+  }
+  isDomainSyncInProgress = true;
+  try {
+    return await doSyncDomainsFromLiquid(userParam);
+  } finally {
+    isDomainSyncInProgress = false;
+  }
+}
+
+async function doSyncDomainsFromLiquid(userParam: { id: number; role?: string | null; resellerId?: string | null; apiKey?: string | null }) {
   const userId = typeof userParam === "object" ? userParam.id : userParam;
   const [u] = await db.select().from(users).where(eq(users.id, userId));
   if (!u) throw new AppError("User not found", 404);

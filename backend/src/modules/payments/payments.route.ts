@@ -167,32 +167,65 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
                 currentPaymentStatus = refreshed.paymentStatus;
               }
             } else if (statusUpper === "CANCELLED" || statusUpper === "CANCELED") {
-              await db.update(transactions)
+              // CAS: only cancel if still pending_payment to avoid overriding completed/processing_domain
+              const res: any = await db.update(transactions)
                 .set({ status: "cancelled", paymentStatus: "cancelled" })
-                .where(eq(transactions.id, tx.id));
-              if (tx.domainId) {
-                await db.update(domains).set({ status: "cancelled" }).where(eq(domains.id, tx.domainId));
+                .where(and(eq(transactions.id, tx.id), eq(transactions.status, "pending_payment")));
+              const changed = res[0]?.affectedRows ?? res?.affectedRows ?? 0;
+              if (changed > 0) {
+                if (tx.domainId) {
+                  await db.update(domains).set({ status: "cancelled" }).where(eq(domains.id, tx.domainId));
+                }
+                currentStatus = "cancelled";
+                currentPaymentStatus = "cancelled";
+              } else {
+                const [refreshed] = await db.select().from(transactions).where(eq(transactions.id, tx.id));
+                if (refreshed) {
+                  currentStatus = refreshed.status;
+                  currentPaymentStatus = refreshed.paymentStatus;
+                  tx = refreshed;
+                }
               }
-              currentStatus = "cancelled";
-              currentPaymentStatus = "cancelled";
             } else if (statusUpper === "EXPIRED" || statusUpper === "TIMEOUT") {
-              await db.update(transactions)
+              // CAS: only expire if still pending_payment to avoid overriding completed/processing_domain
+              const res: any = await db.update(transactions)
                 .set({ status: "expired", paymentStatus: "expired" })
-                .where(eq(transactions.id, tx.id));
-              if (tx.domainId) {
-                await db.update(domains).set({ status: "expired" }).where(eq(domains.id, tx.domainId));
+                .where(and(eq(transactions.id, tx.id), eq(transactions.status, "pending_payment")));
+              const changed = res[0]?.affectedRows ?? res?.affectedRows ?? 0;
+              if (changed > 0) {
+                if (tx.domainId) {
+                  await db.update(domains).set({ status: "expired" }).where(eq(domains.id, tx.domainId));
+                }
+                currentStatus = "expired";
+                currentPaymentStatus = "expired";
+              } else {
+                const [refreshed] = await db.select().from(transactions).where(eq(transactions.id, tx.id));
+                if (refreshed) {
+                  currentStatus = refreshed.status;
+                  currentPaymentStatus = refreshed.paymentStatus;
+                  tx = refreshed;
+                }
               }
-              currentStatus = "expired";
-              currentPaymentStatus = "expired";
             } else if (statusUpper === "FAILED" || statusUpper === "REJECTED") {
-              await db.update(transactions)
+              // CAS: only fail if still pending_payment to avoid overriding completed/processing_domain
+              const res: any = await db.update(transactions)
                 .set({ status: "failed", paymentStatus: "failed" })
-                .where(eq(transactions.id, tx.id));
-              if (tx.domainId) {
-                await db.update(domains).set({ status: "cancelled" }).where(eq(domains.id, tx.domainId));
+                .where(and(eq(transactions.id, tx.id), eq(transactions.status, "pending_payment")));
+              const changed = res[0]?.affectedRows ?? res?.affectedRows ?? 0;
+              if (changed > 0) {
+                if (tx.domainId) {
+                  await db.update(domains).set({ status: "cancelled" }).where(eq(domains.id, tx.domainId));
+                }
+                currentStatus = "failed";
+                currentPaymentStatus = "failed";
+              } else {
+                const [refreshed] = await db.select().from(transactions).where(eq(transactions.id, tx.id));
+                if (refreshed) {
+                  currentStatus = refreshed.status;
+                  currentPaymentStatus = refreshed.paymentStatus;
+                  tx = refreshed;
+                }
               }
-              currentStatus = "failed";
-              currentPaymentStatus = "failed";
             }
           } catch (e) {
             console.warn("[payments/status] Proactive status check failed:", e);

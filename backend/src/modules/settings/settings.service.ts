@@ -293,13 +293,14 @@ export async function updateSystemSettings(data: Record<string, any>): Promise<R
       updatedResellerApiKey = stringVal.trim();
     }
 
-    const [existing] = await db.select().from(appSettings).where(eq(appSettings.key, key));
-
-    if (existing) {
-      await db.update(appSettings).set({ value: storedValue }).where(eq(appSettings.key, key));
-    } else {
-      await db.insert(appSettings).values({ key, value: storedValue, category: getCategoryForKey(key) });
-    }
+    // Use atomic upsert to prevent race conditions between concurrent admin updates
+    await db.insert(appSettings).values({
+      key,
+      value: storedValue,
+      category: getCategoryForKey(key),
+    }).onDuplicateKeyUpdate({
+      set: { value: storedValue }
+    });
   }
 
   // If reseller credentials were updated, sync to primary reseller user in users table & invalidate cache

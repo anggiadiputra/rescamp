@@ -129,28 +129,32 @@ export async function updateCustomer(
 export async function deleteCustomer(creds: { resellerId: string | null; apiKey: string | null }, userParam: any, customerId: number) {
   const cust = await getCustomer(userParam, customerId);
 
-  // Check for active domains before deleting
-  const [active] = await db.select({ id: domains.id }).from(domains)
-    .where(and(eq(domains.customerId, customerId), eq(domains.status, "active")));
-  if (active) throw new AppError("Customer has active domains. Transfer or delete domains first.", 409);
-
   // Delete from LIQUID first
   if (cust.liquidCustomerId && creds.resellerId && creds.apiKey) {
     try {
       const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
       await liquid.deleteCustomer(cust.liquidCustomerId);
-    } catch (e: any) { console.error("[customer] LIQUID delete failed:", e?.message || e); }
+    } catch (e: any) { 
+      console.error("[customer] LIQUID delete failed:", e?.message || e); 
+    }
   }
 
-  // Re-verify active domain status before deleting from local DB to avoid FK race condition
-  const [recheck] = await db.select({ id: domains.id }).from(domains)
-    .where(and(eq(domains.customerId, customerId), eq(domains.status, "active")));
-  if (recheck) throw new AppError("Customer has active domains. Cannot delete.", 409);
+  // Wrap in database transaction for atomic operation
+  await db.transaction(async (tx) => {
+    // Check for active domains before deleting to prevent race conditions
+    const [active] = await tx.select({ id: domains.id }).from(domains)
+      .where(and(eq(domains.customerId, customerId), eq(domains.status, "active")))
+      .limit(1);
+    
+    if (active) {
+      throw new AppError("Customer has active domains. Transfer or delete domains first.", 409);
+    }
 
-  await db.delete(customers).where(eq(customers.id, customerId));
-  if (cust.email) {
-    await db.delete(users).where(and(eq(users.email, cust.email), eq(users.role, "customer")));
-  }
+    await tx.delete(customers).where(eq(customers.id, customerId));
+    if (cust.email) {
+      await tx.delete(users).where(and(eq(users.email, cust.email), eq(users.role, "customer")));
+    }
+  });
 }
 
 export async function completeProfile(

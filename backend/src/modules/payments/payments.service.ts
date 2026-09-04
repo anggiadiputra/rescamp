@@ -1,6 +1,6 @@
-import { db } from "../../db";
+import { db, withMutexLock } from "../../db";
 import { transactions, domains, users, customers } from "../../db/schema";
-import { eq, and, sql, or } from "drizzle-orm";
+import { eq, and, sql, or, inArray, ne } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { sumopodClient } from "../../lib/sumopod";
 import { LiquidClient } from "../../lib/liquid";
@@ -29,6 +29,79 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
   const fullDomain = (payload.domainName.includes(".")
     ? payload.domainName
     : `${payload.domainName}.${tld}`).toLowerCase().trim();
+
+  // R1: The cross-user protection below is entirely SELECT-then-INSERT with no
+  // atomicity — two different users can both pass the "is this domain already
+  // being ordered?" pre-check before either inserts a claim row, and because
+  // orderId is derived from intent that includes userId, the order_id UNIQUE
+  // gate only collapses duplicate submissions from the SAME user. Wrap the
+  // pre-check + claim INSERT in a per-domain MySQL advisory lock (works across
+  // processes/instances) so the second concurrent user sees the first one's
+  // fresh claim row and gets a 409 instead of a second payment link.
+  return withMutexLock(`lock:order:${fullDomain}`, async () => {
+    // Check if there's already an active transaction for this domain and order type
+    const allowedTypes: ("register" | "renew" | "transfer" | "restore" | "privacy" | "fund" | "debit")[] =
+    (payload.type === "register" || payload.type === "transfer")
+      ? ["register", "transfer"]
+      : [payload.type];
+
+  const [existingActiveTx] = await db.select().from(transactions).where(
+    and(
+      inArray(transactions.type, allowedTypes),
+      sql`JSON_UNQUOTE(JSON_EXTRACT(${transactions.metadata}, '$.domainName')) = ${fullDomain}`,
+      or(
+        eq(transactions.status, "pending_payment"),
+        eq(transactions.status, "processing_domain")
+      ),
+      sql`(${transactions.expiresAt} IS NULL OR ${transactions.expiresAt} > NOW())`,
+      sql`${transactions.createdAt} >= ${new Date(Date.now() - 60 * 60 * 1000)}`
+    )
+  ).limit(1);
+
+  if (existingActiveTx) {
+    if (existingActiveTx.userId === payload.userId && existingActiveTx.paymentLinkUrl) {
+      // Same user, return existing payment link (idempotency)
+      return {
+        transaction_id: existingActiveTx.id,
+        transactionId: existingActiveTx.id,
+        order_id: existingActiveTx.orderId || "",
+        orderId: existingActiveTx.orderId || "",
+        payment_id: existingActiveTx.paymentId || "",
+        paymentId: existingActiveTx.paymentId || "",
+        payment_link_url: existingActiveTx.paymentLinkUrl,
+        paymentLinkUrl: existingActiveTx.paymentLinkUrl,
+        amount: Number(existingActiveTx.amount),
+        status: existingActiveTx.status,
+        expires_at: existingActiveTx.expiresAt ? new Date(existingActiveTx.expiresAt).toISOString() : "",
+        expiresAt: existingActiveTx.expiresAt ? new Date(existingActiveTx.expiresAt).toISOString() : "",
+      };
+    } else if (existingActiveTx.userId === payload.userId) {
+      // Same user, mid-flight without paymentLinkUrl yet — wait briefly
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const [refreshed] = await db.select().from(transactions).where(eq(transactions.id, existingActiveTx.id)).limit(1);
+        if (refreshed?.paymentLinkUrl) {
+          return {
+            transaction_id: refreshed.id,
+            transactionId: refreshed.id,
+            order_id: refreshed.orderId || "",
+            orderId: refreshed.orderId || "",
+            payment_id: refreshed.paymentId || "",
+            paymentId: refreshed.paymentId || "",
+            payment_link_url: refreshed.paymentLinkUrl,
+            paymentLinkUrl: refreshed.paymentLinkUrl,
+            amount: Number(refreshed.amount),
+            status: refreshed.status,
+            expires_at: refreshed.expiresAt ? new Date(refreshed.expiresAt).toISOString() : "",
+            expiresAt: refreshed.expiresAt ? new Date(refreshed.expiresAt).toISOString() : "",
+          };
+        }
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    } else {
+      // Different user owns the active transaction, reject to prevent double charging
+      throw new AppError(`Domain ${fullDomain} sedang dalam proses pemesanan oleh pengguna lain. Silakan coba beberapa saat lagi.`, 409);
+    }
+  }
 
   // A-4 (race condition fix): the idempotency key is derived from the ORDER
   // INTENT (user + type + domain + years + customer), NOT from this attempt.
@@ -359,6 +432,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     expires_at: formattedExpiresAt,
     expiresAt: formattedExpiresAt,
   };
+  }); // end withMutexLock (R1)
 }
 
 /**
@@ -420,13 +494,28 @@ export async function processWebhookPayload(payload: any) {
       return { status: "ignored_already_completed" };
     }
     const finalStatus = eventType.includes("cancel") ? "cancelled" : eventType === "payment.failed" ? "failed" : "expired";
-    await db.update(transactions).set({
+    const updateRes: any = await db.update(transactions).set({
       paymentStatus: finalStatus as any,
       status: finalStatus as any,
-    }).where(eq(transactions.id, tx.id));
+    }).where(
+      and(
+        eq(transactions.id, tx.id),
+        ne(transactions.status, "completed"),
+        ne(transactions.status, "processing_domain")
+      )
+    );
 
-    if (tx.domainId) {
-      await db.update(domains).set({ status: finalStatus as any }).where(eq(domains.id, tx.domainId));
+    if ((updateRes[0]?.affectedRows ?? 0) === 0) {
+      return { status: "ignored_already_completed" };
+    }
+
+    // Only cancel domain record if this was a new registration order and the domain is still pending.
+    // For renewal ("renew") or privacy ("privacy"), tx.domainId points to an already active domain
+    // which must NEVER be cancelled due to an unpaid renewal/privacy invoice.
+    if (tx.domainId && tx.type === "register") {
+      await db.update(domains)
+        .set({ status: finalStatus as any })
+        .where(and(eq(domains.id, tx.domainId), eq(domains.status, "pending")));
     }
     return { status: `updated_${finalStatus}` };
   }
@@ -517,7 +606,17 @@ export async function processWebhookPayload(payload: any) {
       ) || null;
 
       const [existingDomain] = await db.select().from(domains).where(eq(domains.domainName, meta.domainName));
-      if (!existingDomain) {
+      if (existingDomain) {
+        await db.update(domains).set({
+          userId: tx.userId,
+          customerId: targetLocalCustomerId || existingDomain.customerId,
+          status: "active",
+          liquidOrderId: liquidOrderId ? String(liquidOrderId) : existingDomain.liquidOrderId,
+          autoRenew: meta.autoRenew ? 1 : existingDomain.autoRenew,
+          privacyProtection: meta.privacyProtection ? 1 : existingDomain.privacyProtection,
+          nameservers: meta.nameservers || existingDomain.nameservers,
+        }).where(eq(domains.id, existingDomain.id));
+      } else {
         await db.insert(domains).values({
           userId: tx.userId,
           customerId: targetLocalCustomerId,
@@ -529,7 +628,16 @@ export async function processWebhookPayload(payload: any) {
           privacyProtection: meta.privacyProtection ? 1 : 0,
           liquidOrderId: liquidOrderId ? String(liquidOrderId) : null,
           nameservers: meta.nameservers || [],
-        }).onDuplicateKeyUpdate({ set: { domainName: sql`${domains.domainName}` } });
+        }).onDuplicateKeyUpdate({
+          set: {
+            userId: tx.userId,
+            customerId: targetLocalCustomerId || sql`${domains.customerId}`,
+            status: "active",
+            liquidOrderId: liquidOrderId ? String(liquidOrderId) : sql`${domains.liquidOrderId}`,
+            autoRenew: meta.autoRenew ? 1 : sql`${domains.autoRenew}`,
+            privacyProtection: meta.privacyProtection ? 1 : sql`${domains.privacyProtection}`,
+          }
+        });
       }
     } else if (meta.type === "transfer") {
       const liquidRes = await liquid.transferDomain({
@@ -544,7 +652,17 @@ export async function processWebhookPayload(payload: any) {
       ) || null;
 
       const [existingDomain] = await db.select().from(domains).where(eq(domains.domainName, meta.domainName));
-      if (!existingDomain) {
+      if (existingDomain) {
+        await db.update(domains).set({
+          userId: tx.userId,
+          customerId: targetLocalCustomerId || existingDomain.customerId,
+          status: "pending",
+          liquidOrderId: liquidOrderId ? String(liquidOrderId) : existingDomain.liquidOrderId,
+          autoRenew: meta.autoRenew ? 1 : existingDomain.autoRenew,
+          privacyProtection: meta.privacyProtection ? 1 : existingDomain.privacyProtection,
+          nameservers: meta.nameservers || existingDomain.nameservers,
+        }).where(eq(domains.id, existingDomain.id));
+      } else {
         await db.insert(domains).values({
           userId: tx.userId,
           customerId: targetLocalCustomerId,
@@ -556,7 +674,16 @@ export async function processWebhookPayload(payload: any) {
           privacyProtection: meta.privacyProtection ? 1 : 0,
           liquidOrderId: liquidOrderId ? String(liquidOrderId) : null,
           nameservers: meta.nameservers || [],
-        }).onDuplicateKeyUpdate({ set: { domainName: sql`${domains.domainName}` } });
+        }).onDuplicateKeyUpdate({
+          set: {
+            userId: tx.userId,
+            customerId: targetLocalCustomerId || sql`${domains.customerId}`,
+            status: "pending",
+            liquidOrderId: liquidOrderId ? String(liquidOrderId) : sql`${domains.liquidOrderId}`,
+            autoRenew: meta.autoRenew ? 1 : sql`${domains.autoRenew}`,
+            privacyProtection: meta.privacyProtection ? 1 : sql`${domains.privacyProtection}`,
+          }
+        });
       }
     } else if (meta.type === "renew") {
       const domainId = meta.domainId || tx.domainId;
@@ -681,6 +808,12 @@ export async function processWebhookPayload(payload: any) {
 
     await db.update(transactions).set({ status: "completed" }).where(eq(transactions.id, tx.id));
     console.log(`[sumopod webhook] Transaction ${tx.id} completed for ${meta.domainName}`);
+
+    // Invalidate domain availability search cache
+    try {
+      const { invalidateDomainSearchCache } = await import("../domains/domains.service");
+      invalidateDomainSearchCache(meta.domainName);
+    } catch {}
 
     return { status: "processed_successfully" };
   } catch (err: any) {

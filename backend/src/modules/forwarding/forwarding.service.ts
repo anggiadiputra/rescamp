@@ -2,7 +2,7 @@ import { LiquidClient } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { db } from "../../db";
 import { domains, users } from "../../db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { getDomain } from "../domains/domains.service";
 
 // V2-01: forwarding service previously built userParam from the caller-supplied
@@ -114,7 +114,8 @@ export async function enablePrivacy(user: { resellerId: string | null; apiKey: s
   const domainRef = await resolveDomainRef(liquid, domain);
   const res = await liquid.enablePrivacyProtection(domainRef);
   if (domain.id && domain.id > 0) {
-    await db.update(domains).set({ privacyProtection: 1 }).where(eq(domains.id, domain.id));
+    await db.update(domains).set({ privacyProtection: 1 })
+      .where(and(eq(domains.id, domain.id), eq(domains.privacyProtection, 0)));
   }
   return res;
 }
@@ -127,7 +128,8 @@ export async function disablePrivacy(user: { resellerId: string | null; apiKey: 
   const domainRef = await resolveDomainRef(liquid, domain);
   const res = await liquid.disablePrivacyProtection(domainRef);
   if (domain.id && domain.id > 0) {
-    await db.update(domains).set({ privacyProtection: 0 }).where(eq(domains.id, domain.id));
+    await db.update(domains).set({ privacyProtection: 0 })
+      .where(and(eq(domains.id, domain.id), eq(domains.privacyProtection, 1)));
   }
   return res;
 }

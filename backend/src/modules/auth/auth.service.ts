@@ -30,12 +30,14 @@ export async function sendRegisterOtp(email: string) {
   const code = generateOtp();
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 menit
 
-  await db.update(otpCodes).set({ used: true }).where(
-    and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "register"), eq(otpCodes.used, false))
-  );
-
   const encryptedCode = await encryptOtpCode(code);
-  await db.insert(otpCodes).values({ email: cleanEmail, codeEncrypted: encryptedCode, purpose: "register", expiresAt });
+
+  await db.transaction(async (tx) => {
+    await tx.update(otpCodes).set({ used: true }).where(
+      and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "register"), eq(otpCodes.used, false))
+    );
+    await tx.insert(otpCodes).values({ email: cleanEmail, codeEncrypted: encryptedCode, purpose: "register", expiresAt });
+  });
 
   await sendEmail(cleanEmail, "register_otp", { otp: code, code, expiry_minutes: 5 });
 
@@ -53,17 +55,15 @@ export async function register(data: {
     throw new AppError("Kode OTP verifikasi diperlukan. Silakan verifikasi email Anda.", 400);
   }
   if (data.code) {
-    otpAttempts.assertAllowed(`register:${cleanEmail}`);
+    otpAttempts.assertAndRecordAttempt(`register:${cleanEmail}`);
     const [record] = await db.select().from(otpCodes).where(
       and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "register"), eq(otpCodes.used, false))
     ).orderBy(desc(otpCodes.id)).limit(1);
     if (!record) {
-      otpAttempts.recordFailure(`register:${cleanEmail}`);
       throw new AppError("Kode OTP verifikasi tidak valid", 401);
     }
     if (new Date() > record.expiresAt) throw new AppError("Kode OTP sudah kadaluarsa", 401);
     if (!(await otpCodeMatches(record, data.code))) {
-      otpAttempts.recordFailure(`register:${cleanEmail}`);
       throw new AppError("Kode OTP verifikasi tidak valid", 401);
     }
     // N1: CAS — if a concurrent caller already consumed this code, affectedRows=0 → reject
@@ -175,6 +175,19 @@ export async function register(data: {
           country: data.country || "ID", zipcode: data.zipcode || "",
           phone_cc: data.phone_cc || "62",
           phone: data.phone || "",
+        }).onDuplicateKeyUpdate({
+          set: {
+            userId: userId,
+            liquidCustomerId: liquidCustomerId ? liquidCustomerId : sql`${customers.liquidCustomerId}`,
+            name: data.name,
+            company: data.company || sql`${customers.company}`,
+            address: data.address || sql`${customers.address}`,
+            city: data.city || sql`${customers.city}`,
+            state: data.state || sql`${customers.state}`,
+            zipcode: data.zipcode || sql`${customers.zipcode}`,
+            phone_cc: data.phone_cc || sql`${customers.phone_cc}`,
+            phone: data.phone || sql`${customers.phone}`,
+          }
         });
         hasProfile = true;
       } catch (e) { console.error("[auth] customer record insert failed:", e); }
@@ -345,28 +358,26 @@ export async function updateProfile(userId: number, data: {
         } catch (e) { console.error("[profile] LIQUID customer update failed:", e); }
       })();
     } else if (!cust.liquidCustomerId && resellerId && apiKey) {
-      // Auto-create in LIQUID if not created yet
-      (async () => {
-        try {
-          const liquid = new LiquidClient(resellerId, apiKey);
-          const liqCust = await liquid.createCustomer({
-            name: updatedCust.name,
-            email: updatedCust.email,
-            company: updatedCust.company || "",
-            address: updatedCust.address || "",
-            city: updatedCust.city || "",
-            state: updatedCust.state || "",
-            country: updatedCust.country || "ID",
-            zipcode: updatedCust.zipcode || "",
-            phone_cc: updatedCust.phone_cc || "62",
-            phone: updatedCust.phone || "",
-          });
-          const liquidId = String(liqCust?.customer_id || liqCust?.id || "");
-          if (liquidId) {
-            await db.update(customers).set({ liquidCustomerId: liquidId }).where(eq(customers.id, cust.id));
-          }
-        } catch (e) { console.error("[profile] LIQUID customer create failed:", e); }
-      })();
+      // Synchronously create customer in LIQUID so subsequent checkout has liquidCustomerId immediately
+      try {
+        const liquid = new LiquidClient(resellerId, apiKey);
+        const liqCust = await liquid.createCustomer({
+          name: updatedCust.name,
+          email: updatedCust.email,
+          company: updatedCust.company || "",
+          address: updatedCust.address || "",
+          city: updatedCust.city || "",
+          state: updatedCust.state || "",
+          country: updatedCust.country || "ID",
+          zipcode: updatedCust.zipcode || "",
+          phone_cc: updatedCust.phone_cc || "62",
+          phone: updatedCust.phone || "",
+        });
+        const liquidId = String(liqCust?.customer_id || liqCust?.id || "");
+        if (liquidId) {
+          await db.update(customers).set({ liquidCustomerId: liquidId }).where(eq(customers.id, cust.id));
+        }
+      } catch (e) { console.error("[profile] LIQUID customer create failed:", e); }
     } else if (hasResellerCapabilities(user.role) && resellerId && apiKey) {
       // Sync reseller's own profile to LIQUID via /resellers/{id}
       (async () => {
@@ -534,15 +545,20 @@ export async function sendLoginOtp(email: string, password: string) {
   const code = generateOtp();
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 menit
 
-  // Invalidate old OTPs
-  await db.update(otpCodes).set({ used: true }).where(
-    and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "login"), eq(otpCodes.used, false))
-  );
-
   const encryptedCode = await encryptOtpCode(code);
-  await db.insert(otpCodes).values({ email: cleanEmail, codeEncrypted: encryptedCode, purpose: "login", expiresAt });
 
-  otpAttempts.clear(`login:${cleanEmail}`);
+  // Invalidate old OTPs and insert new code atomically in transaction
+  await db.transaction(async (tx) => {
+    await tx.update(otpCodes).set({ used: true }).where(
+      and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "login"), eq(otpCodes.used, false))
+    );
+    await tx.insert(otpCodes).values({ email: cleanEmail, codeEncrypted: encryptedCode, purpose: "login", expiresAt });
+  });
+
+  // R3: do NOT clear the per-email OTP lockout here. Sending a new OTP must
+  // not reset the brute-force counter — otherwise an attacker who has been
+  // locked out can re-send the OTP to wipe the lockout and try again
+  // indefinitely. The counter ages out via evictExpired.
 
   await sendEmail(cleanEmail, "login_otp", { otp: code, code, expiry_minutes: 5 });
 
@@ -554,14 +570,13 @@ export async function verifyLoginOtp(email: string, code: string) {
   const cleanCode = (code || "").trim();
   if (!cleanCode) throw new AppError("Kode OTP tidak valid atau sudah digunakan", 401);
 
-  otpAttempts.assertAllowed(`login:${cleanEmail}`);
+  otpAttempts.assertAndRecordAttempt(`login:${cleanEmail}`);
 
   const [record] = await db.select().from(otpCodes).where(
     and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "login"), eq(otpCodes.used, false))
   ).orderBy(desc(otpCodes.id)).limit(1);
 
   if (!record || !(await otpCodeMatches(record, cleanCode))) {
-    otpAttempts.recordFailure(`login:${cleanEmail}`);
     throw new AppError("Kode OTP tidak valid atau sudah digunakan", 401);
   }
   if (new Date() > record.expiresAt) throw new AppError("Kode OTP sudah kadaluarsa. Silakan minta kode baru.", 401);
@@ -597,16 +612,17 @@ export async function forgotPassword(email: string) {
   const otpCode = generateOtp();
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 menit
 
-  // Invalidate previous unused reset tokens for this email
-  await db.update(otpCodes).set({ used: true }).where(
-    and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "reset"), eq(otpCodes.used, false))
-  );
-
-  // Insert both token and 6-digit OTP code so user can reset via link OR OTP code
   const encryptedToken = await encryptOtpCode(token);
   const encryptedOtpCode = await encryptOtpCode(otpCode);
-  await db.insert(otpCodes).values({ email: cleanEmail, codeEncrypted: encryptedToken, purpose: "reset", expiresAt });
-  await db.insert(otpCodes).values({ email: cleanEmail, codeEncrypted: encryptedOtpCode, purpose: "reset", expiresAt });
+
+  // Invalidate previous unused reset tokens and insert both credentials atomically in transaction
+  await db.transaction(async (tx) => {
+    await tx.update(otpCodes).set({ used: true }).where(
+      and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "reset"), eq(otpCodes.used, false))
+    );
+    await tx.insert(otpCodes).values({ email: cleanEmail, codeEncrypted: encryptedToken, purpose: "reset", expiresAt });
+    await tx.insert(otpCodes).values({ email: cleanEmail, codeEncrypted: encryptedOtpCode, purpose: "reset", expiresAt });
+  });
 
   // Keep the one-time credential in the fragment so it is not sent in HTTP requests.
   const origins = (env.CORS_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -637,7 +653,8 @@ export async function resetPassword(tokenOrCode: string, newPassword: string, em
   if (!email || !email.trim()) throw new AppError("Email wajib diisi untuk reset password", 400);
   const cleanEmail = email.trim().toLowerCase();
   const attemptKey = `reset:${cleanEmail}`;
-  otpAttempts.assertAllowed(attemptKey);
+  
+  otpAttempts.assertAndRecordAttempt(attemptKey);
 
   // Scope to the specific user's email only
   const rows = await db.select().from(otpCodes).where(
@@ -654,23 +671,23 @@ export async function resetPassword(tokenOrCode: string, newPassword: string, em
   }
 
   if (!record) {
-    otpAttempts.recordFailure(attemptKey);
     throw new AppError("Token atau Kode OTP reset tidak valid atau sudah digunakan", 401);
   }
   if (new Date() > (record as any).expiresAt) throw new AppError("Token atau Kode OTP reset sudah kadaluarsa", 401);
 
   // N1: CAS — a concurrent reset must not consume the same credential twice
   // (e.g. link token and OTP code for the same email raced together).
+  // Perform atomic batch invalidation for all active reset tokens for this email
   const consume: any = await db.update(otpCodes).set({ used: true })
-    .where(and(eq(otpCodes.id, record.id), eq(otpCodes.used, false)));
+    .where(and(
+      eq(otpCodes.email, cleanEmail),
+      eq(otpCodes.purpose, "reset"),
+      eq(otpCodes.used, false)
+    ));
+  
   if ((consume[0]?.affectedRows ?? 0) === 0) {
     throw new AppError("Token atau Kode OTP reset sudah digunakan", 401);
   }
-
-  // Invalidate the remaining reset tokens for this email
-  await db.update(otpCodes).set({ used: true }).where(
-    and(eq(otpCodes.email, record.email), eq(otpCodes.purpose, "reset"))
-  );
 
   const passwordHash = await hashPassword(newPassword);
   await db.update(users).set({

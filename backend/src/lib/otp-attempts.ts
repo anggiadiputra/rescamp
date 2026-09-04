@@ -16,11 +16,30 @@ export class OtpAttemptTracker {
     }
   }
 
+  assertAndRecordAttempt(key: string): void {
+    const now = Date.now();
+    const record = this.store.get(key);
+    if (record && record.count >= this.maxFailures && now < record.lockedUntil) {
+      const remainSec = Math.ceil((record.lockedUntil - now) / 1000);
+      throw new AppError(`Terlalu banyak percobaan OTP salah. Coba lagi dalam ${remainSec} detik.`, 429);
+    }
+    const current = record || { count: 0, lockedUntil: 0 };
+    current.count += 1;
+    if (current.count >= this.maxFailures) {
+      current.lockedUntil = now + this.lockoutMs;
+    }
+    this.store.set(key, current);
+  }
+
   recordFailure(key: string): void {
     const record = this.store.get(key) || { count: 0, lockedUntil: 0 };
     record.count += 1;
     if (record.count >= this.maxFailures) record.lockedUntil = Date.now() + this.lockoutMs;
     this.store.set(key, record);
+  }
+
+  recordAttempt(key: string): void {
+    this.assertAndRecordAttempt(key);
   }
 
   clear(key: string): void {

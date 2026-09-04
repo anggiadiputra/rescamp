@@ -9,7 +9,7 @@ import { billingRoutes } from "./modules/billing/billing.route";
 import { forwardingRoutes } from "./modules/forwarding/forwarding.route";
 import { paymentRoutes } from "./modules/payments/payments.route";
 import { settingsRoutes } from "./modules/settings/settings.route";
-import { sweepExpiredTransactions, sweepActionRequiredRetries } from "./modules/billing/billing.service";
+import { sweepExpiredTransactions, sweepActionRequiredRetries, recoverStuckProcessingDomains } from "./modules/billing/billing.service";
 import { ensureDatabaseSchema } from "./db";
 import { AppError } from "./lib/error";
 import { securityHeaders } from "./lib/security-headers";
@@ -107,9 +107,11 @@ function startAutoExpireSweeper() {
   if (sweepTimer) return;
   sweepExpiredTransactions().catch((e) => console.warn("[sweeper] initial run failed:", e));
   sweepActionRequiredRetries().catch((e) => console.warn("[sweeper] initial action_required run failed:", e));
+  recoverStuckProcessingDomains().catch((e) => console.warn("[sweeper] initial processing_domain recovery failed:", e));
   sweepTimer = setInterval(() => {
     sweepExpiredTransactions().catch((e) => console.warn("[sweeper] run failed:", e));
     sweepActionRequiredRetries().catch((e) => console.warn("[sweeper] action_required run failed:", e));
+    recoverStuckProcessingDomains().catch((e) => console.warn("[sweeper] processing_domain recovery failed:", e));
   }, 15 * 60 * 1000);
 }
 

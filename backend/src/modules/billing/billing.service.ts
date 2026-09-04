@@ -194,6 +194,40 @@ async function upsertLiquidTransaction(userId: number, item: any) {
 }
 
 /**
+ * R2 recovery: flip `processing_domain` rows that are STUCK back to
+ * `action_required` so the normal action_required sweeper picks them up.
+ *
+ * `processing_domain` is set at the START of webhook/sweeper payment processing
+ * (a CAS from pending/expired/failed/action_required) and is normally a
+ * short-lived "in-flight" state that ends in `completed` or back to a
+ * non-processing state. But if the process crashes AFTER marking the row
+ * processing_domain and BEFORE the outer try/catch (no catch => no reset), the
+ * row can sit in processing_domain forever: the webhook reclaim guard only
+ * recovers pending/expired/failed, and the sweeper only selects action_required,
+ * and sweepExpiredTransactions skips it. The domain is effectively orphaned.
+ *
+ * A row legitimately in-processing is short-lived (seconds to a few minutes of
+ * registrar API calls), so a generous stale window is safe: any row still
+ * processing_domain this long after creation is treated as an orphan. Recovery
+ * is re-runnable/idempotent and gated by the sweeper's existing CAS so it can't
+ * fight a live webhook.
+ */
+export async function recoverStuckProcessingDomains(staleMinutes = 30) {
+  const staleBefore = new Date(Date.now() - staleMinutes * 60 * 1000);
+  const result: any = await db.update(transactions)
+    .set({ status: "action_required" })
+    .where(and(
+      eq(transactions.status, "processing_domain"),
+      sql`${transactions.createdAt} IS NOT NULL AND ${transactions.createdAt} < ${staleBefore}`
+    ));
+  const changed = result[0]?.affectedRows ?? result?.affectedRows ?? 0;
+  if (changed > 0) {
+    console.log(`[sweeper] recovered ${changed} stuck processing_domain transaction(s) back to action_required`);
+  }
+  return changed;
+}
+
+/**
  * Background sweeper: retry payCustomerTransaction for action_required rows.
  * Mirrors the post-pay success path from payments.service.ts:422-465.
  * Bounded retries via metadata.retryCount (CAS-guarded). Path (a) rows —
@@ -231,7 +265,10 @@ export async function sweepActionRequiredRetries() {
 
     const currentRetry = Number(meta.retryCount || 0);
     const casResult: any = await db.update(transactions)
-      .set({ metadata: sql`JSON_SET(COALESCE(${transactions.metadata}, JSON_OBJECT()), '$.retryCount', ${currentRetry + 1})` })
+      .set({
+        status: "processing_domain",
+        metadata: sql`JSON_SET(COALESCE(${transactions.metadata}, JSON_OBJECT()), '$.retryCount', ${currentRetry + 1})`
+      })
       .where(and(
         eq(transactions.id, row.id),
         eq(transactions.status, "action_required"),
@@ -305,7 +342,7 @@ export async function sweepActionRequiredRetries() {
       processed++;
     } catch (err: any) {
       const updatedMeta = sql`JSON_SET(COALESCE(${transactions.metadata}, JSON_OBJECT()), '$.lastError', ${err?.message || String(err)})`;
-      await db.update(transactions).set({ metadata: updatedMeta }).where(eq(transactions.id, tx.id));
+      await db.update(transactions).set({ status: "action_required", metadata: updatedMeta }).where(eq(transactions.id, tx.id));
       console.warn(`[sweeper] retry ${currentRetry + 1}/${MAX_ACTION_REQUIRED_RETRIES} failed for tx ${tx.id}: ${err?.message || err}`);
     }
   }
