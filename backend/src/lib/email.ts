@@ -2,12 +2,23 @@ import { env } from "../config/env";
 import { getSystemSettings } from "../modules/settings/settings.service";
 import { AppError } from "./error";
 
+// Cache the email config for a short TTL so a burst of emails (e.g. the expired
+// sweeper notifying N transactions) doesn't trigger N+1 DB reads of app_settings.
+// Email provider credentials change rarely; 60s staleness is acceptable and the
+// cache is invalidated on the next call after expiry.
+let emailConfigCache: { at: number; cfg: any } | null = null;
+const EMAIL_CONFIG_TTL_MS = 60_000;
+
 async function getEmailConfig() {
+  const now = Date.now();
+  if (emailConfigCache && now - emailConfigCache.at < EMAIL_CONFIG_TTL_MS) {
+    return emailConfigCache.cfg;
+  }
   // Read through the settings service so encrypted provider credentials are
   // decrypted before they are sent to Kirisan or Brevo.
   const map = await getSystemSettings();
 
-  return {
+  const cfg = {
     provider: (map.email_provider || "kirisan").toLowerCase(),
     brandName: map.brand_name || "Ekstensi.id",
     // Kirisan
@@ -28,6 +39,8 @@ async function getEmailConfig() {
     smtpFromName: map.smtp_from_name || map.brand_name || "Ekstensi.id Support",
     brevoApiKey: map.brevo_api_key || map.smtp_pass || "",
   };
+  emailConfigCache = { at: now, cfg };
+  return cfg;
 }
 
 function renderEmailHtml(
