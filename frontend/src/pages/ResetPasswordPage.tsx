@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, Button, InfoBanner, PasswordInput } from "../components/ui";
 import { api } from "../lib/api";
-import { Lock, Key, Mail, CheckCircle2, ShieldCheck, RefreshCw } from "lucide-react";
+import { Lock, CheckCircle2, ShieldCheck } from "lucide-react";
 
 export default function ResetPasswordPage() {
   // SECURITY (audit B-item): the reset token is ONLY read from the URL FRAGMENT
@@ -12,60 +12,23 @@ export default function ResetPasswordPage() {
   const hashParams = new URLSearchParams(window.location.hash.slice(1));
   const initialToken = hashParams.get("token") || "";
   const initialEmail = hashParams.get("email") || "";
-  const wasSent = hashParams.get("sent") === "true";
 
   const [email, setEmail] = useState(initialEmail);
-  const [inputToken, setInputToken] = useState(initialToken);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
-  const [resending, setResending] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(wasSent ? 30 : 0);
-  const [resendMessage, setResendMessage] = useState(
-    wasSent ? `Kode OTP reset password telah dikirim ke ${initialEmail || "email Anda"}. Silakan periksa inbox/spam.` : ""
-  );
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
 
-  // No URL-sync effect: the token/email arrive only via the hash fragment,
-  // which is read once at mount (see hashParams above).
-
-  // Countdown timer for resend OTP
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const timer = setInterval(() => {
-      setResendCooldown((prev) => prev - 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [resendCooldown]);
-
-  const hasDirectToken = !!inputToken && inputToken.length > 10;
-
-  async function handleResendOtp() {
-    const cleanEmail = (email || "").trim().toLowerCase();
-    if (!cleanEmail) {
-      setError("Masukkan email Anda terlebih dahulu untuk mengirim ulang kode.");
-      return;
-    }
-    setError("");
-    setResending(true);
-    try {
-      await api.post("/auth/forgot-password", { email: cleanEmail });
-      setResendMessage(`Kode OTP baru telah dikirim ke ${cleanEmail}.`);
-      setResendCooldown(30);
-    } catch (err: any) {
-      setError(err.message || "Gagal mengirim ulang kode OTP");
-    }
-    setResending(false);
-  }
+  const hasDirectToken = !!initialToken && initialToken.length > 10;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (loading) return;
     const cleanEmail = (email || "").trim().toLowerCase();
-    const finalToken = (inputToken || "").trim();
+    const finalToken = (initialToken || "").trim();
     if (!cleanEmail) { setError("Masukkan alamat email Anda"); return; }
-    if (!finalToken) { setError("Masukkan Kode OTP atau Token Reset"); return; }
+    if (!finalToken) { setError("Tautan reset tidak valid. Silakan minta link baru dari email."); return; }
     if (password !== confirm) { setError("Password dan Konfirmasi Password tidak cocok"); return; }
     if (!/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(password)) {
       setError("Password minimal 8 karakter dan harus mengandung kombinasi huruf & angka");
@@ -77,7 +40,7 @@ export default function ResetPasswordPage() {
       await api.post("/auth/reset-password", { token: finalToken, password, email: cleanEmail });
       setDone(true);
     } catch (err: any) {
-      setError(err.message || "Gagal mengatur password baru. Pastikan Kode OTP atau Token valid.");
+      setError(err.message || "Gagal mengatur password baru. Pastikan tautan reset valid.");
     }
     setLoading(false);
   }
@@ -114,15 +77,9 @@ export default function ResetPasswordPage() {
           <p className="text-sm text-gray-500 mt-1">
             {hasDirectToken
               ? "Tautan reset terverifikasi. Masukkan kata sandi baru Anda di bawah ini."
-              : "Masukkan email, Kode OTP / Token yang dikirim ke email, dan password baru Anda."}
+              : "Buka tautan reset dari email Anda untuk mengatur password baru."}
           </p>
         </div>
-
-        {resendMessage && (
-          <div className="mb-4">
-            <InfoBanner type="success" message={resendMessage} />
-          </div>
-        )}
 
         {error && (
           <div className="mb-4">
@@ -140,7 +97,7 @@ export default function ResetPasswordPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1">
-              <Mail className="w-3.5 h-3.5" /> Email Akun
+              Email Akun
             </label>
             <input
               type="email"
@@ -148,31 +105,6 @@ export default function ResetPasswordPage() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="nama@email.com"
               className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-black text-gray-800"
-              required
-            />
-          </div>
-
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                <Key className="w-3.5 h-3.5" /> Kode OTP / Token Reset
-              </label>
-              <button
-                type="button"
-                onClick={handleResendOtp}
-                disabled={resending || resendCooldown > 0}
-                className="text-xs text-blue-600 hover:underline disabled:opacity-50 disabled:no-underline flex items-center gap-1"
-              >
-                <RefreshCw className={`w-3 h-3 ${resending ? "animate-spin" : ""}`} />
-                {resendCooldown > 0 ? `Kirim Ulang (${resendCooldown}s)` : "Kirim Ulang OTP"}
-              </button>
-            </div>
-            <input
-              type="text"
-              value={inputToken}
-              onChange={(e) => setInputToken(e.target.value)}
-              placeholder="Contoh: 123456 atau Token Reset"
-              className="w-full px-3.5 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-black text-gray-800 font-mono tracking-wider"
               required
             />
           </div>
@@ -215,4 +147,3 @@ export default function ResetPasswordPage() {
     </div>
   );
 }
-

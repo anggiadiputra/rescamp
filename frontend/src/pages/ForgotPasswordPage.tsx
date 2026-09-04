@@ -53,13 +53,12 @@ export default function ForgotPasswordPage() {
             />
           </div>
           <Button type="submit" disabled={loading} className="w-full">
-            {loading ? "Mengirim Kode Reset..." : "Kirim Kode & Atur Password Baru"}
+            {loading ? "Mengirim Link Reset..." : "Kirim Link Reset Password"}
           </Button>
         </form>
 
         <div className="mt-4 flex justify-between items-center text-xs text-gray-500">
           <Link to="/login" className="text-black font-semibold hover:underline">← Kembali ke Login</Link>
-          <Link to="/reset-password" className="hover:underline">Sudah punya Kode OTP? →</Link>
         </div>
       </Card>
     </div>

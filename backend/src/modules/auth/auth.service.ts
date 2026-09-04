@@ -605,23 +605,21 @@ export async function forgotPassword(email: string) {
   const [user] = await db.select().from(users).where(eq(users.email, cleanEmail));
   // H6 anti-enumeration: same response whether or not the email exists; nothing sent if not
   if (!user) {
-    return { message: "Link & Kode OTP reset password telah berhasil dikirim" };
+    return { message: "Link reset password telah berhasil dikirim" };
   }
 
   const token = generateResetToken();
-  const otpCode = generateOtp();
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 menit
 
   const encryptedToken = await encryptOtpCode(token);
-  const encryptedOtpCode = await encryptOtpCode(otpCode);
 
-  // Invalidate previous unused reset tokens and insert both credentials atomically in transaction
+  // Invalidate previous unused reset tokens and insert the new one atomically.
+  // (Simplified: only a single link-token credential, no separate OTP code.)
   await db.transaction(async (tx) => {
     await tx.update(otpCodes).set({ used: true }).where(
       and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "reset"), eq(otpCodes.used, false))
     );
     await tx.insert(otpCodes).values({ email: cleanEmail, codeEncrypted: encryptedToken, purpose: "reset", expiresAt });
-    await tx.insert(otpCodes).values({ email: cleanEmail, codeEncrypted: encryptedOtpCode, purpose: "reset", expiresAt });
   });
 
   // Keep the one-time credential in the fragment so it is not sent in HTTP requests.
@@ -631,8 +629,6 @@ export async function forgotPassword(email: string) {
 
   await sendEmail(cleanEmail, "reset_password", {
     token,
-    code: otpCode,
-    otp: otpCode,
     reset_link: resetLink,
     reset_url: resetLink,
     link: resetLink,
@@ -643,20 +639,21 @@ export async function forgotPassword(email: string) {
   });
 
   return {
-    message: "Link & Kode OTP reset password telah berhasil dikirim",
+    message: "Link reset password telah berhasil dikirim",
   };
 }
 
 export async function resetPassword(tokenOrCode: string, newPassword: string, email?: string) {
   const clean = (tokenOrCode || "").trim();
-  if (!clean) throw new AppError("Token atau Kode OTP reset tidak valid", 400);
+  if (!clean) throw new AppError("Token reset tidak valid", 400);
   if (!email || !email.trim()) throw new AppError("Email wajib diisi untuk reset password", 400);
   const cleanEmail = email.trim().toLowerCase();
   const attemptKey = `reset:${cleanEmail}`;
   
   otpAttempts.assertAndRecordAttempt(attemptKey);
 
-  // Scope to the specific user's email only
+  // Scope to the specific user's email only. (Simplified: only the link token
+  // is accepted — no separate OTP code.)
   const rows = await db.select().from(otpCodes).where(
     and(
       eq(otpCodes.purpose, "reset"),
@@ -671,12 +668,11 @@ export async function resetPassword(tokenOrCode: string, newPassword: string, em
   }
 
   if (!record) {
-    throw new AppError("Token atau Kode OTP reset tidak valid atau sudah digunakan", 401);
+    throw new AppError("Token reset tidak valid atau sudah digunakan", 401);
   }
-  if (new Date() > (record as any).expiresAt) throw new AppError("Token atau Kode OTP reset sudah kadaluarsa", 401);
+  if (new Date() > (record as any).expiresAt) throw new AppError("Token reset sudah kadaluarsa", 401);
 
-  // N1: CAS — a concurrent reset must not consume the same credential twice
-  // (e.g. link token and OTP code for the same email raced together).
+  // N1: CAS — a concurrent reset must not consume the same credential twice.
   // Perform atomic batch invalidation for all active reset tokens for this email
   const consume: any = await db.update(otpCodes).set({ used: true })
     .where(and(
@@ -686,7 +682,7 @@ export async function resetPassword(tokenOrCode: string, newPassword: string, em
     ));
   
   if ((consume[0]?.affectedRows ?? 0) === 0) {
-    throw new AppError("Token atau Kode OTP reset sudah digunakan", 401);
+    throw new AppError("Token reset sudah digunakan", 401);
   }
 
   const passwordHash = await hashPassword(newPassword);
