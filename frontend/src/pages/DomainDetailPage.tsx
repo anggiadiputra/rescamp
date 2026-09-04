@@ -721,7 +721,7 @@ export default function DomainDetailPage() {
 
           {/* Action 2: Renew Domain */}
           <button
-            onClick={() => { setRenewYears(1); setRenewOpen(true); }}
+            onClick={() => { setRenewYears(1); setRenewWithPrivacy(Boolean(domain.privacyProtection)); setRenewOpen(true); }}
             disabled={domain.status === "suspended"}
             title={domain.status === "suspended" ? "Domain suspended — unsuspend dulu" : undefined}
             className={`p-4 sm:p-5 bg-gray-50 border border-gray-200/80 rounded-xl transition-all flex flex-col justify-between gap-3 text-left group ${
