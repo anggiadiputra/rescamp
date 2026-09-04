@@ -392,6 +392,10 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
       nameservers: payload.nameservers || [],
       autoRenew: payload.autoRenew || false,
       privacyProtection: payload.privacyProtection || false,
+      // Transfer auth code must be persisted so the post-payment webhook can
+      // execute the transfer with the correct EPP code. Without this, the
+      // webhook sends auth_code:"" and the transfer always fails.
+      authCode: payload.authCode || "",
       liquidOrderId,
       liquidTransactionId,
       liquidCustomerId: targetLiquidCustomerId,

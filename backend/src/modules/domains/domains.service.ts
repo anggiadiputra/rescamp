@@ -613,6 +613,19 @@ export async function orderTransferDomain(
   const liquid = await getLiquidRequired(user);
   const tld = data.domain_name.split(".").slice(1).join(".").toLowerCase();
 
+  // Validate the EPP auth code BEFORE creating a payment link, so a customer
+  // never pays for a transfer that will fail because the code is wrong.
+  if (data.auth_code && data.auth_code.trim()) {
+    try {
+      await liquid.checkTransferValidity(data.domain_name, data.auth_code.trim());
+    } catch (e: any) {
+      throw new AppError(
+        `Kode otorisasi (EPP/Auth Code) untuk ${data.domain_name} tidak valid. Periksa kembali kode dari registrar saat ini.`,
+        400,
+      );
+    }
+  }
+
   let unitPrice = 150000;
   try {
     const rawCustPrices = await liquid.getCustomerPrices();
