@@ -31,7 +31,7 @@ async function getEmailConfig() {
 }
 
 function renderEmailHtml(
-  type: "login_otp" | "register_otp" | "reset_password" | "register_success",
+  type: "login_otp" | "register_otp" | "reset_password" | "register_success" | "order_invoice" | "payment_success" | "payment_failed" | "payment_expired",
   vars: Record<string, any>,
   brandName: string
 ): string {
@@ -73,6 +73,71 @@ function renderEmailHtml(
     `;
   }
 
+  if (type === "order_invoice") {
+    const domain = vars.domainName || vars.domain || "";
+    const years = vars.years || 1;
+    const amount = vars.amount || 0;
+    const orderId = vars.orderId || "";
+    const payUrl = vars.paymentLinkUrl || vars.payment_link_url || "#";
+    const typeLabel = vars.orderTypeLabel || "Domain";
+    return `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; color: #111827;">
+        <h2 style="margin-top: 0; font-size: 20px; font-weight: 700; color: #111827;">Invoice ${typeLabel} — ${brandName}</h2>
+        <p style="font-size: 14px; color: #4b5563; line-height: 1.5;">Terima kasih! Pesanan Anda telah dibuat dan menunggu pembayaran.</p>
+        <div style="background: #f9fafb; border-radius: 8px; padding: 16px; margin: 20px 0; font-size: 14px; color: #111827;">
+          <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">Domain</span><strong>${domain}</strong></div>
+          <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">Durasi</span><strong>${years} tahun</strong></div>
+          <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">No. Order</span><strong>${orderId}</strong></div>
+          <div style="display: flex; justify-content: space-between; padding: 4px 0; border-top: 1px solid #e5e7eb; margin-top: 8px; padding-top: 8px;"><span style="color: #6b7280;">Total</span><strong style="font-size: 16px;">${amount}</strong></div>
+        </div>
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${payUrl}" style="background-color: #000000; color: #ffffff; text-decoration: none; padding: 12px 28px; font-size: 14px; font-weight: 700; border-radius: 8px; display: inline-block;">Bayar Sekarang</a>
+        </div>
+        <p style="font-size: 12px; color: #9ca3af; line-height: 1.5; margin-bottom: 0;">Link pembayaran berlaku 1 jam. Jika tidak dibayar, pesanan akan dibatalkan otomatis.</p>
+      </div>
+    `;
+  }
+
+  if (type === "payment_success") {
+    const domain = vars.domainName || vars.domain || "";
+    const orderId = vars.orderId || "";
+    const amount = vars.amount || 0;
+    return `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; color: #111827;">
+        <h2 style="margin-top: 0; font-size: 20px; font-weight: 700; color: #059669;">Pembayaran Berhasil — ${brandName}</h2>
+        <p style="font-size: 14px; color: #4b5563; line-height: 1.5;">Pembayaran Anda telah kami terima. Pesanan sedang diproses.</p>
+        <div style="background: #f9fafb; border-radius: 8px; padding: 16px; margin: 20px 0; font-size: 14px; color: #111827;">
+          <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">Domain</span><strong>${domain}</strong></div>
+          <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">No. Order</span><strong>${orderId}</strong></div>
+          <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">Total Dibayar</span><strong>${amount}</strong></div>
+        </div>
+        <p style="font-size: 12px; color: #9ca3af; line-height: 1.5; margin-bottom: 0;">Detail status pesanan dapat dilihat di dashboard Anda.</p>
+      </div>
+    `;
+  }
+
+  if (type === "payment_failed" || type === "payment_expired") {
+    const domain = vars.domainName || vars.domain || "";
+    const orderId = vars.orderId || "";
+    const isExpired = type === "payment_expired";
+    const title = isExpired ? "Pembayaran Kedaluwarsa" : "Pembayaran Gagal";
+    const color = isExpired ? "#d97706" : "#dc2626";
+    const msg = isExpired
+      ? "Link pembayaran Anda telah kedaluwarsa dan pesanan dibatalkan."
+      : "Pembayaran Anda tidak berhasil diproses dan pesanan dibatalkan.";
+    return `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; color: #111827;">
+        <h2 style="margin-top: 0; font-size: 20px; font-weight: 700; color: ${color};">${title} — ${brandName}</h2>
+        <p style="font-size: 14px; color: #4b5563; line-height: 1.5;">${msg}</p>
+        <div style="background: #f9fafb; border-radius: 8px; padding: 16px; margin: 20px 0; font-size: 14px; color: #111827;">
+          <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">Domain</span><strong>${domain}</strong></div>
+          <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">No. Order</span><strong>${orderId}</strong></div>
+        </div>
+        <p style="font-size: 12px; color: #9ca3af; line-height: 1.5; margin-bottom: 0;">Anda dapat membuat pesanan baru kapan saja melalui dashboard.</p>
+      </div>
+    `;
+  }
+
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; color: #111827;">
       <h2 style="margin-top: 0; font-size: 20px; font-weight: 700; color: #111827;">Selamat Datang di ${brandName}!</h2>
@@ -83,7 +148,7 @@ function renderEmailHtml(
 
 export async function sendEmail(
   to: string,
-  type: "login_otp" | "register_otp" | "reset_password" | "register_success",
+  type: "login_otp" | "register_otp" | "reset_password" | "register_success" | "order_invoice" | "payment_success" | "payment_failed" | "payment_expired",
   variables: Record<string, any>
 ) {
   // H1: never log OTP codes or reset links — they are live credentials. Log destination + type.
@@ -142,6 +207,10 @@ export async function sendEmail(
     register_otp: `[${cfg.brandName}] Kode OTP Pendaftaran Anda`,
     reset_password: `[${cfg.brandName}] Petunjuk Reset Password`,
     register_success: `Selamat Datang di ${cfg.brandName}!`,
+    order_invoice: `[${cfg.brandName}] Invoice Pesanan — Menunggu Pembayaran`,
+    payment_success: `[${cfg.brandName}] Pembayaran Berhasil`,
+    payment_failed: `[${cfg.brandName}] Pembayaran Gagal`,
+    payment_expired: `[${cfg.brandName}] Pembayaran Kedaluwarsa`,
   };
 
   const subject = subjectMap[type] || `[${cfg.brandName}] Notifikasi Account`;

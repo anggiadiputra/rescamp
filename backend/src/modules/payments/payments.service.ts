@@ -7,6 +7,42 @@ import { LiquidClient } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { resolveResellerCreds } from "../../lib/reseller-creds";
 import { canAccessTenantResource, loadTenantScope } from "../../lib/tenant-access";
+import { sendEmail } from "../../lib/email";
+
+type EmailType =
+  | "order_invoice"
+  | "payment_success"
+  | "payment_failed"
+  | "payment_expired";
+
+/**
+ * Send a transactional email to BOTH the customer who placed the order and the
+ * operator (admin) account, so neither side misses the notification. Email
+ * delivery is best-effort: a failure to send must never break the order/payment
+ * flow, so errors are logged and swallowed.
+ */
+async function notifyOrderEmails(
+  type: EmailType,
+  toEmail: string | null | undefined,
+  vars: Record<string, any>,
+) {
+  const recipients = new Set<string>();
+  if (toEmail && toEmail.trim()) recipients.add(toEmail.trim().toLowerCase());
+  try {
+    const [admin] = await db.select({ email: users.email }).from(users)
+      .where(eq(users.role, "admin")).limit(1);
+    if (admin?.email && admin.email.trim()) recipients.add(admin.email.trim().toLowerCase());
+  } catch (e) {
+    console.warn("[payments] notifyOrderEmails: admin lookup failed:", (e as any)?.message || e);
+  }
+  for (const email of recipients) {
+    try {
+      await sendEmail(email, type, vars);
+    } catch (e) {
+      console.warn(`[payments] ${type} email to ${email} failed (non-blocking):`, (e as any)?.message || e);
+    }
+  }
+}
 
 export interface CreateDomainOrderPayload {
   userId: number;
@@ -405,6 +441,23 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
   // A-4: we own the claim row (txId) — UPDATE it instead of inserting a new one.
   await db.update(transactions).set(transactionData).where(eq(transactions.id, txId));
 
+  // Send invoice email (customer + operator) with the payment link. Best-effort:
+  // a send failure must not break the order flow.
+  const orderTypeLabel =
+    payload.type === "register" ? "Pendaftaran Domain"
+    : payload.type === "transfer" ? "Transfer Domain"
+    : payload.type === "renew" ? "Perpanjangan Domain"
+    : payload.type === "privacy" ? "WHOIS Protection"
+    : "Domain";
+  notifyOrderEmails("order_invoice", user.email, {
+    domainName: fullDomain,
+    years,
+    amount: `Rp ${Number(payload.amount).toLocaleString("id-ID")}`,
+    orderId,
+    paymentLinkUrl: sumopodRes.payment_link_url,
+    orderTypeLabel,
+  }).catch((e) => console.warn("[payments] order_invoice email failed (non-blocking):", e?.message || e));
+
   return {
     transaction_id: txId,
     transactionId: txId,
@@ -503,6 +556,20 @@ export async function processWebhookPayload(payload: any) {
         .set({ status: finalStatus as any })
         .where(and(eq(domains.id, tx.domainId), eq(domains.status, "pending")));
     }
+
+    // Notify customer + operator that the payment failed/expired/cancelled.
+    const emailType: EmailType =
+      finalStatus === "expired" ? "payment_expired"
+      : finalStatus === "failed" ? "payment_failed"
+      : "payment_failed"; // cancelled → treat as failed notification
+    const [txUser] = await db.select({ email: users.email }).from(users).where(eq(users.id, tx.userId)).limit(1);
+    let metaName = "";
+    try { metaName = (typeof tx.metadata === "string" ? JSON.parse(tx.metadata) : tx.metadata)?.domainName || ""; } catch {}
+    notifyOrderEmails(emailType, txUser?.email, {
+      domainName: metaName || "",
+      orderId: tx.orderId || "",
+    }).catch((e) => console.warn(`[payments] ${emailType} email failed (non-blocking):`, e?.message || e));
+
     return { status: `updated_${finalStatus}` };
   }
 
@@ -777,6 +844,13 @@ export async function processWebhookPayload(payload: any) {
 
     await db.update(transactions).set({ status: "completed" }).where(eq(transactions.id, tx.id));
     console.log(`[sumopod webhook] Transaction ${tx.id} completed for ${meta.domainName}`);
+
+    // Send payment-success email (customer + operator). Best-effort.
+    notifyOrderEmails("payment_success", user.email, {
+      domainName: meta.domainName || "",
+      orderId: tx.orderId || meta.orderId || "",
+      amount: `Rp ${Number(tx.amount).toLocaleString("id-ID")}`,
+    }).catch((e) => console.warn("[payments] payment_success email failed (non-blocking):", e?.message || e));
 
     // Invalidate domain availability search cache
     try {

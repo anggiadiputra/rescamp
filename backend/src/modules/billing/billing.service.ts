@@ -5,6 +5,7 @@ import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { resolveResellerCreds, resolveCredsFromUser } from "../../lib/reseller-creds";
 import { loadTenantScope } from "../../lib/tenant-access";
+import { sendEmail } from "../../lib/email";
 
 const MAX_ACTION_REQUIRED_RETRIES = 5;
 
@@ -361,6 +362,19 @@ export async function sweepActionRequiredRetries() {
  */
 export async function sweepExpiredTransactions() {
   const oneMinAgo = new Date(Date.now() - 60 * 1000);
+  // Select the rows that are about to expire so we can notify their owners.
+  const expiring = await db.select({
+    id: transactions.id,
+    userId: transactions.userId,
+    orderId: transactions.orderId,
+    metadata: transactions.metadata,
+  }).from(transactions).where(and(
+    eq(transactions.status, "pending_payment"),
+    sql`${transactions.expiresAt} IS NOT NULL AND ${transactions.expiresAt} < ${oneMinAgo}`,
+    sql`(${transactions.paymentId} IS NULL OR ${transactions.paymentId} = '')`,
+    sql`(${transactions.metadata} IS NULL OR ${transactions.metadata} NOT LIKE '%"syncedFromLiquid":true%')`
+  ));
+
   const result: any = await db.update(transactions)
     .set({ status: "expired", paymentStatus: "expired" })
     .where(and(
@@ -373,6 +387,32 @@ export async function sweepExpiredTransactions() {
   if (changed > 0) {
     console.log(`[sweeper] expired ${changed} pending transaction(s)`);
   }
+
+  // Notify owners of the expired transactions (best-effort, non-blocking).
+  for (const row of expiring) {
+    try {
+      const [u] = await db.select({ email: users.email }).from(users).where(eq(users.id, row.userId)).limit(1);
+      let domainName = "";
+      try { domainName = (typeof row.metadata === "string" ? JSON.parse(row.metadata) : row.metadata)?.domainName || ""; } catch {}
+      const recipients = new Set<string>();
+      if (u?.email?.trim()) recipients.add(u.email.trim().toLowerCase());
+      const [admin] = await db.select({ email: users.email }).from(users).where(eq(users.role, "admin")).limit(1);
+      if (admin?.email?.trim()) recipients.add(admin.email.trim().toLowerCase());
+      for (const email of recipients) {
+        try {
+          await sendEmail(email, "payment_expired", {
+            domainName,
+            orderId: row.orderId || "",
+          });
+        } catch (e) {
+          console.warn(`[sweeper] payment_expired email to ${email} failed (non-blocking):`, (e as any)?.message || e);
+        }
+      }
+    } catch (e) {
+      console.warn(`[sweeper] payment_expired notify failed for tx ${row.id}:`, (e as any)?.message || e);
+    }
+  }
+
   return changed;
 }
 
