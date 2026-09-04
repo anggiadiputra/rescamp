@@ -42,6 +42,16 @@ function toPaymentResponse(t: any) {
   };
 }
 
+/** Add `years` to a "YYYY-MM-DD" (or ISO) date string. Returns null if the
+ *  input can't be parsed, so callers can fall back gracefully. */
+function addYearsToDate(dateStr: string | null | undefined, years: number): string | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  d.setFullYear(d.getFullYear() + years);
+  return d.toISOString().split("T")[0] ?? null;
+}
+
 export async function createDomainOrderPayment(payload: CreateDomainOrderPayload) {
   const years = payload.years || 1;
   const tld = payload.tld || payload.domainName.split(".").slice(1).join(".") || "com";
@@ -696,6 +706,13 @@ export async function processWebhookPayload(payload: any) {
                 domainUpdate.expiryDate = String(updatedInfo.expiry_date).split(" ")[0];
               }
             } catch {}
+            // Fallback: if the Resellercamp refresh failed (or returned no
+            // expiry), derive the new expiry from the local one + years so the
+            // local record never goes stale after a successful renewal.
+            if (!domainUpdate.expiryDate) {
+              const derived = addYearsToDate(targetDomain.expiryDate, yearsToAdd);
+              if (derived) domainUpdate.expiryDate = derived;
+            }
 
             await db.update(domains)
               .set(domainUpdate)
@@ -751,36 +768,12 @@ export async function processWebhookPayload(payload: any) {
           await db.update(domains).set({ privacyProtection: 1 }).where(eq(domains.id, domainId));
         }
       }
-    } else if (meta.type === "renew") {
-      const domainId = meta.domainId || tx.domainId;
-      if (domainId) {
-        const [targetDomain] = await db.select().from(domains).where(eq(domains.id, domainId));
-        if (targetDomain) {
-          // N6: idempotency — only bump years if not already processed for this transaction
-          // (prevents double-bump if a second webhook replay for the same tx arrives,
-          // or if the same tx.id was processed by a concurrent webhook/poll path).
-          const yearsToAdd = meta.years || 1;
-          if (meta.yearsRenewed !== yearsToAdd) {
-            meta.yearsRenewed = yearsToAdd;
-            await db.update(transactions)
-              .set({ metadata: JSON.stringify(meta) })
-              .where(and(eq(transactions.id, tx.id), sql`JSON_EXTRACT(${transactions.metadata}, '$.yearsRenewed') IS NULL`));
-
-            const domainUpdate: Record<string, any> = {
-              years: sql`${domains.years} + ${yearsToAdd}`,
-              status: "active",
-            };
-            if (meta.privacyProtection) {
-              domainUpdate.privacyProtection = 1;
-            }
-
-            await db.update(domains)
-              .set(domainUpdate)
-              .where(eq(domains.id, domainId));
-          }
-        }
-      }
     }
+    // NOTE: renewal is handled entirely in the `meta.type === "renew"` branch
+    // above (Resellercamp renewDomain call + years bump + expiry refresh). A
+    // second `renew` branch was previously duplicated here and only survived
+    // because of the N6 yearsRenewed idempotency guard; it has been removed to
+    // avoid a fragile double-bump path.
 
     await db.update(transactions).set({ status: "completed" }).where(eq(transactions.id, tx.id));
     console.log(`[sumopod webhook] Transaction ${tx.id} completed for ${meta.domainName}`);
