@@ -10,6 +10,7 @@ interface AuthContextType {
   loading: boolean;
   register: (data: any) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -60,7 +61,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
-  return <AuthContext.Provider value={{ user, loading, register, logout }}>{children}</AuthContext.Provider>;
+  // Re-probe the session and sync the in-memory user with what the backend
+  // knows (role/hasProfile can change server-side after complete-profile, etc).
+  // Returns the fresh user (or null) so callers can act on it right away.
+  async function refreshUser(): Promise<User | null> {
+    try {
+      const res = await api.get<{ authenticated: boolean; user?: User }>("/auth/session");
+      if (res?.authenticated && res.user) {
+        setUser(res.user);
+        return res.user;
+      }
+      setUser(null);
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  return <AuthContext.Provider value={{ user, loading, register, logout, refreshUser }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

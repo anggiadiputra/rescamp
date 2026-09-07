@@ -593,9 +593,18 @@ export async function verifyLoginOtp(email: string, code: string) {
   const [user] = await db.select().from(users).where(eq(users.email, cleanEmail));
   if (!user) throw new AppError("User tidak ditemukan", 404);
 
+  // hasProfile: consistent with login() — a customer who has no local `customers`
+  // row yet (e.g. legacy registration, operator-created account) must see the
+  // complete-profile flow; everyone else is profile-complete.
+  let hasProfile = true;
+  if (user.role === "customer") {
+    const [cust] = await db.select({ id: customers.id }).from(customers).where(eq(customers.email, user.email));
+    hasProfile = !!cust;
+  }
+
   const token = await signToken({ sub: user.id, email: user.email, role: user.role as string, sessionVersion: user.sessionVersion });
   return {
-    user: { id: user.id, email: user.email, name: user.name, role: user.role },
+    user: { id: user.id, email: user.email, name: user.name, role: user.role, hasProfile },
     token,
   };
 }

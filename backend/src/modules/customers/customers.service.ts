@@ -1,7 +1,7 @@
 import { db } from "../../db";
 import { customers, users } from "../../db/schema";
 import { domains } from "../../db/schema/domains";
-import { eq, and, like, sql, inArray } from "drizzle-orm";
+import { eq, and, like, sql, inArray, desc } from "drizzle-orm";
 import { LiquidClient } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { resolveResellerCreds } from "../../lib/reseller-creds";
@@ -189,8 +189,11 @@ export async function completeProfile(
     // Still save locally even if LIQUID fails
   }
 
-  // Save to our DB — link liquid_customer_id
-  const insertResult: any = await db.insert(customers).values({
+  // Save to our DB — link liquid_customer_id. UPSERT: a customers row may
+  // already exist (registration auto-creates one); blindly INSERTing a second
+  // row would trip customers_email_unique and bounce the customer back into the
+  // /complete-profile redirect loop.
+  await db.insert(customers).values({
     userId: user.parentResellerId || user.id,
     liquidCustomerId,
     name: user.name,
@@ -202,9 +205,20 @@ export async function completeProfile(
     country: data.country,
     zipcode: data.zipcode,
     phone: data.phone,
+  }).onDuplicateKeyUpdate({
+    set: {
+      userId: user.parentResellerId || user.id,
+      liquidCustomerId: liquidCustomerId || sql`${customers.liquidCustomerId}`,
+      company: data.company,
+      address: data.address,
+      city: data.city,
+      state: data.state,
+      country: data.country,
+      zipcode: data.zipcode,
+      phone: data.phone,
+    },
   });
-  const custId = Number(insertResult[0]?.insertId || insertResult.insertId);
-  const [cust] = await db.select().from(customers).where(eq(customers.id, custId));
+  const [cust] = await db.select().from(customers).where(eq(customers.email, user.email)).orderBy(desc(customers.id)).limit(1);
   return cust!;
 }
 

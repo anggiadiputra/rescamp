@@ -10,7 +10,7 @@ const COUNTRIES = [
 
 export default function CompleteProfilePage() {
   const nav = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [form, setForm] = useState({
     company: "",
     address: "",
@@ -33,7 +33,10 @@ export default function CompleteProfilePage() {
     try {
       await api.post("/customers/complete-profile", form);
       toast("Profile completed! You can now order domains.");
-      nav("/dashboard");
+      // Re-sync session state so ProtectedRoute sees hasProfile=true — otherwise
+      // nav("/dashboard") bounces straight back to /complete-profile (redirect loop).
+      const fresh = await refreshUser();
+      nav(fresh?.hasProfile ? "/dashboard" : "/complete-profile");
     } catch (err: any) { setError(err.message); }
     setLoading(false);
   }
