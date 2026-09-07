@@ -4,6 +4,7 @@ import type { JwtPayload } from "../../lib/jwt";
 import { getJwtExpirySeconds, verifyToken } from "../../lib/jwt";
 import { verifyTurnstileToken } from "../../lib/turnstile";
 import { AppError } from "../../lib/error";
+import { env } from "../../config/env";
 import { db } from "../../db";
 import { users } from "../../db/schema";
 import { eq } from "drizzle-orm";
@@ -114,9 +115,20 @@ export async function session(ctx: any) {
   try {
     const payload = await verifyToken(token);
     const userId = Number(payload.sub);
-    const [user] = await db.select({ sessionVersion: users.sessionVersion }).from(users).where(eq(users.id, userId)).limit(1);
+    const [user] = await db.select({ sessionVersion: users.sessionVersion, lastActiveAt: users.lastActiveAt }).from(users).where(eq(users.id, userId)).limit(1);
     if (!user || user.sessionVersion !== Number(payload.sv ?? 0)) {
       return { data: { authenticated: false } };
+    }
+    // Sliding-session: the probe must agree with authGuard. If the user has
+    // been idle past SESSION_TIMEOUT_MIN, authGuard 401s every API call — a
+    // probe that still says authenticated:true turns /login <-> /dashboard
+    // into an infinite redirect loop (PublicRoute bounces back to /dashboard).
+    const timeoutMs = env.SESSION_TIMEOUT_MIN * 60 * 1000;
+    if (user.lastActiveAt) {
+      const lastActive = new Date(user.lastActiveAt).getTime();
+      if (Date.now() - lastActive > timeoutMs) {
+        return { data: { authenticated: false } };
+      }
     }
     const result = await svc.me(userId);
     return { data: { authenticated: true, user: (result as any).user } };
