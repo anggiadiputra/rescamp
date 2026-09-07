@@ -25,14 +25,14 @@ export default function CustomersPage() {
   const perPage = 10;
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
-  const [overviewId, setOverviewId] = useState<number | null>(null);
+  const [overviewId, setOverviewId] = useState<number | string | null>(null);
 
   // Form modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [editId, setEditId] = useState(0);
+  const [editId, setEditId] = useState<number | string>(0);
   const [form, setForm] = useState(defaultForm);
-  const [deleteId, setDeleteId] = useState(0);
+  const [deleteId, setDeleteId] = useState<number | string>(0);
   const [deleteName, setDeleteName] = useState("");
 
   const { data, loading, isRefreshing, refetch } = useCachedFetch<PaginatedResponse<Customer>>(
@@ -369,7 +369,7 @@ export default function CustomersPage() {
         </div>
       </Modal>
 
-      <ConfirmDialog open={deleteId > 0} title="Delete Customer Contact" message={`Delete ${deleteName}? This cannot be undone.`} onConfirm={doDelete} onClose={() => setDeleteId(0)} />
+      <ConfirmDialog open={!!deleteId} title="Delete Customer Contact" message={`Delete ${deleteName}? This cannot be undone.`} onConfirm={doDelete} onClose={() => setDeleteId(0)} />
     </div>
   );
 }

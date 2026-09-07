@@ -84,7 +84,7 @@ export interface Domain {
 }
 
 export interface Customer {
-  id: number;
+  id: number | string;
   liquidCustomerId: string | null;
   name: string;
   email: string;

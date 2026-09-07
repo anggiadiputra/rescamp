@@ -75,13 +75,28 @@ export async function listCustomers(userParam: TenantPrincipal | number, search?
   return { data: rows, meta: { total: Number(countResult?.count || 0), page, perPage } };
 }
 
-export async function getCustomer(userParam: { id: number; role?: string | null; email?: string | null } | number, customerId: number) {
+export async function getCustomer(userParam: { id: number; role?: string | null; email?: string | null } | number, customerId: number | string) {
   const user = typeof userParam === "number"
     ? (await db.select().from(users).where(eq(users.id, userParam)))[0]
     : userParam;
   if (!user) throw new AppError("User not found", 404);
 
-  const [cust] = await db.select().from(customers).where(eq(customers.id, customerId));
+  // Resolve by local id OR liquid customer id. The customers page lists live
+  // Resellercamp records whose `id` is the LIQUID id — edit/delete on those
+  // must not 404 just because that number isn't a local customers.id.
+  const rawId = String(customerId).trim();
+  const isNumeric = /^\d+$/.test(rawId);
+  let cust: any = undefined;
+  if (isNumeric) {
+    // First: exact local id match (operators editing local-only customers).
+    [cust] = await db.select().from(customers).where(eq(customers.id, Number(rawId))).limit(1);
+  }
+  if (!cust) {
+    // Second: liquid customer id match — the customers page lists live
+    // Resellercamp records whose `id` IS the LIQUID id, so edit/delete on those
+    // must resolve even when the number is not a local customers.id.
+    [cust] = await db.select().from(customers).where(eq(customers.liquidCustomerId, rawId)).limit(1);
+  }
   if (!cust) throw new AppError("Customer not found", 404);
 
   const scope = await loadTenantScope(user);
@@ -93,68 +108,141 @@ export async function getCustomer(userParam: { id: number; role?: string | null;
 export async function updateCustomer(
   creds: { resellerId: string | null; apiKey: string | null },
   userParam: any,
-  customerId: number,
+  customerId: number | string,
   data: Partial<{
     name: string; email: string; company: string; address: string; city: string; state: string; country: string; zipcode: string; phone: string;
   }>,
 ) {
-  const cust = await getCustomer(userParam, customerId);
-  await db.update(customers).set(data).where(eq(customers.id, customerId));
+  // Resolve target: prefer a local row (id or liquidCustomerId match); if none
+  // exists the customer is remote-only (listed live from Resellercamp) and the
+  // write goes straight to LIQUID without a local row to update.
+  const resolved = await resolveCustomerForWrite(userParam, customerId);
 
-  // Sync to LIQUID
-  if (cust.liquidCustomerId && creds.resellerId && creds.apiKey) {
+  if (resolved.local && creds.resellerId && creds.apiKey && resolved.local.liquidCustomerId) {
+    // Local row exists + linked to LIQUID: update both.
+    await db.update(customers).set(data).where(eq(customers.id, resolved.local.id));
     try {
       const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
-      await liquid.updateCustomer(cust.liquidCustomerId, {
-        name: data.name ?? cust.name,
-        email: data.email ?? cust.email,
-        company: data.company ?? cust.company ?? "",
-        address_line_1: data.address ?? cust.address ?? "",
-        city: data.city ?? cust.city ?? "",
-        state: data.state ?? cust.state ?? "",
-        country_code: (data.country ?? cust.country ?? "ID").slice(0, 2).toUpperCase(),
-        zipcode: data.zipcode ?? cust.zipcode ?? "",
-        tel_cc_no: cust.phone_cc || "62",
-        tel_no: data.phone ?? cust.phone ?? "",
+      await liquid.updateCustomer(resolved.local.liquidCustomerId, {
+        name: data.name ?? resolved.local.name,
+        email: data.email ?? resolved.local.email,
+        company: data.company ?? resolved.local.company ?? "",
+        address_line_1: data.address ?? resolved.local.address ?? "",
+        city: data.city ?? resolved.local.city ?? "",
+        state: data.state ?? resolved.local.state ?? "",
+        country_code: (data.country ?? resolved.local.country ?? "ID").slice(0, 2).toUpperCase(),
+        zipcode: data.zipcode ?? resolved.local.zipcode ?? "",
+        tel_cc_no: resolved.local.phone_cc || "62",
+        tel_no: data.phone ?? resolved.local.phone ?? "",
       });
     } catch (e: any) {
       console.error("[customer] LIQUID update failed:", e?.message || e);
     }
+    const [updated] = await db.select().from(customers).where(eq(customers.id, resolved.local.id));
+    return updated!;
   }
 
-  const [updated] = await db.select().from(customers).where(eq(customers.id, customerId));
-  return updated!;
-}
-
-export async function deleteCustomer(creds: { resellerId: string | null; apiKey: string | null }, userParam: any, customerId: number) {
-  const cust = await getCustomer(userParam, customerId);
-
-  // Delete from LIQUID first
-  if (cust.liquidCustomerId && creds.resellerId && creds.apiKey) {
+  if (resolved.liquidId && creds.resellerId && creds.apiKey) {
+    // Remote-only (no local row, or local row not linked): update LIQUID
+    // directly. Include remote data fallbacks from the payload only.
     try {
       const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
-      await liquid.deleteCustomer(cust.liquidCustomerId);
-    } catch (e: any) { 
-      console.error("[customer] LIQUID delete failed:", e?.message || e); 
+      await liquid.updateCustomer(resolved.liquidId, {
+        name: data.name ?? resolved.local?.name ?? "",
+        email: data.email ?? resolved.local?.email ?? "",
+        company: data.company ?? "",
+        address_line_1: data.address ?? "",
+        city: data.city ?? "",
+        state: data.state ?? "",
+        country_code: (data.country ?? "ID").slice(0, 2).toUpperCase(),
+        zipcode: data.zipcode ?? "",
+        tel_cc_no: "62",
+        tel_no: data.phone ?? "",
+      });
+    } catch (e: any) {
+      console.error("[customer] LIQUID update failed:", e?.message || e);
+      throw new AppError("Gagal memperbarui customer di Resellercamp", 502);
     }
+    return { id: resolved.liquidId, ...data, liquidCustomerId: resolved.liquidId };
   }
 
-  // Wrap in database transaction for atomic operation
-  await db.transaction(async (tx) => {
-    // Check for active domains before deleting to prevent race conditions
-    const [active] = await tx.select({ id: domains.id }).from(domains)
-      .where(and(eq(domains.customerId, customerId), eq(domains.status, "active")))
-      .limit(1);
-    
-    if (active) {
-      throw new AppError("Customer has active domains. Transfer or delete domains first.", 409);
-    }
+  throw new AppError("Customer not found", 404);
+}
 
-    await tx.delete(customers).where(eq(customers.id, customerId));
-    if (cust.email) {
-      await tx.delete(users).where(and(eq(users.email, cust.email), eq(users.role, "customer")));
+export async function deleteCustomer(creds: { resellerId: string | null; apiKey: string | null }, userParam: any, customerId: number | string) {
+  const resolved = await resolveCustomerForWrite(userParam, customerId);
+
+  if (resolved.liquidId && creds.resellerId && creds.apiKey) {
+    try {
+      const liquid = new LiquidClient(creds.resellerId, creds.apiKey);
+      await liquid.deleteCustomer(resolved.liquidId);
+    } catch (e: any) {
+      console.error("[customer] LIQUID delete failed:", e?.message || e);
+      throw new AppError("Gagal menghapus customer di Resellercamp", 502);
     }
-  });
+  } else if (!resolved.local) {
+    throw new AppError("Customer not found", 404);
+  }
+
+  // Delete local row only if it existed (and only its own row, never by raw id
+  // when the caller addressed the customer via a remote/liquid id).
+  if (resolved.local) {
+    const localId = resolved.local.id;
+    await db.transaction(async (tx) => {
+      // Check for active domains before deleting to prevent race conditions
+      const [active] = await tx.select({ id: domains.id }).from(domains)
+        .where(and(eq(domains.customerId, localId), eq(domains.status, "active")))
+        .limit(1);
+
+      if (active) {
+        throw new AppError("Customer has active domains. Transfer or delete domains first.", 409);
+      }
+
+      await tx.delete(customers).where(eq(customers.id, localId));
+      if (resolved.local.email) {
+        await tx.delete(users).where(and(eq(users.email, resolved.local.email), eq(users.role, "customer")));
+      }
+    });
+  }
+}
+
+// Resolve a customer for a write operation (update/delete). Returns:
+//   local    — the local DB row when one exists (matched by id or liquid id)
+//   liquidId — the Resellercamp customer id to operate on (from local row's
+//              liquidCustomerId, or taken from the raw path id when the row is
+//              remote-only). null when neither a local row nor creds exist.
+async function resolveCustomerForWrite(userParam: any, customerId: number | string) {
+  const user = await resolveUser(userParam);
+  if (!user) throw new AppError("User not found", 404);
+
+  const rawId = String(customerId).trim();
+  let local: any;
+  if (/^\d+$/.test(rawId)) {
+    [local] = await db.select().from(customers).where(eq(customers.id, Number(rawId))).limit(1);
+  }
+  if (!local) {
+    [local] = await db.select().from(customers).where(eq(customers.liquidCustomerId, rawId)).limit(1);
+  }
+
+  const scope = await loadTenantScope(user);
+  if (local && !canAccessTenantResource(scope, { userId: local.userId, customerId: local.id }))
+    throw new AppError("Customer not found", 404);
+
+  // liquidId to operate on in Resellercamp:
+  //  - local row linked to LIQUID  -> its liquidCustomerId
+  //  - no local row (remote-only)   -> the raw path id IS the liquid id
+  //    (caller still requires the operator's own creds before any remote write)
+  const liquidId = local?.liquidCustomerId || (!local ? rawId : undefined) || undefined;
+
+  return { local: local || undefined, liquidId };
+}
+
+async function resolveUser(userParam: any) {
+  if (typeof userParam === "number") {
+    const [u] = await db.select().from(users).where(eq(users.id, userParam)).limit(1);
+    return u;
+  }
+  return userParam;
 }
 
 export async function completeProfile(
