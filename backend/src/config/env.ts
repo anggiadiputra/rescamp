@@ -7,6 +7,9 @@ const envVars = {
   DB_PASSWORD: process.env.DB_PASSWORD || "",
   DB_NAME: process.env.DB_NAME || "domain_dashboard",
   JWT_SECRET: process.env.JWT_SECRET as string,
+  // JWT-ROTATION: previous secret kept during a rotation window so tokens
+  // signed before the rotation keep verifying. Optional; empty when not rotating.
+  JWT_SECRET_PREVIOUS: process.env.JWT_SECRET_PREVIOUS || "",
   JWT_EXPIRY: process.env.JWT_EXPIRY || "24h",
   // Sliding-session inactivity timeout (minutes). A user is auto-logged-out
   // after this many minutes without any authenticated request. Default 30.

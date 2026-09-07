@@ -14,6 +14,7 @@ import { ensureDatabaseSchema } from "./db";
 import { AppError } from "./lib/error";
 import { securityHeaders } from "./lib/security-headers";
 import { assertSafeCorsConfig, isOriginAllowed, parseAllowedOrigins } from "./lib/cors-policy";
+import { csrfOriginGuard } from "./lib/csrf";
 
 const isProduction = process.env.NODE_ENV === "production";
 const allowedOrigins = parseAllowedOrigins(env.CORS_ORIGIN || "");
@@ -41,6 +42,16 @@ const app = new Elysia()
     })
   )
   .use(securityHeaders)
+  // CSRF (second layer on top of SameSite=Strict cookie): reject state-changing
+  // requests whose Origin/Referer is not in the CORS allowlist. Webhook endpoints
+  // (server-to-server) are exempt inside the guard.
+  .onRequest(({ request, set }) => {
+    const result = csrfOriginGuard({ request, set } as any);
+    if (result) {
+      set.status = result.statusCode || 403;
+      return result;
+    }
+  })
   .onRequest(({ request }) => {
     (request as any)._startTime = performance.now();
   })

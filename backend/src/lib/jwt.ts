@@ -2,13 +2,36 @@ import { SignJWT, jwtVerify } from "jose";
 import { env } from "../config/env";
 import { AppError } from "./error";
 
-const SECRET = new TextEncoder().encode(env.JWT_SECRET);
-
 export interface JwtPayload {
   sub: string;
   email: string;
   role?: string;
   sv: number;
+}
+
+// JWT-ROTATION: two signing keys are supported simultaneously.
+//   - JWT_SECRET      — the current key; all new tokens are signed with it.
+//   - JWT_SECRET_PREVIOUS — the retired key; tokens signed with it still verify
+//     during the rotation window (one JWT_EXPIRY period is a safe window).
+// This lets the operator rotate the secret without killing every active
+// session: deploy with the old secret in JWT_SECRET_PREVIOUS, then remove that
+// variable again after the rotation window passes.
+//
+// Verification tries the current key first (the common case), then the previous
+// key. With at most two keys this is standard practice and avoids the foot-gun
+// of a `kid` header that must be re-bound to key material on every rotation.
+
+function encodeSecret(secret: string | undefined): Uint8Array | null {
+  if (!secret) return null;
+  return new TextEncoder().encode(secret);
+}
+
+const currentSecret = encodeSecret(env.JWT_SECRET);
+const previousSecret = encodeSecret(env.JWT_SECRET_PREVIOUS || undefined);
+
+if (!currentSecret) {
+  // env.ts already gates on length, but keep a hard guard here too.
+  throw new Error("JWT_SECRET must be set");
 }
 
 export async function signToken(payload: { sub: number; email: string; role?: string; sessionVersion?: number }): Promise<string> {
@@ -22,14 +45,25 @@ export async function signToken(payload: { sub: number; email: string; role?: st
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${expSeconds}s`)
-    .sign(SECRET);
+    .sign(currentSecret!);
 }
 
 export async function verifyToken(token: string): Promise<JwtPayload> {
+  // Current key first (the common case).
   try {
-    const { payload } = await jwtVerify(token, SECRET);
+    const { payload } = await jwtVerify(token, currentSecret!, { algorithms: ["HS256"] });
     return payload as unknown as JwtPayload;
   } catch {
+    // Rotation window: fall back to the previous key. A token signed with a
+    // fully retired key (neither current nor previous) is rejected here.
+    if (previousSecret) {
+      try {
+        const { payload } = await jwtVerify(token, previousSecret, { algorithms: ["HS256"] });
+        return payload as unknown as JwtPayload;
+      } catch {
+        // fall through to reject
+      }
+    }
     throw new AppError("Invalid or expired token", 401);
   }
 }
