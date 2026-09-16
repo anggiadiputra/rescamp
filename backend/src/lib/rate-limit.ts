@@ -1,8 +1,13 @@
 /**
- * Simple in-memory rate limiter using token bucket algorithm
- * ponytail: in-memory only; for production with multiple instances, use Redis
+ * Rate limiter backed by Redis (fixed-window counter) with an in-memory token
+ * bucket fallback. Redis gives us:
+ *   - state that survives deploy/restart (the previous Map reset every restart),
+ *   - a single shared counter across instances when scaled horizontally.
+ * The token bucket is kept as a graceful fallback so auth/checkout never breaks
+ * when Redis is down — a strict availability WIN, not a hard dependency.
  */
 import { AppError } from "./error";
+import { incrWithExpiry, getRedis } from "./redis";
 
 interface RateLimitStore {
   tokens: number;
@@ -16,16 +21,27 @@ interface RateLimitOptions {
   windowMs: number;
 }
 
+const RATE_PREFIX = "rl:";
+
 export function createRateLimiter(options: RateLimitOptions) {
   const { maxRequests, windowMs } = options;
   const store = new Map<string, RateLimitStore>();
   stores.add(store);
+  const windowSec = Math.max(1, Math.ceil(windowMs / 1000));
 
   return {
     /**
-     * Check if request is allowed. Returns true if allowed, false if rate limited.
+     * Check if request is allowed. Async: reads/writes the Redis counter when
+     * available, else the local token bucket. Returns true if allowed.
      */
-    isAllowed(key: string): boolean {
+    async isAllowed(key: string): Promise<boolean> {
+      const count = await incrWithExpiry(`${RATE_PREFIX}${key}`, windowSec);
+      if (count !== null) {
+        // Fixed-window: the Nth request within the window is allowed iff N <= max.
+        return count <= maxRequests;
+      }
+
+      // ---- in-memory token bucket fallback ----
       const now = Date.now();
       const record = store.get(key);
 
@@ -48,7 +64,7 @@ export function createRateLimiter(options: RateLimitOptions) {
     },
 
     /**
-     * Get remaining requests for a key
+     * Get remaining requests for a key (best-effort; local fallback only).
      */
     getRemaining(key: string): number {
       const now = Date.now();
@@ -62,9 +78,15 @@ export function createRateLimiter(options: RateLimitOptions) {
     },
 
     /**
-     * Reset rate limit for a key
+     * Reset rate limit for a key (Redis + local).
      */
-    reset(key: string): void {
+    async reset(key: string): Promise<void> {
+      const redis = getRedis();
+      if (redis) {
+        try {
+          await redis.del(`${RATE_PREFIX}${key}`);
+        } catch {}
+      }
       store.delete(key);
     },
   };
@@ -149,9 +171,9 @@ export function rateLimit(
   limiter: ReturnType<typeof createRateLimiter>,
   message: string = "Terlalu banyak permintaan. Silakan coba lagi nanti.",
 ) {
-  return ({ request, server }: { request: Request; server: any }) => {
+  return async ({ request, server }: { request: Request; server: any }) => {
     const ip = getClientIP(request, server);
-    if (!limiter.isAllowed(ip)) {
+    if (!(await limiter.isAllowed(ip))) {
       throw new AppError(message, 429);
     }
   };
@@ -168,4 +190,3 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000);
-

@@ -55,7 +55,7 @@ export async function register(data: {
     throw new AppError("Kode OTP verifikasi diperlukan. Silakan verifikasi email Anda.", 400);
   }
   if (data.code) {
-    otpAttempts.assertAndRecordAttempt(`register:${cleanEmail}`);
+    await otpAttempts.assertAndRecordAttempt(`register:${cleanEmail}`);
     const [record] = await db.select().from(otpCodes).where(
       and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "register"), eq(otpCodes.used, false))
     ).orderBy(desc(otpCodes.id)).limit(1);
@@ -72,7 +72,7 @@ export async function register(data: {
     if ((markUsed[0]?.affectedRows ?? 0) === 0) {
       throw new AppError("Kode OTP sudah digunakan", 401);
     }
-    otpAttempts.clear(`register:${cleanEmail}`);
+    await otpAttempts.clear(`register:${cleanEmail}`);
   }
 
   const passwordHash = await hashPassword(data.password);
@@ -570,7 +570,7 @@ export async function verifyLoginOtp(email: string, code: string) {
   const cleanCode = (code || "").trim();
   if (!cleanCode) throw new AppError("Kode OTP tidak valid atau sudah digunakan", 401);
 
-  otpAttempts.assertAndRecordAttempt(`login:${cleanEmail}`);
+  await otpAttempts.assertAndRecordAttempt(`login:${cleanEmail}`);
 
   const [record] = await db.select().from(otpCodes).where(
     and(eq(otpCodes.email, cleanEmail), eq(otpCodes.purpose, "login"), eq(otpCodes.used, false))
@@ -588,7 +588,7 @@ export async function verifyLoginOtp(email: string, code: string) {
     throw new AppError("Kode OTP sudah digunakan", 401);
   }
 
-  otpAttempts.clear(`login:${cleanEmail}`);
+  await otpAttempts.clear(`login:${cleanEmail}`);
 
   const [user] = await db.select().from(users).where(eq(users.email, cleanEmail));
   if (!user) throw new AppError("User tidak ditemukan", 404);
@@ -659,7 +659,7 @@ export async function resetPassword(tokenOrCode: string, newPassword: string, em
   const cleanEmail = email.trim().toLowerCase();
   const attemptKey = `reset:${cleanEmail}`;
   
-  otpAttempts.assertAndRecordAttempt(attemptKey);
+  await otpAttempts.assertAndRecordAttempt(attemptKey);
 
   // Scope to the specific user's email only. (Simplified: only the link token
   // is accepted — no separate OTP code.)
@@ -699,7 +699,7 @@ export async function resetPassword(tokenOrCode: string, newPassword: string, em
     passwordHash,
     sessionVersion: sql`${users.sessionVersion} + 1`,
   }).where(eq(users.email, record.email));
-  otpAttempts.clear(attemptKey);
+  await otpAttempts.clear(attemptKey);
 
   return { message: "Password berhasil diubah. Silakan login." };
 }

@@ -1,54 +1,113 @@
 import { AppError } from "./error";
+import { getRedis } from "./redis";
+
+// OTP brute-force lockout tracker.
+//
+// Backed by Redis via a single INCR (Redis's INCR is atomic, so concurrent
+// burst attempts cannot overshoot the failure budget — the 11th..Nth call in a
+// flood sees count > maxFailures and is rejected). Bun's Redis client has no
+// Lua/EVAL, so a single-counter scheme is what keeps this atomic across
+// processes; a GET-lock-then-SET-lock sequence would reopen the race this
+// tracker exists to close.
+//
+// When Redis is unavailable we fall back to a per-process Map whose code path is
+// fully synchronous (no await before the increment), preserving atomicity within
+// a single-threaded process. Auth never breaks just because Redis is down.
+
+const ATTEMPT_PREFIX = "otp:attempt:";
 
 export class OtpAttemptTracker {
-  private readonly store = new Map<string, { count: number; lockedUntil: number }>();
+  private readonly localStore = new Map<string, { count: number; windowStart: number }>();
 
   constructor(
     private readonly maxFailures = 5,
     private readonly lockoutMs = 5 * 60 * 1000,
   ) {}
 
-  assertAllowed(key: string): void {
-    const record = this.store.get(key);
-    if (record && record.count >= this.maxFailures && Date.now() < record.lockedUntil) {
-      const remainSec = Math.ceil((record.lockedUntil - Date.now()) / 1000);
-      throw new AppError(`Terlalu banyak percobaan OTP salah. Coba lagi dalam ${remainSec} detik.`, 429);
+  get windowSec(): number {
+    return Math.max(1, Math.ceil(this.lockoutMs / 1000));
+  }
+
+  /**
+   * Atomically record an attempt and reject if the failure budget is exceeded.
+   * Throws AppError(429) once the key exceeds maxFailures within the window.
+   */
+  async assertAndRecordAttempt(key: string): Promise<void> {
+    const redis = getRedis();
+    if (!redis) {
+      // Synchronous fallback — no await before mutation, so a burst of calls is
+      // serialized by the JS event loop and cannot race the local counter.
+      this.localAssertAndRecord(key);
+      return;
+    }
+
+    let count: number | null;
+    try {
+      count = await redis.incr(`${ATTEMPT_PREFIX}${key}`);
+      if (count === 1) {
+        await redis.expire(`${ATTEMPT_PREFIX}${key}`, this.windowSec);
+      }
+    } catch {
+      this.localAssertAndRecord(key);
+      return;
+    }
+
+    if (count > this.maxFailures) {
+      throw new AppError(
+        `Terlalu banyak percobaan OTP salah. Coba lagi dalam ${this.windowSec} detik.`,
+        429,
+      );
     }
   }
 
-  assertAndRecordAttempt(key: string): void {
+  async recordFailure(key: string): Promise<void> {
+    await this.assertAndRecordAttempt(key);
+  }
+
+  async recordAttempt(key: string): Promise<void> {
+    await this.assertAndRecordAttempt(key);
+  }
+
+  async clear(key: string): Promise<void> {
+    const redis = getRedis();
+    if (redis) {
+      try {
+        await redis.del(`${ATTEMPT_PREFIX}${key}`);
+      } catch {}
+    }
+    this.localStore.delete(key);
+  }
+
+  // ---- In-memory fallback (synchronous, atomic within one process) ----
+
+  private localAssertAndRecord(key: string): void {
     const now = Date.now();
-    const record = this.store.get(key);
-    if (record && record.count >= this.maxFailures && now < record.lockedUntil) {
-      const remainSec = Math.ceil((record.lockedUntil - now) / 1000);
-      throw new AppError(`Terlalu banyak percobaan OTP salah. Coba lagi dalam ${remainSec} detik.`, 429);
+    const windowMs = this.windowSec * 1000;
+    const rec = this.localStore.get(key);
+
+    // Fixed window: reset the counter once the window has elapsed.
+    if (!rec || now - rec.windowStart >= windowMs) {
+      this.localStore.set(key, { count: 1, windowStart: now });
+      return;
     }
-    const current = record || { count: 0, lockedUntil: 0 };
-    current.count += 1;
-    if (current.count >= this.maxFailures) {
-      current.lockedUntil = now + this.lockoutMs;
+
+    rec.count += 1;
+    if (rec.count > this.maxFailures) {
+      throw new AppError(
+        `Terlalu banyak percobaan OTP salah. Coba lagi dalam ${this.windowSec} detik.`,
+        429,
+      );
     }
-    this.store.set(key, current);
+    this.localStore.set(key, rec);
   }
 
-  recordFailure(key: string): void {
-    const record = this.store.get(key) || { count: 0, lockedUntil: 0 };
-    record.count += 1;
-    if (record.count >= this.maxFailures) record.lockedUntil = Date.now() + this.lockoutMs;
-    this.store.set(key, record);
-  }
-
-  recordAttempt(key: string): void {
-    this.assertAndRecordAttempt(key);
-  }
-
-  clear(key: string): void {
-    this.store.delete(key);
-  }
-
+  // Kept for API compatibility; local fallback state is self-expiring via the
+  // window check above, so a manual sweep is only a hygiene measure.
   evictExpired(now = Date.now()): void {
-    for (const [key, record] of this.store) {
-      if (record.lockedUntil > 0 && now > record.lockedUntil + 60_000) this.store.delete(key);
+    for (const [key, rec] of this.localStore) {
+      if (now - rec.windowStart > this.windowSec * 1000 + 60_000) {
+        this.localStore.delete(key);
+      }
     }
   }
 }

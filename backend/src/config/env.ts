@@ -29,6 +29,10 @@ const envVars = {
   FONNTE_API_URL: process.env.FONNTE_API_URL || "https://api.fonnte.com",
   TURNSTILE_VERIFY_URL: process.env.TURNSTILE_VERIFY_URL || "https://challenges.cloudflare.com/turnstile/v0/siteverify",
   APP_URL: process.env.APP_URL || "https://dash.ekstensi.id",
+  // Redis-backed rate limiting & OTP lockout. When unset, the in-memory
+  // fallbacks are used (deterministic in dev/test). In production set
+  // REDIS_URL=redis://127.0.0.1:6379 to survive restarts and scale out.
+  REDIS_URL: process.env.REDIS_URL || "",
 } as const;
 
 // V2-06: HS256 secrets under 32 chars are offline-brute-forceable; align the
