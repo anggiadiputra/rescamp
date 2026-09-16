@@ -225,16 +225,34 @@ export async function getSystemSettings(): Promise<Record<string, string>> {
 // H16: SSRF guard — URLs in settings must be https and point at known providers.
 // Prevents a (compromised) reseller from steering the app's outgoing requests
 // (which carry real API keys/tokens) to an attacker host.
+//
+// Every field the server actually FETCHES outbound must be listed here. A
+// `_url` field that is NOT in this map gets no host allowlist (only the
+// https + non-private checks), which is exactly how an SSRF sneaks through.
 const URL_FIELD_ALLOWED_HOSTS: Record<string, string[]> = {
   kirisan_api_url: ["api.kirisan.com"],
   fonnte_api_url: ["api.fonnte.com"],
   turnstile_verify_url: ["challenges.cloudflare.com"],
   sumopod_base_url: ["api-pay.sumopod.com", "api-pay-sandbox.sumopod.com", "api.sumopod.com"],
+  duitku_base_url: ["passport.duitku.com", "sandbox.duitku.com"],
 };
+
+// Server-fetched URL fields: these MUST pass the full check (https + non-private
+// + host allowlist). Anything the server sends an outbound request to belongs here.
+const SERVER_FETCH_URL_FIELDS = new Set([
+  "kirisan_api_url",
+  "fonnte_api_url",
+  "turnstile_verify_url",
+  "sumopod_base_url",
+  "duitku_base_url",
+]);
 
 export function validateSettingUrl(key: string, value: string) {
   const allowed = URL_FIELD_ALLOWED_HOSTS[key];
-  if (!key.endsWith("_url") && !key.endsWith("_endpoint") && !allowed) return;
+  const isServerFetched = SERVER_FETCH_URL_FIELDS.has(key);
+  // Only validate fields that are (a) server-fetched URLs, or (b) otherwise
+  // URL-shaped. Non-URL fields pass straight through.
+  if (!isServerFetched && !key.endsWith("_url") && !key.endsWith("_endpoint") && !allowed) return;
   if (!value || value.trim() === "") return; // allow empty optional URL fields
   let parsed: URL;
   try {
@@ -259,6 +277,11 @@ export function validateSettingUrl(key: string, value: string) {
   }
   if (allowed && !allowed.includes(hostname)) {
     throw new AppError(`Host "${parsed.hostname}" tidak diizinkan untuk pengaturan "${key}"`, 400);
+  }
+  // Fail closed: a server-fetched URL without an allowlist entry is a config bug
+  // — reject rather than let it through on https-only.
+  if (isServerFetched && !allowed) {
+    throw new AppError(`Pengaturan "${key}" tidak memiliki daftar host yang diizinkan`, 500);
   }
 }
 
