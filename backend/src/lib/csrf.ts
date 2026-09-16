@@ -27,6 +27,7 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 // exempt from the browser-CSRF guard.
 const CSRF_EXEMPT_PATHS = new Set([
   "/api/payments/webhook/sumopod", // Sumopod webhook: verified via Svix HMAC / token, fail-closed
+  "/api/payments/callback/duitku", // Duitku callback: verified via HMAC-SHA256 + amount match, fail-closed
 ]);
 
 function isCsrfExempt(pathname: string): boolean {
