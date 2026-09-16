@@ -44,7 +44,12 @@ export class OtpAttemptTracker {
     let count: number | null;
     try {
       count = await redis.incr(`${ATTEMPT_PREFIX}${key}`);
-      if (count === 1) {
+      // Set the TTL on the first attempt, and REFRESH it to the full window the
+      // moment the failure budget is exhausted. This mirrors the old sliding
+      // `lockedUntil` semantics: the lockout lasts a full window from the attempt
+      // that triggers it, not from the first attempt — otherwise a patient
+      // attacker could spread attempts across a window and dodge the lock.
+      if (count === 1 || count === this.maxFailures) {
         await redis.expire(`${ATTEMPT_PREFIX}${key}`, this.windowSec);
       }
     } catch {
@@ -58,14 +63,6 @@ export class OtpAttemptTracker {
         429,
       );
     }
-  }
-
-  async recordFailure(key: string): Promise<void> {
-    await this.assertAndRecordAttempt(key);
-  }
-
-  async recordAttempt(key: string): Promise<void> {
-    await this.assertAndRecordAttempt(key);
   }
 
   async clear(key: string): Promise<void> {
@@ -97,6 +94,12 @@ export class OtpAttemptTracker {
         `Terlalu banyak percobaan OTP salah. Coba lagi dalam ${this.windowSec} detik.`,
         429,
       );
+    }
+    // Refresh the window start when the budget is exhausted, mirroring the
+    // Redis path: the lockout lasts a full window from the triggering attempt,
+    // not from the first one.
+    if (rec.count === this.maxFailures) {
+      rec.windowStart = now;
     }
     this.localStore.set(key, rec);
   }

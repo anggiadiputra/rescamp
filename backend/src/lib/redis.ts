@@ -59,19 +59,3 @@ export async function incrWithExpiry(key: string, ttlSeconds: number): Promise<n
     return null;
   }
 }
-
-/**
- * Read-and-delete a lock record atomically enough for a coarse lockout check.
- * Returns the stored value, or null when Redis is down / key missing.
- */
-export async function getDel(key: string): Promise<string | null> {
-  const redis = getRedis();
-  if (!redis) return null;
-  try {
-    const value = await redis.get(key);
-    if (value !== null) await redis.del(key);
-    return value;
-  } catch {
-    return null;
-  }
-}
