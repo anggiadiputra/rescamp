@@ -644,6 +644,20 @@ export async function processWebhookPayload(payload: any, gateway: "sumopod" | "
     return { status: "transaction_not_found" };
   }
 
+  // Payment-integrity guard (S2, parity with the Duitku callback): a
+  // payment.completed event must carry the same amount the order was created
+  // with. Without this, an underpaid/partial "completed" webhook would still
+  // provision the domain and deduct wholesale cost. Amount is optional in the
+  // payload shape for legacy events, but when present it MUST match the row.
+  const webhookAmount = data.amount != null ? Number(data.amount) : NaN;
+  const txAmount = Number(tx.amount);
+  if (!Number.isNaN(webhookAmount) && Number.isFinite(txAmount) && Math.round(webhookAmount) !== Math.round(txAmount)) {
+    console.warn(
+      `[webhook] Amount mismatch for ${orderId || paymentId}: webhook=${webhookAmount} db=${txAmount}`,
+    );
+    return { status: "amount_mismatch" };
+  }
+
   // Out-of-Order Webhook Guard
   if (eventType === "payment.failed" || eventType === "payment.expired" || eventType === "payment.cancelled" || eventType === "payment.canceled") {
     if (tx.paymentStatus === "completed" || tx.status === "completed" || tx.status === "processing_domain") {
