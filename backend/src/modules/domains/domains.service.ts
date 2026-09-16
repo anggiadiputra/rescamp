@@ -603,6 +603,8 @@ export async function orderRegisterDomain(
     autoRenew: data.auto_renew,
     privacyProtection: data.privacy_protection,
     amount: totalAmount,
+    gateway: (data as any).gateway,
+    paymentMethod: (data as any).payment_method,
   });
 }
 
@@ -647,6 +649,8 @@ export async function orderTransferDomain(
     authCode: data.auth_code,
     nameservers: data.nameservers,
     amount: unitPrice,
+    gateway: (data as any).gateway,
+    paymentMethod: (data as any).payment_method,
   });
 }
 
@@ -692,13 +696,16 @@ export async function orderRenewDomain(
     customerId: domain.customerId || undefined,
     privacyProtection: includePrivacy,
     amount: totalAmount,
+    gateway: (options as any)?.gateway,
+    paymentMethod: (options as any)?.payment_method,
   });
 }
 
 export async function orderBuyPrivacy(
   user: { id: number; resellerId: string | null; apiKey: string | null },
   userParam: any,
-  domainId: string | number
+  domainId: string | number,
+  options?: { gateway?: "sumopod" | "duitku"; payment_method?: string }
 ) {
   const domain = await getDomain(userParam, domainId);
   const tldKey = domain.tld.toLowerCase();
@@ -731,6 +738,8 @@ export async function orderBuyPrivacy(
     domainId: domain.id,
     customerId: domain.customerId || undefined,
     amount: privacyPrice,
+    gateway: (options as any)?.gateway,
+    paymentMethod: (options as any)?.payment_method,
   });
 
 }

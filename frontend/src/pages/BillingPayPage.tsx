@@ -22,7 +22,13 @@ export default function BillingPayPage() {
     expiresAt: string;
     status: string;
     currency: string;
+    gateway?: string;
+    vaNumber?: string;
+    qrString?: string;
+    channel?: string;
   } | null>(null);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [copiedField, setCopiedField] = useState("");
   const [timeLeft, setTimeLeft] = useState(3600);
   const [isExpired, setIsExpired] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -49,6 +55,10 @@ export default function BillingPayPage() {
         expiresAt: d.expiresAt || d.metadata?.expiresAt || "",
         status: d.status,
         currency: d.currency || "IDR",
+        gateway: d.metadata?.gateway || "",
+        vaNumber: d.metadata?.vaNumber || "",
+        qrString: d.metadata?.qrString || "",
+        channel: d.metadata?.channel || "",
       });
       if (d.expiresAt || d.metadata?.expiresAt) {
         const exp = d.expiresAt || d.metadata.expiresAt;
@@ -219,6 +229,62 @@ export default function BillingPayPage() {
             </div>
           </div>
 
+          {data.gateway === "duitku" && !isExpired && !isPaid && (
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <div className="p-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                  Pembayaran via Duitku — {data.channel || "Channel"}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black text-white">DUITKU</span>
+              </div>
+              <div className="p-4 space-y-3">
+                {data.vaNumber && (
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Virtual Account</p>
+                      <p className="text-lg font-black text-gray-900 font-mono tracking-tight">{data.vaNumber}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { navigator.clipboard.writeText(data.vaNumber!); setCopiedField("va"); setTimeout(() => setCopiedField(""), 2000); }}
+                      className="px-3 py-2 border border-gray-200 hover:bg-gray-50 rounded-lg text-xs font-semibold text-gray-700 flex items-center gap-1.5"
+                    >
+                      {copiedField === "va" ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedField === "va" ? "Tersalin" : "Salin"}
+                    </button>
+                  </div>
+                )}
+
+                {data.qrString && (
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">QRIS</p>
+                      <p className="text-xs text-gray-600">Scan dengan aplikasi e-wallet / m-banking</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setQrModalOpen(true)}
+                      className="px-3 py-2 border border-gray-200 hover:bg-gray-50 rounded-lg text-xs font-semibold text-gray-700"
+                    >
+                      Lihat QR
+                    </button>
+                  </div>
+                )}
+
+                {data.paymentLinkUrl && (
+                  <a
+                    href={data.paymentLinkUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-semibold text-blue-700 hover:underline inline-flex items-center gap-1"
+                  >
+                    Buka halaman pembayaran Duitku <ArrowRight className="w-3.5 h-3.5" />
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
           {!isExpired && !isPaid && data.paymentLinkUrl && (
             <div className="space-y-2">
               <a
@@ -268,6 +334,36 @@ export default function BillingPayPage() {
           </div>
         </div>
       </Card>
+
+      {/* QRIS Modal */}
+      {qrModalOpen && data?.qrString && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+          onClick={() => setQrModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl border border-gray-200 shadow-xl max-w-xs w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
+              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Scan QRIS</h3>
+              <button onClick={() => setQrModalOpen(false)} className="text-gray-400 hover:text-gray-700 text-lg leading-none">×</button>
+            </div>
+            <div className="p-4">
+              <div className="bg-white border border-gray-200 rounded-xl p-3 flex items-center justify-center">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(data.qrString)}`}
+                  alt="QRIS"
+                  className="w-[220px] h-[220px]"
+                />
+              </div>
+              <p className="text-[10px] text-gray-500 text-center mt-2.5">
+                Buka e-wallet / m-banking → Scan QRIS → selesaikan pembayaran
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

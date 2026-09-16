@@ -53,6 +53,23 @@ export default function DomainRegisterPage() {
   const [autoRenew, setAutoRenew] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // Multi-gateway checkout (Sumopod default; Duitku opsional)
+  const [gateway, setGateway] = useState<"sumopod" | "duitku">("sumopod");
+  const [channel, setChannel] = useState("");
+  const [duitkuChannels, setDuitkuChannels] = useState<any[]>([]);
+
+  useEffect(() => {
+    api.get<any>("/payments/config").then((res) => {
+      const cfg = res?.data || res;
+      const dEnabled = Boolean(cfg?.gateways?.duitku?.enabled);
+      const channels: any[] = Array.isArray(cfg?.duitku_channels) ? cfg.duitku_channels : [];
+      setDuitkuChannels(channels);
+      if (dEnabled && channels.length > 0) setGateway("duitku"); // Duitku aktif + channel tersedia
+      else setGateway("sumopod");
+      if (channels.length > 0) setChannel(String(channels[0].code));
+    }).catch(() => {});
+  }, []);
+
   // Transfer form state
   const [transferDomain, setTransferDomain] = useState(searchParams.get("search") || searchParams.get("domain") || "");
   const [authCode, setAuthCode] = useState("");
@@ -178,6 +195,7 @@ export default function DomainRegisterPage() {
         nameservers: ns.length >= 2 ? ns : undefined,
         privacy_protection: isIdDomain ? false : privacy,
         auto_renew: autoRenew,
+        ...(gateway === "duitku" ? { gateway, payment_method: channel } : { gateway }),
       });
 
       const paymentInfo = res?.data || res;
@@ -213,6 +231,7 @@ export default function DomainRegisterPage() {
         domain_name: transferDomain.trim(),
         auth_code: authCode.trim() || undefined,
         customer_id: effectiveCustomerId,
+        ...(gateway === "duitku" ? { gateway, payment_method: channel } : { gateway }),
       });
 
       const paymentInfo = res?.data || res;
@@ -556,7 +575,50 @@ export default function DomainRegisterPage() {
                 </div>
               </div>
 
-              {/* Step 5: Order Summary Box */}
+              {/* Step 5: Payment Method (multi-gateway) */}
+              {duitkuChannels.length > 0 && (
+                <div className="pt-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-700 block mb-1.5">5. Metode Pembayaran</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setGateway("sumopod")}
+                      className={`p-3 rounded-lg border text-left transition-all ${gateway === "sumopod" ? "border-black bg-gray-50 shadow-xs" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                    >
+                      <p className="text-xs font-bold text-gray-900">Sumopod</p>
+                      <p className="text-[10px] text-gray-500">Link pembayaran</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGateway("duitku")}
+                      className={`p-3 rounded-lg border text-left transition-all ${gateway === "duitku" ? "border-black bg-gray-50 shadow-xs" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                    >
+                      <p className="text-xs font-bold text-gray-900">Duitku</p>
+                      <p className="text-[10px] text-gray-500">VA / QRIS / e-wallet</p>
+                    </button>
+                  </div>
+
+                  {gateway === "duitku" && (
+                    <div className="mt-2.5 max-h-56 overflow-y-auto space-y-1.5 pr-1">
+                      {duitkuChannels.map((ch) => (
+                        <button
+                          key={ch.code}
+                          type="button"
+                          onClick={() => setChannel(String(ch.code))}
+                          className={`w-full p-2.5 rounded-lg border flex items-center justify-between gap-2 transition-all ${channel === String(ch.code) ? "border-black bg-gray-50 shadow-xs" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                        >
+                          <span className="text-xs font-semibold text-gray-800 truncate">{ch.name}</span>
+                          {Number(ch.fee_flat || ch.fee_value || 0) > 0 && (
+                            <span className="text-[10px] text-gray-500 font-mono shrink-0">+Rp {Number(ch.fee_flat || ch.fee_value).toLocaleString("id-ID")}</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Step 6: Order Summary Box */}
               <div className="p-4 bg-gray-900 text-white rounded-xl space-y-2.5 mt-4">
                 <div className="flex justify-between items-center text-xs text-gray-300">
                   <span>Domain Registration ({selectedDomain.domain} &times; {years} yr)</span>

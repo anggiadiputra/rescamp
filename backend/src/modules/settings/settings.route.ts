@@ -1,5 +1,9 @@
 import { Elysia } from "elysia";
-import { getSystemSettings, updateSystemSettings, testKirisanConnection, testEmailConnection, testLiquidConnection } from "./settings.service";
+import {
+  getSystemSettings, updateSystemSettings,
+  testKirisanConnection, testEmailConnection, testLiquidConnection,
+  testDuitkuConnection, syncDuitkuChannels, updateDuitkuChannelOrder,
+} from "./settings.service";
 import { AppError } from "../../lib/error";
 import { adminGuard, authGuard } from "../../middleware/auth";
 import { settingsRateLimiter, rateLimit } from "../../lib/rate-limit";
@@ -35,6 +39,7 @@ const MASKED_SETTINGS_FIELDS = [
   "turnstile_secret_key",
   "reseller_api_key",
   "liquid_api_key",
+  "duitku_api_key",
 ];
 
 function maskSettingsSecrets(settings: Record<string, string>): Record<string, string> {
@@ -112,4 +117,52 @@ export const settingsRoutes = new Elysia({ prefix: "/settings" })
       .post("/test-email", handleTestEmail as any)
       .get("/test-liquid", handleTestLiquid as any)
       .post("/test-liquid", handleTestLiquid as any)
+      // ── Duitku payment gateway (admin) ──
+      .post("/payment-gateways/duitku/test", handleTestDuitku as any)
+      .post("/payment-gateways/duitku/sync-channels", handleSyncDuitkuChannels as any)
+      .put("/payment-gateways/duitku/channels", handleUpdateDuitkuChannels as any)
+      .get("/payment-gateways/duitku/channels", handleGetDuitkuChannels as any)
   );
+
+// ── Handlers Duitku ──
+
+async function handleTestDuitku({ body }: any) {
+  const res = await testDuitkuConnection({
+    merchant_code: body?.merchant_code,
+    api_key: body?.api_key,
+    environment: body?.environment,
+  });
+  return res;
+}
+
+async function handleSyncDuitkuChannels() {
+  return await syncDuitkuChannels();
+}
+
+async function handleUpdateDuitkuChannels({ body }: any) {
+  if (!Array.isArray(body?.channels)) {
+    throw new AppError("Body harus berisi { channels: [{ code, enabled?, order? }] }", 400);
+  }
+  return await updateDuitkuChannelOrder(body.channels);
+}
+
+async function handleGetDuitkuChannels() {
+  const { getActiveDuitkuChannels, getSystemSettings } = await import("./settings.service");
+  const settings = await getSystemSettings();
+  let all: Array<any> = [];
+  let syncedAt = "";
+  try {
+    const parsed = settings.duitku_channels ? JSON.parse(settings.duitku_channels) : null;
+    all = Array.isArray(parsed?.channels) ? parsed.channels : [];
+    syncedAt = String(parsed?.synced_at || "");
+  } catch {}
+  return {
+    data: {
+      enabled: settings.duitku_enabled === "true",
+      configured: Boolean(settings.duitku_merchant_code && settings.duitku_api_key),
+      synced_at: syncedAt,
+      channels: all,
+      active: await getActiveDuitkuChannels(),
+    },
+  };
+}

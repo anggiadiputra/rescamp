@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, Button, InfoBanner, LoadingSpinner, toast, SecretInput } from "../components/ui";
 import { api } from "../lib/api";
 import {
@@ -20,6 +20,7 @@ const SECTION_FIELDS: Record<string, string[]> = {
   theme: ["primary_color", "header_color", "sidebar_color", "theme_preset"],
   fonnte: ["fonnte_api_url", "fonnte_token", "fonnte_sender", "fonnte_notify_order", "fonnte_notify_expiry"],
   sumopod: ["sumopod_api_key", "sumopod_base_url", "sumopod_webhook_token", "sumopod_webhook_secret", "sumopod_success_url", "sumopod_cancel_url"],
+  duitku: ["duitku_enabled", "duitku_merchant_code", "duitku_api_key", "duitku_environment"],
   s3: ["s3_endpoint", "s3_region", "s3_access_key", "s3_secret_key", "s3_bucket", "s3_public_url"],
   turnstile: ["turnstile_enabled", "turnstile_site_key", "turnstile_secret_key", "turnstile_verify_url"],
   tax: ["tax_enabled", "tax_rate", "tax_label"],
@@ -43,6 +44,7 @@ export default function SettingsPage() {
     theme: false,
     fonnte: false,
     sumopod: false,
+    duitku: false,
     s3: false,
     turnstile: false,
     tax: false,
@@ -61,6 +63,15 @@ export default function SettingsPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
   const [syncError, setSyncError] = useState("");
+
+  // Duitku payment gateway
+  const [duitkuTesting, setDuitkuTesting] = useState(false);
+  const [duitkuSyncing, setDuitkuSyncing] = useState(false);
+  const [duitkuSavingChannels, setDuitkuSavingChannels] = useState(false);
+  const [duitkuMsg, setDuitkuMsg] = useState("");
+  const [duitkuMsgType, setDuitkuMsgType] = useState<"ok" | "error">("ok");
+  const [duitkuChannels, setDuitkuChannels] = useState<any[]>([]);
+  const dragIdx = useRef<number | null>(null);
 
   const [form, setForm] = useState<Record<string, any>>({
     // Brand & SEO
@@ -109,6 +120,12 @@ export default function SettingsPage() {
     sumopod_success_url: "",
     sumopod_cancel_url: "",
 
+    // Duitku Gateway
+    duitku_enabled: false,
+    duitku_merchant_code: "",
+    duitku_api_key: "",
+    duitku_environment: "sandbox",
+
     // S3 Object Storage
     s3_endpoint: "",
     s3_region: "us-east-1",
@@ -135,6 +152,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetchSettings();
+    loadDuitkuChannels();
   }, []);
 
   async function fetchSettings() {
@@ -151,6 +169,8 @@ export default function SettingsPage() {
         tax_enabled: data.tax_enabled === "true" || data.tax_enabled === true,
         tax_rate: data.tax_rate ?? "11",
         tax_label: data.tax_label ?? "PPN",
+        duitku_enabled: data.duitku_enabled === "true" || data.duitku_enabled === true,
+        duitku_environment: data.duitku_environment || "sandbox",
         reseller_id: data.reseller_id || "",
         reseller_api_key: data.reseller_api_key || "",
       };
@@ -267,6 +287,72 @@ export default function SettingsPage() {
       toast(e.message || "Gagal menguji koneksi Resellercamp API", "error");
     }
     setTestingLiquid(false);
+  }
+
+  // ── Duitku handlers ──
+
+  async function loadDuitkuChannels() {
+    try {
+      const res = await api.get<any>("/settings/payment-gateways/duitku/channels");
+      const d = res?.data || res;
+      setDuitkuChannels(Array.isArray(d?.channels) ? d.channels : []);
+    } catch {}
+  }
+
+  async function handleTestDuitku() {
+    setDuitkuTesting(true);
+    setDuitkuMsg("");
+    try {
+      const res = await api.post<any>("/settings/payment-gateways/duitku/test", {
+        merchant_code: form.duitku_merchant_code,
+        api_key: form.duitku_api_key,
+        environment: form.duitku_environment || "sandbox",
+      });
+      setDuitkuMsgType("ok");
+      setDuitkuMsg(res.message || "Koneksi Duitku berhasil!");
+    } catch (e: any) {
+      setDuitkuMsgType("error");
+      setDuitkuMsg(e.message || "Gagal menguji koneksi Duitku");
+    }
+    setDuitkuTesting(false);
+  }
+
+  async function handleSyncDuitkuChannels() {
+    setDuitkuSyncing(true);
+    setDuitkuMsg("");
+    try {
+      // Simpan kredensial dulu (agar server memakai nilai terbaru), lalu sinkron
+      await handleSave(undefined, "duitku");
+      const res = await api.post<any>("/settings/payment-gateways/duitku/sync-channels", {});
+      const d = res?.data || res;
+      setDuitkuChannels(Array.isArray(d?.channels) ? d.channels : []);
+      setDuitkuMsgType("ok");
+      setDuitkuMsg(res.message || d?.message || "Sinkronisasi channel berhasil");
+    } catch (e: any) {
+      setDuitkuMsgType("error");
+      setDuitkuMsg(e.message || "Gagal sinkronisasi channel Duitku");
+    }
+    setDuitkuSyncing(false);
+  }
+
+  async function handleSaveDuitkuChannels() {
+    setDuitkuSavingChannels(true);
+    setDuitkuMsg("");
+    try {
+      await api.put<any>("/settings/payment-gateways/duitku/channels", {
+        channels: duitkuChannels.map((c: any, i: number) => ({
+          code: c.code,
+          enabled: c.enabled !== false && !c.stale,
+          order: i + 1,
+        })),
+      });
+      setDuitkuMsgType("ok");
+      setDuitkuMsg("Urutan & status channel disimpan");
+    } catch (e: any) {
+      setDuitkuMsgType("error");
+      setDuitkuMsg(e.message || "Gagal menyimpan urutan channel");
+    }
+    setDuitkuSavingChannels(false);
   }
 
   async function handleSyncReseller() {
@@ -1888,6 +1974,183 @@ export default function SettingsPage() {
                 </div>
               </Card>
             )}
+
+            {/* 9. Payment Gateways — Duitku (aktif berdampingan dengan Sumopod) */}
+            <Card className="p-6 bg-white border border-gray-200 shadow-xs rounded-xl space-y-4">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-gray-700" />
+                  <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">9. Payment Gateway Duitku</h2>
+                </div>
+                <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded ${form.duitku_enabled ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-500"}`}>
+                  {form.duitku_enabled ? "Aktif" : "Non-Aktif"}
+                </span>
+              </div>
+
+              <div className="space-y-3.5 text-xs">
+                <p className="text-xs text-gray-500">
+                  Duitku berjalan <b>berdampingan</b> dengan Sumopod (Sumopod tetap default). Aktifkan, isi kredensial,
+                  lalu klik <b>Sinkronkan Channel</b> untuk menarik metode pembayaran dari dashboard Duitku Anda.
+                </p>
+
+                {/* Toggle enable */}
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">Aktifkan Duitku</p>
+                    <p className="text-[11px] text-gray-500">Tampilkan Duitku sebagai opsi pembayaran di checkout</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, duitku_enabled: !form.duitku_enabled })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none cursor-pointer ${form.duitku_enabled ? "bg-emerald-500" : "bg-gray-300"}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.duitku_enabled ? "translate-x-6" : "translate-x-1"}`} />
+                  </button>
+                </div>
+
+                {/* Kredensial */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-0.5 block">Merchant Code</label>
+                    <input
+                      value={form.duitku_merchant_code || ""}
+                      onChange={(e) => setForm({ ...form, duitku_merchant_code: e.target.value })}
+                      placeholder="D1234"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-black bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-0.5 block">API Key</label>
+                    <input
+                      type="password"
+                      value={form.duitku_api_key || ""}
+                      onChange={(e) => setForm({ ...form, duitku_api_key: e.target.value })}
+                      placeholder="API Key Duitku"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-black bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-0.5 block">Environment</label>
+                    <select
+                      value={form.duitku_environment || "sandbox"}
+                      onChange={(e) => setForm({ ...form, duitku_environment: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-black bg-white font-medium"
+                    >
+                      <option value="sandbox">Sandbox</option>
+                      <option value="production">Production</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Tombol aksi */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleTestDuitku}
+                    disabled={duitkuTesting || !form.duitku_merchant_code || !form.duitku_api_key}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:text-black bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${duitkuTesting ? "animate-spin" : ""}`} />
+                    {duitkuTesting ? "Menguji..." : "Uji Koneksi"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSyncDuitkuChannels}
+                    disabled={duitkuSyncing || !form.duitku_merchant_code || !form.duitku_api_key}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white rounded-lg transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                    style={{ backgroundColor: settings.primary_color || "#000000" }}
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${duitkuSyncing ? "animate-spin" : ""}`} />
+                    {duitkuSyncing ? "Menyinkronkan..." : "Sinkronkan Channel"}
+                  </button>
+                  <span className="text-[10px] text-gray-400">
+                    {duitkuChannels.length > 0
+                      ? `${duitkuChannels.filter((c: any) => !c.stale).length} channel tersinkron (${duitkuChannels.filter((c: any) => c.enabled && !c.stale).length} aktif)`
+                      : "Belum ada channel tersinkron"}
+                  </span>
+                </div>
+
+                {duitkuMsg && (
+                  <p className={`text-xs rounded-lg px-3 py-2 border ${duitkuMsgType === "error" ? "text-red-600 bg-red-50 border-red-200" : "text-emerald-700 bg-emerald-50 border-emerald-100"}`}>
+                    {duitkuMsg}
+                  </p>
+                )}
+
+                {/* Daftar channel: drag-and-drop urutan + toggle */}
+                {duitkuChannels.length > 0 && (
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                        Urutan Channel di Checkout — tarik untuk mengurutkan
+                      </p>
+                    </div>
+                    <ul className="divide-y divide-gray-100">
+                      {duitkuChannels.map((ch: any, idx: number) => (
+                        <li
+                          key={ch.code}
+                          draggable
+                          onDragStart={(e) => { dragIdx.current = idx; e.dataTransfer.effectAllowed = "move"; }}
+                          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const from = dragIdx.current;
+                            if (from === null || from === idx) return;
+                            const next = [...duitkuChannels];
+                            const [moved] = next.splice(from, 1);
+                            next.splice(idx, 0, moved);
+                            setDuitkuChannels(next.map((c: any, i: number) => ({ ...c, order: i + 1 })));
+                            dragIdx.current = null;
+                          }}
+                          className={`p-2.5 flex items-center gap-2.5 bg-white ${ch.stale ? "opacity-50" : ""} ${dragIdx.current === idx ? "opacity-40" : ""}`}
+                        >
+                          <span className="cursor-grab text-gray-400 select-none" title="Tarik untuk mengurutkan">⠿</span>
+                          <input
+                            type="checkbox"
+                            checked={ch.enabled !== false && !ch.stale}
+                            disabled={ch.stale}
+                            onChange={(e) => {
+                              const next = duitkuChannels.map((c: any) =>
+                                c.code === ch.code ? { ...c, enabled: e.target.checked } : c
+                              );
+                              setDuitkuChannels(next);
+                            }}
+                            className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black cursor-pointer"
+                          />
+                          {ch.image && <img src={ch.image} alt={ch.code} className="w-8 h-5 object-contain" />}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-gray-900 truncate">
+                              {ch.name} {ch.stale && <span className="text-amber-600">⚠ nonaktif di Duitku</span>}
+                            </p>
+                            <p className="text-[10px] text-gray-500 font-mono">{ch.code}{Number(ch.fee_flat || 0) > 0 ? ` · fee Rp ${Number(ch.fee_flat).toLocaleString("id-ID")}` : " · fee 0"}</p>
+                          </div>
+                          <span className="text-[10px] text-gray-400 font-mono">#{ch.order ?? idx + 1}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="px-3 py-2.5 bg-gray-50 border-t border-gray-100">
+                      <button
+                        type="button"
+                        onClick={handleSaveDuitkuChannels}
+                        disabled={duitkuSavingChannels}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                        style={{ backgroundColor: settings.primary_color || "#000000" }}
+                      >
+                        <Save className={`w-3.5 h-3.5 ${duitkuSavingChannels ? "animate-pulse" : ""}`} />
+                        {duitkuSavingChannels ? "Menyimpan..." : "Simpan Urutan & Status Channel"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                  <p className="text-[11px] text-blue-700">
+                    <b>Cara kerja:</b> Sumopod tetap menjadi metode default di checkout. Saat Duitku diaktifkan,
+                    pelanggan bisa memilih Duitku dan memilih channel (urutan sesuai pengaturan di atas).
+                    Fee channel mengikuti pengaturan akun Duitku Anda.
+                  </p>
+                </div>
+              </div>
+            </Card>
 
           </div>
         </div>

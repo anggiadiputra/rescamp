@@ -53,6 +53,15 @@ export interface SettingsData {
   sumopod_success_url?: string;
   sumopod_cancel_url?: string;
 
+  // Duitku Gateway (payment gateway #2 — aktif berdampingan dengan Sumopod)
+  duitku_enabled?: string; // "true"/"false"
+  duitku_merchant_code?: string;
+  duitku_api_key?: string; // terenkripsi at rest (SECRET_SETTING_FIELDS)
+  duitku_base_url?: string; // kosong = default dari DUITKU_ENV
+  duitku_environment?: string; // "sandbox" | "production" — override base URL
+  payment_gateways_config?: string; // JSON {default} — default terkunci "sumopod"
+  duitku_channels?: string; // JSON cache channel hasil tombol Sinkronkan
+
   // S3 Object Storage
   s3_endpoint?: string;
   s3_region?: string;
@@ -116,6 +125,14 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   sumopod_success_url: `${env.CORS_ORIGIN}/billing?status=success`,
   sumopod_cancel_url: `${env.CORS_ORIGIN}/billing?status=cancel`,
 
+  duitku_enabled: "false",
+  duitku_merchant_code: env.DUITKU_MERCHANT_CODE,
+  duitku_api_key: env.DUITKU_API_KEY,
+  duitku_base_url: env.DUITKU_BASE_URL,
+  duitku_environment: env.DUITKU_ENV === "production" ? "production" : "sandbox",
+  payment_gateways_config: JSON.stringify({ default: "sumopod" }),
+  duitku_channels: "",
+
   s3_endpoint: "",
   s3_region: "us-east-1",
   s3_access_key: "",
@@ -141,6 +158,7 @@ const SECRET_SETTING_FIELDS = new Set([
   "kirisan_token", "kirisan_channel_key", "smtp_pass", "brevo_api_key",
   "fonnte_token", "s3_access_key", "s3_secret_key", "turnstile_secret_key",
   "reseller_api_key", "liquid_api_key",
+  "duitku_api_key",
 ]);
 
 export async function encodeSettingValue(key: string, value: string): Promise<string> {
@@ -532,4 +550,181 @@ export async function testLiquidConnection(resellerId?: string, apiKey?: string)
     resellerId: rId,
     balance,
   };
+}
+
+/** Uji koneksi Duitku: getpaymentmethod dengan amount kecil.
+ *  Kredensial dari payload (frontend mengirim yang baru diketik) dengan
+ *  fallback ke settings tersimpan. */
+export async function testDuitkuConnection(payload?: {
+  merchant_code?: string;
+  api_key?: string;
+  environment?: string;
+}) {
+  const settings = await getSystemSettings();
+  const merchantCode = String(payload?.merchant_code || settings.duitku_merchant_code || "").trim();
+  const apiKey = String(payload?.api_key || settings.duitku_api_key || "").trim();
+  const envSel = String(payload?.environment || "sandbox").trim();
+
+  if (!merchantCode || !apiKey) {
+    throw new AppError("Merchant Code dan API Key Duitku wajib diisi.", 400);
+  }
+
+  const baseUrl = envSel === "production"
+    ? "https://passport.duitku.com"
+    : "https://sandbox.duitku.com";
+
+  // Panggil getpaymentmethod amount minimum (Rp 10.000) langsung dengan kredensial uji
+  const { hmacSha256Hex } = await import("../../lib/duitku");
+  const datetime = formatDuitkuDatetimeNow();
+  const signature = hmacSha256Hex(`${merchantCode}10000${datetime}`, apiKey);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  try {
+    const res = await fetch(`${baseUrl}/webapi/api/merchant/paymentmethod/getpaymentmethod`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        merchantcode: merchantCode,
+        amount: 10000,
+        datetime,
+        signature,
+      }),
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    let json: any = null;
+    try { json = text ? JSON.parse(text) : null; } catch {}
+    if (!res.ok || !json || json.responseCode !== "00") {
+      const msg = json?.responseMessage || `HTTP ${res.status}`;
+      throw new AppError(`Koneksi Duitku gagal: ${msg}`, 400);
+    }
+    return {
+      success: true,
+      message: "Koneksi Duitku berhasil!",
+      merchantCode,
+      environment: envSel,
+      channelCount: Array.isArray(json.paymentFee) ? json.paymentFee.length : 0,
+    };
+  } catch (err: any) {
+    if (err instanceof AppError) throw err;
+    if (err?.name === "AbortError") throw new AppError("Timeout koneksi ke Duitku", 504);
+    throw new AppError(`Koneksi Duitku gagal: ${err?.message || err}`, 502);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function formatDuitkuDatetimeNow(): string {
+  const now = new Date();
+  const jakarta = new Date(now.getTime() + 7 * 3600 * 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${jakarta.getUTCFullYear()}-${pad(jakarta.getUTCMonth() + 1)}-${pad(jakarta.getUTCDate())} ` +
+    `${pad(jakarta.getUTCHours())}:${pad(jakarta.getUTCMinutes())}:${pad(jakarta.getUTCSeconds())}`;
+}
+
+/** Sinkronkan channel pembayaran Duitku → app_settings.duitku_channels.
+ *  Channel baru dari Duitku otomatis enabled di posisi terakhir; urutan & status
+ *  toggle channel lama dipertahankan; channel yang hilang dari Duitku ditandai stale. */
+export async function syncDuitkuChannels() {
+  const { DuitkuClient } = await import("../../lib/duitku");
+  const client = new DuitkuClient();
+  // amount 10.000 (min) cukup untuk menarik daftar channel aktif + fee
+  const live = await client.getPaymentMethods(10000);
+
+  const settings = await getSystemSettings();
+  let prev: Array<any> = [];
+  try {
+    const parsed: any = settings.duitku_channels ? JSON.parse(settings.duitku_channels) : [];
+    prev = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.channels) ? parsed.channels : []);
+  } catch {
+    prev = [];
+  }
+  const prevByCode = new Map<string, any>();
+  for (const c of prev) prevByCode.set(String(c.code), c);
+
+  const merged = live.map((ch, idx) => {
+    const old = prevByCode.get(ch.paymentMethod);
+    const feeNum = Number(ch.totalFee || "0");
+    return {
+      code: ch.paymentMethod,
+      name: ch.paymentName,
+      image: ch.paymentImage,
+      fee_flat: feeNum,
+      fee_percent: 0, // Duitku v2 mengirim fee flat per channel pada getpaymentmethod
+      enabled: old ? old.enabled !== false : true,
+      stale: false,
+      order: old?.order ?? idx + 1,
+    };
+  });
+
+  // channel yang ada di setting lama tapi tidak lagi dikembalikan Duitku → stale
+  const liveCodes = new Set(live.map((c) => c.paymentMethod));
+  let maxOrder = merged.reduce((m, c) => Math.max(m, c.order), 0);
+  for (const old of prev) {
+    if (!liveCodes.has(String(old.code))) {
+      maxOrder += 1;
+      merged.push({ ...old, stale: true, order: maxOrder });
+    }
+  }
+  merged.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+
+  const payload = JSON.stringify({
+    synced_at: new Date().toISOString(),
+    channels: merged,
+  });
+  await db.insert(appSettings).values({
+    key: "duitku_channels",
+    value: payload,
+    category: "payment_gateway",
+  }).onDuplicateKeyUpdate({ set: { value: payload } });
+
+  return {
+    success: true,
+    message: `Sinkronisasi berhasil: ${merged.length} channel (${merged.filter((c) => !c.stale).length} aktif, ${merged.filter((c) => c.stale).length} stale)`,
+    channels: merged,
+  };
+}
+
+/** Simpan urutan & toggle channel (hasil drag-and-drop admin). */
+export async function updateDuitkuChannelOrder(channels: Array<{ code: string; enabled?: boolean; order?: number }>) {
+  const settings = await getSystemSettings();
+  let current: any = { synced_at: "", channels: [] };
+  try {
+    current = settings.duitku_channels ? JSON.parse(settings.duitku_channels) : current;
+  } catch {}
+  const list: Array<any> = Array.isArray(current.channels) ? current.channels : [];
+  const byCode = new Map(list.map((c: any) => [String(c.code), c]));
+
+  for (const ch of channels) {
+    const row = byCode.get(String(ch.code));
+    if (!row) continue;
+    if (typeof ch.enabled === "boolean") row.enabled = ch.enabled;
+    if (typeof ch.order === "number") row.order = ch.order;
+  }
+  list.sort((a: any, b: any) => (a.order ?? 999) - (b.order ?? 999));
+
+  const payload = JSON.stringify({ ...current, channels: list });
+  await db.insert(appSettings).values({
+    key: "duitku_channels",
+    value: payload,
+    category: "payment_gateway",
+  }).onDuplicateKeyUpdate({ set: { value: payload } });
+
+  return { success: true, message: "Urutan channel disimpan", channels: list };
+}
+
+/** Helper: baca channel aktif (enabled, non-stale) untuk checkout, urut sesuai admin. */
+export async function getActiveDuitkuChannels(): Promise<Array<any>> {
+  const settings = await getSystemSettings();
+  if (!settings.duitku_channels) return [];
+  try {
+    const parsed = JSON.parse(settings.duitku_channels);
+    const list: Array<any> = Array.isArray(parsed?.channels) ? parsed.channels : [];
+    return list
+      .filter((c: any) => c.enabled !== false && !c.stale)
+      .sort((a: any, b: any) => (a.order ?? 999) - (b.order ?? 999));
+  } catch {
+    return [];
+  }
 }

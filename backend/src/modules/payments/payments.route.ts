@@ -8,6 +8,36 @@ import { authGuard } from "../../middleware/auth";
 import { webhookRateLimiter, paymentStatusRateLimiter, rateLimit } from "../../lib/rate-limit";
 
 export const paymentRoutes = new Elysia({ prefix: "/payments" })
+  // ── Checkout config (auth, untuk frontend) ──
+  .get(
+    "/config",
+    async () => {
+      const { getSystemSettings, getActiveDuitkuChannels } = await import(
+        "../../modules/settings/settings.service"
+      );
+      const { isDuitkuConfigured } = await import("../../lib/duitku");
+      const settings = await getSystemSettings();
+      const duitkuEnabled = settings.duitku_enabled === "true" && (await isDuitkuConfigured());
+      return {
+        data: {
+          gateways: {
+            sumopod: { enabled: true, default: true },
+            duitku: {
+              enabled: duitkuEnabled,
+              default: false, // A4: Sumopod selalu default
+            },
+          },
+          default_gateway: "sumopod",
+          // Channel Duitku aktif (urut sesuai admin) — hanya relevan jika duitku enabled
+          duitku_channels: duitkuEnabled ? await getActiveDuitkuChannels() : [],
+        },
+      };
+    },
+    {
+      beforeHandle: [authGuard],
+      detail: { tags: ["Payments"], summary: "Checkout gateway configuration (enabled + channels)" },
+    }
+  )
   // Webhook Receiver (Public - called by Sumopod Payment Gateway)
   .post(
     "/webhook/sumopod",
@@ -59,7 +89,7 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
       }
 
       try {
-        const result = await processWebhookPayload(payload);
+        const result = await processWebhookPayload(payload, "sumopod");
         return { received: true, result };
       } catch (error) {
         await db.delete(webhookReceipts).where(eq(webhookReceipts.id, receiptId)).catch(() => {});
@@ -69,6 +99,91 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
     {
       beforeHandle: rateLimit(webhookRateLimiter, "Terlalu banyak request webhook."),
       detail: { tags: ["Payments"], summary: "Sumopod payment gateway webhook callback listener" },
+    }
+  )
+
+  // ── Duitku webhook callback (Public — dipanggil server Duitku) ──
+  // Content-Type: application/x-www-form-urlencoded; parameter flat.
+  // Verifikasi HMAC-SHA256 timing-safe + merchantCode + amount match (S1/S2).
+  .post(
+    "/callback/duitku",
+    async ({ body, set }) => {
+      const cb = body as any;
+      const {
+        merchantCode,
+        amount,
+        merchantOrderId,
+        signature,
+        resultCode,
+        reference,
+      } = cb || {};
+
+      if (!merchantOrderId) {
+        set.status = 400;
+        return "Bad Parameter";
+      }
+
+      const { verifyDuitkuCallback } = await import("../../lib/duitku");
+      const isValid = await verifyDuitkuCallback({
+        merchantCode: String(merchantCode || ""),
+        amount: String(amount ?? ""),
+        merchantOrderId: String(merchantOrderId),
+        signature: String(signature || ""),
+      });
+      if (!isValid) {
+        console.warn("[duitku callback] Bad signature/merchantCode", { merchantOrderId });
+        set.status = 400;
+        return "Bad Signature";
+      }
+
+      // Amount harus persis sama dengan yang tersimpan (duitku.md §12 best practice)
+      const [tx] = await db
+        .select()
+        .from(transactions)
+        .where(and(eq(transactions.paymentGateway, "duitku"), eq(transactions.orderId, String(merchantOrderId))))
+        .limit(1);
+      if (!tx) {
+        console.warn(`[duitku callback] Transaction not found: ${merchantOrderId}`);
+        // Tetap 200 agar Duitku berhenti retry untuk order yang tidak kita kenal
+        set.status = 200;
+        return "OK";
+      }
+      const txAmount = Number(tx.amount);
+      const cbAmount = Number(amount);
+      if (!Number.isFinite(cbAmount) || Math.round(cbAmount) !== Math.round(txAmount)) {
+        console.warn(
+          `[duitku callback] Amount mismatch for ${merchantOrderId}: callback=${cbAmount} db=${txAmount}`,
+        );
+        set.status = 400;
+        return "Amount Mismatch";
+      }
+
+      // Normalisasi ke bentuk event internal yang sama dengan Sumopod
+      const eventType =
+        resultCode === "00" ? "payment.completed"
+        : resultCode === "01" ? "payment.failed"
+        : "payment.cancelled";
+
+      const payload = {
+        event_type: eventType,
+        data: {
+          order_id: String(merchantOrderId),
+          payment_id: String(reference || tx.paymentId || ""),
+          amount: Math.round(cbAmount),
+          channel: String(cb.paymentCode || ""),
+          issuer_code: String(cb.issuerCode || ""),
+          settlement_date: String(cb.settlementDate || ""),
+        },
+      };
+
+      const result = await processWebhookPayload(payload, "duitku");
+      // Wajib HTTP 200 + body OK (duitku.md §4.3) — Duitku retry 5x jika bukan 200
+      set.status = 200;
+      return { status: "OK", result };
+    },
+    {
+      beforeHandle: rateLimit(webhookRateLimiter, "Terlalu banyak request webhook."),
+      detail: { tags: ["Payments"], summary: "Duitku payment gateway callback listener" },
     }
   )
 

@@ -8,6 +8,7 @@ import { AppError } from "../../lib/error";
 import { resolveResellerCreds } from "../../lib/reseller-creds";
 import { canAccessTenantResource, loadTenantScope } from "../../lib/tenant-access";
 import { sendOrderNotification } from "../../lib/email";
+import { env } from "../../config/env";
 
 export interface CreateDomainOrderPayload {
   userId: number;
@@ -22,6 +23,104 @@ export interface CreateDomainOrderPayload {
   authCode?: string;
   domainId?: number;
   amount: number;
+  // Multi-gateway (opsional — default "sumopod", terkunci sebagai default):
+  gateway?: "sumopod" | "duitku";
+  paymentMethod?: string; // kode channel Duitku (BC/SP/IR/...), wajib jika gateway=duitku
+}
+
+// ── Gateway selection helpers ─────────────────────────────────────────────
+
+async function resolveCheckoutGateway(
+  requested: "sumopod" | "duitku" | undefined,
+): Promise<"sumopod" | "duitku"> {
+  const gw = requested || "sumopod"; // A4: Sumopod default terkunci
+  if (gw === "sumopod") return gw;
+  // Duitku: hanya bisa dipakai jika enabled + terkonfigurasi
+  const { getSystemSettings } = await import("../settings/settings.service");
+  const settings = await getSystemSettings();
+  if (settings.duitku_enabled !== "true") {
+    throw new AppError("Gateway Duitku sedang tidak aktif.", 400);
+  }
+  const { isDuitkuConfigured } = await import("../../lib/duitku");
+  if (!(await isDuitkuConfigured())) {
+    throw new AppError("Gateway Duitku belum dikonfigurasi (Merchant Code / API Key).", 400);
+  }
+  return gw;
+}
+
+async function validateDuitkuChannel(paymentMethod: string | undefined): Promise<void> {
+  if (!paymentMethod) {
+    throw new AppError("Pilih metode pembayaran Duitku terlebih dahulu.", 422);
+  }
+  const { getActiveDuitkuChannels } = await import("../settings/settings.service");
+  const channels = await getActiveDuitkuChannels();
+  const found = channels.find((c: any) => String(c.code) === String(paymentMethod));
+  if (!found) {
+    throw new AppError("Metode pembayaran Duitku tidak tersedia. Silakan pilih ulang.", 422);
+  }
+}
+
+/** Buat payment di Duitku untuk satu order. Return bentuk setara SumopodPaymentResponse
+ *  + field Duitku tambahan (disimpan ke metadata transaksi). */
+async function createDuitkuPayment(opts: {
+  orderId: string;
+  amount: number;
+  productDetails: string;
+  email: string;
+  customerName: string;
+  paymentMethod: string;
+  expiresAtIso: string;
+}): Promise<{
+  paymentId: string;
+  paymentLinkUrl: string;
+  expiresAt: string;
+  duitkuExtra: Record<string, any>;
+}> {
+  const { DuitkuClient } = await import("../../lib/duitku");
+  const client = new DuitkuClient();
+
+  let frontendUrl = env.CORS_ORIGIN.trim().replace(/\/$/, "");
+  if (frontendUrl.startsWith("http://")) {
+    frontendUrl = frontendUrl.replace(/^http:\/\//, "https://");
+  } else if (!frontendUrl.startsWith("https://")) {
+    frontendUrl = `https://${frontendUrl}`;
+  }
+
+  // Expiry per channel (duitku.md §7): QRIS/e-wallet singkat, VA/retail 24 jam.
+  const channel = String(opts.paymentMethod || "").toUpperCase();
+  const QRIS_CHANNELS = new Set(["SP", "NQ", "GQ", "SQ"]);
+  const EWALLET_SHORT = new Set(["OV", "SA", "JP"]); // default sistem 10-30 menit
+  let expiryPeriod = 1440; // default VA / retail / DANA
+  if (QRIS_CHANNELS.has(channel)) expiryPeriod = 60;
+  else if (EWALLET_SHORT.has(channel)) expiryPeriod = 60;
+
+  const result = await client.inquiry({
+    orderId: opts.orderId,
+    amount: Math.round(opts.amount),
+    paymentMethod: opts.paymentMethod,
+    productDetails: opts.productDetails,
+    email: opts.email,
+    customerVaName: opts.customerName || "Customer",
+    callbackUrl: `${env.APP_URL.replace(/\/$/, "")}/api/payments/callback/duitku`,
+    returnUrl: `${frontendUrl}/billing?status=return&order_id=${encodeURIComponent(opts.orderId)}`,
+    expiryPeriod,
+  });
+
+  const expiresAt = new Date(Date.now() + expiryPeriod * 60 * 1000).toISOString();
+
+  return {
+    paymentId: result.reference,
+    paymentLinkUrl: result.paymentUrl,
+    expiresAt,
+    duitkuExtra: {
+      gateway: "duitku",
+      channel: opts.paymentMethod,
+      vaNumber: result.vaNumber || "",
+      qrString: result.qrString || "",
+      appUrl: result.appUrl || "",
+      expiryPeriod,
+    },
+  };
 }
 
 /** Map a transactions row to the uniform payment-response shape returned by
@@ -80,6 +179,14 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
   const intentKey = `${payload.userId}:${payload.type}:${fullDomain}:${years}:${payload.customerId ?? 0}:${payload.domainId ?? 0}`;
   const intentHash = createHash("sha256").update(intentKey).digest("hex").slice(0, 24);
   const orderId = `INV-${payload.type.toUpperCase().slice(0, 3)}-${intentHash}`;
+
+  // Multi-gateway: pilih gateway + validasi channel Duitku SEBELUM claim insert
+  // (validasi murah — DB settings; gagal cepat tanpa meninggalkan claim row).
+  const gateway = await resolveCheckoutGateway(payload.gateway);
+  if (gateway === "duitku") {
+    await validateDuitkuChannel(payload.paymentMethod);
+  }
+
   const lockResult = await withMutexLock(`lock:order:${fullDomain}`, async () => {
     // Check if there's already an active transaction for this domain and order type
     const allowedTypes: ("register" | "renew" | "transfer" | "restore" | "privacy" | "fund" | "debit")[] =
@@ -138,12 +245,12 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
       type: payload.type,
       amount: String(payload.amount),
       currency: "IDR",
-      paymentGateway: "sumopod",
+      paymentGateway: gateway,
       orderId,
       status: "pending_payment" as const,
       paymentStatus: "pending" as const,
       description: `Domain ${payload.type} - ${fullDomain} (${years} yr) - ${orderId}`,
-      metadata: JSON.stringify({ orderId, domainName: fullDomain, tld, years, type: payload.type }),
+      metadata: JSON.stringify({ orderId, domainName: fullDomain, tld, years, type: payload.type, gateway }),
     });
     txId = Number((claim as any).insertId);
   } catch (err: any) {
@@ -344,22 +451,48 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     liquidOrderId = targetDomain.liquidOrderId ? String(targetDomain.liquidOrderId) : null;
   }
 
-  // --- Step 3: Create Payment Link on Sumopod Payment Gateway ---
+  // --- Step 3: Create Payment Link — per gateway (Sumopod default / Duitku) ---
   // A-4: orderId was already derived from the order INTENT at the top of this
   // function (deterministic hash), so a concurrent duplicate submission can
   // never create a second payment link for the same intent.
-  const sumopodRes = await sumopodClient.createPayment({
-    orderId,
-    amount: payload.amount,
-    currency: "IDR",
-    expiresInHours: 1,
-  });
+  let paymentId: string;
+  let paymentLinkUrl: string;
+  let formattedExpiresAt: string;
+  let duitkuExtra: Record<string, any> = {};
+  let gatewayFee = 0;
+  let gatewayNetAmount = 0;
 
-  const formattedExpiresAt = sumopodRes.expires_at
-    ? (sumopodRes.expires_at.includes("Z") || /[+-]\d{2}:\d{2}$/.test(sumopodRes.expires_at)
-        ? sumopodRes.expires_at
-        : `${sumopodRes.expires_at.replace(" ", "T")}Z`)
-    : new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  if (gateway === "duitku") {
+    const dk = await createDuitkuPayment({
+      orderId,
+      amount: payload.amount,
+      productDetails: `Domain ${payload.type} - ${fullDomain} (${years} yr)`,
+      email: user.email,
+      customerName: user.name || custRecord?.name || "Customer",
+      paymentMethod: String(payload.paymentMethod),
+      expiresAtIso: "",
+    });
+    paymentId = dk.paymentId;
+    paymentLinkUrl = dk.paymentLinkUrl;
+    formattedExpiresAt = dk.expiresAt;
+    duitkuExtra = dk.duitkuExtra;
+  } else {
+    const sumopodRes = await sumopodClient.createPayment({
+      orderId,
+      amount: payload.amount,
+      currency: "IDR",
+      expiresInHours: 1,
+    });
+    paymentId = sumopodRes.payment_id;
+    paymentLinkUrl = sumopodRes.payment_link_url;
+    formattedExpiresAt = sumopodRes.expires_at
+      ? (sumopodRes.expires_at.includes("Z") || /[+-]\d{2}:\d{2}$/.test(sumopodRes.expires_at)
+          ? sumopodRes.expires_at
+          : `${sumopodRes.expires_at.replace(" ", "T")}Z`)
+      : new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    gatewayFee = sumopodRes.fee || 0;
+    gatewayNetAmount = sumopodRes.net_amount || 0;
+  }
 
   // --- Step 4: Update the claimed transaction row with payment details ---
   // Use customer's userId (not reseller) so customer sees invoice in their billing
@@ -374,10 +507,10 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     type: payload.type,
     amount: String(payload.amount),
     currency: "IDR",
-    paymentGateway: "sumopod",
-    paymentId: sumopodRes.payment_id,
+    paymentGateway: gateway,
+    paymentId,
     orderId,
-    paymentLinkUrl: sumopodRes.payment_link_url,
+    paymentLinkUrl,
     expiresAt: new Date(formattedExpiresAt),
     liquidTransactionId: liquidTransactionId ? String(liquidTransactionId) : null,
     status: "pending_payment" as const,
@@ -389,6 +522,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
       tld,
       years,
       type: payload.type,
+      gateway,
       nameservers: payload.nameservers || [],
       autoRenew: payload.autoRenew || false,
       privacyProtection: payload.privacyProtection || false,
@@ -402,8 +536,9 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
       customerId: validCustomerId,
       domainId: payload.domainId,
       expiresAt: formattedExpiresAt,
-      fee: sumopodRes.fee || 0,
-      netAmount: sumopodRes.net_amount || 0,
+      fee: gatewayFee,
+      netAmount: gatewayNetAmount,
+      ...duitkuExtra,
     }),
   };
 
@@ -423,7 +558,7 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     years,
     amount: `Rp ${Number(payload.amount).toLocaleString("id-ID")}`,
     orderId,
-    paymentLinkUrl: sumopodRes.payment_link_url,
+    paymentLinkUrl,
     orderTypeLabel,
   }).catch((e: any) => console.warn("[payments] order_invoice email failed (non-blocking):", e?.message || e));
 
@@ -432,21 +567,34 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
     transactionId: txId,
     order_id: orderId,
     orderId: orderId,
-    payment_id: sumopodRes.payment_id,
-    paymentId: sumopodRes.payment_id,
-    payment_link_url: sumopodRes.payment_link_url,
-    paymentLinkUrl: sumopodRes.payment_link_url,
+    payment_id: paymentId,
+    paymentId,
+    payment_link_url: paymentLinkUrl,
+    paymentLinkUrl,
     amount: payload.amount,
     status: "pending_payment",
     expires_at: formattedExpiresAt,
     expiresAt: formattedExpiresAt,
+    // Multi-gateway extras (frontend menampilkan instruksi sesuai jenis):
+    gateway,
+    ...(gateway === "duitku"
+      ? {
+          payment_url: paymentLinkUrl,
+          va_number: duitkuExtra.vaNumber || "",
+          qr_string: duitkuExtra.qrString || "",
+          app_url: duitkuExtra.appUrl || "",
+          channel: duitkuExtra.channel || "",
+        }
+      : {}),
   };
 }
 
 /**
  * Handle incoming webhook payload from Sumopod Payment Gateway
+ * (multi-gateway: `gateway` menentukan filter kolom payment_gateway —
+ *  orderId antar gateway diisolasi agar tidak saling menabrak).
  */
-export async function processWebhookPayload(payload: any) {
+export async function processWebhookPayload(payload: any, gateway: "sumopod" | "duitku" = "sumopod") {
   const eventType = payload.event_type || payload.type || payload.event;
   const data = payload.data || payload;
   const orderId = data.order_id || data.orderId || data.reference_id;
@@ -468,7 +616,7 @@ export async function processWebhookPayload(payload: any) {
   if (!tx && orderId) {
     // Try the indexed orderId column (preferred)
     const [byOrderId] = await db.select().from(transactions)
-      .where(and(eq(transactions.paymentGateway, "sumopod"), eq(transactions.orderId, orderId)))
+      .where(and(eq(transactions.paymentGateway, gateway), eq(transactions.orderId, orderId)))
       .limit(1);
     tx = byOrderId || null;
   }
@@ -477,7 +625,7 @@ export async function processWebhookPayload(payload: any) {
     // Fallback: exact match on metadata.orderId (for rows inserted before the column existed)
     const [byMeta] = await db.select().from(transactions)
       .where(and(
-        eq(transactions.paymentGateway, "sumopod"),
+        eq(transactions.paymentGateway, gateway),
         sql`JSON_UNQUOTE(JSON_EXTRACT(${transactions.metadata}, '$.orderId')) = ${orderId}`,
       ))
       .limit(1);
@@ -486,7 +634,7 @@ export async function processWebhookPayload(payload: any) {
 
   if (!tx && orderId) {
     const [byTxId] = await db.select().from(transactions)
-      .where(and(eq(transactions.paymentGateway, "sumopod"), eq(transactions.id, parseInt(String(orderId), 10) || -1)))
+      .where(and(eq(transactions.paymentGateway, gateway), eq(transactions.id, parseInt(String(orderId), 10) || -1)))
       .limit(1);
     tx = byTxId || null;
   }
