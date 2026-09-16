@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import { api } from "../lib/api";
+import { useDataCache } from "./DataCacheContext";
 
 interface User {
   id: number; email: string; name: string; role?: string; hasProfile?: boolean;
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const { invalidateCache } = useDataCache();
 
   useEffect(() => {
     // H8: session is in an httpOnly cookie — ask the session probe, no localStorage.
@@ -58,6 +60,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   function logout() {
     api.post("/auth/logout").catch(() => {});
+    // Clear all cached data (domains, customers, transactions, balance) so the
+    // next user on a shared browser never sees the previous account's data from
+    // the in-memory SWR cache.
+    invalidateCache();
     setUser(null);
   }
 

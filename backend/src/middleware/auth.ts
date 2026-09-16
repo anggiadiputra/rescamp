@@ -30,7 +30,7 @@ export async function authGuard(ctx: any) {
   try {
     const payload = await verifyToken(token);
     const userId = Number(payload.sub);
-    const [user] = await db.select({ sessionVersion: users.sessionVersion, lastActiveAt: users.lastActiveAt }).from(users).where(eq(users.id, userId)).limit(1);
+    const [user] = await db.select({ sessionVersion: users.sessionVersion, lastActiveAt: users.lastActiveAt, role: users.role }).from(users).where(eq(users.id, userId)).limit(1);
     if (!user || user.sessionVersion !== Number(payload.sv ?? 0)) {
       throw new Error("Session revoked");
     }
@@ -55,7 +55,12 @@ export async function authGuard(ctx: any) {
       await db.update(users).set({ lastActiveAt: now }).where(eq(users.id, userId)).catch(() => {});
     }
 
-    ctx.store.user = payload;
+    // Authorization decisions (resellerGuard/adminGuard) must use the CURRENT
+    // role from the DB, not the `role` claim baked into the JWT at sign time —
+    // a demoted admin's old token would otherwise keep admin privileges for up
+    // to JWT_EXPIRY. `sub`/`email`/`sv` stay from the token; only role is
+    // re-anchored to the authoritative source.
+    ctx.store.user = { ...payload, role: user.role };
   } catch (err: any) {
     ctx.set.status = 401;
     return { error: err.message, statusCode: 401 };

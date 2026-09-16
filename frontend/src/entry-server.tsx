@@ -7,15 +7,15 @@ import LandingPage from "./pages/LandingPage";
 
 export function renderLandingHtml(): string {
   const html = renderToStaticMarkup(
-    <AuthProvider>
-      <SettingsProvider>
-        <DataCacheProvider>
+    <DataCacheProvider>
+      <AuthProvider>
+        <SettingsProvider>
           <StaticRouter location="/">
             <LandingPage />
           </StaticRouter>
-        </DataCacheProvider>
-      </SettingsProvider>
-    </AuthProvider>
+        </SettingsProvider>
+      </AuthProvider>
+    </DataCacheProvider>
   );
   return html;
 }

@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 import type { Domain, PaginatedResponse } from "../lib/types";
 import { useSettings } from "../contexts/SettingsContext";
 import { useCachedFetch } from "../contexts/DataCacheContext";
+import { useAuth } from "../contexts/AuthContext";
 
 function formatDateOnly(dateStr?: string | null): string {
   if (!dateStr) return "-";
@@ -15,6 +16,7 @@ function formatDateOnly(dateStr?: string | null): string {
 
 export default function DomainsPage() {
   const { settings } = useSettings();
+  const { user } = useAuth();
   const nav = useNavigate();
   const [page, setPage] = useState(1);
   const perPage = 10;
@@ -22,9 +24,9 @@ export default function DomainsPage() {
   const [statusFilter, setStatusFilter] = useState("");
 
   const { data, loading, isRefreshing, refetch } = useCachedFetch<PaginatedResponse<Domain>>(
-    `domains:page:${page}`,
+    `domains:user:${user?.id || 0}:page:${page}`,
     () => api.get<PaginatedResponse<Domain>>(`/domains/remote?page=${page}&per_page=${perPage}`),
-    [page]
+    [page, user?.id]
   );
 
   const domains = data?.data || [];

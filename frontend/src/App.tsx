@@ -64,9 +64,9 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <SettingsProvider>
-        <DataCacheProvider>
+    <DataCacheProvider>
+      <AuthProvider>
+        <SettingsProvider>
           <BrowserRouter>
             <Suspense fallback={<PageLoader />}>
               <Routes>
@@ -95,8 +95,8 @@ export default function App() {
               </Routes>
             </Suspense>
           </BrowserRouter>
-        </DataCacheProvider>
-      </SettingsProvider>
-    </AuthProvider>
+        </SettingsProvider>
+      </AuthProvider>
+    </DataCacheProvider>
   );
 }

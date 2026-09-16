@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 import type { Customer, PaginatedResponse } from "../lib/types";
 import { useSettings } from "../contexts/SettingsContext";
 import { useCachedFetch } from "../contexts/DataCacheContext";
+import { useAuth } from "../contexts/AuthContext";
 
 const defaultForm = {
   name: "",
@@ -21,6 +22,7 @@ const defaultForm = {
 
 export default function CustomersPage() {
   const { settings } = useSettings();
+  const { user } = useAuth();
   const [page, setPage] = useState(1);
   const perPage = 10;
   const [search, setSearch] = useState("");
@@ -36,7 +38,7 @@ export default function CustomersPage() {
   const [deleteName, setDeleteName] = useState("");
 
   const { data, loading, isRefreshing, refetch } = useCachedFetch<PaginatedResponse<Customer>>(
-    `customers:page:${page}`,
+    `customers:user:${user?.id || 0}:page:${page}`,
     async () => {
       try {
         return await api.get<PaginatedResponse<Customer>>(`/customers/remote?page=${page}&per_page=${perPage}`);
@@ -44,7 +46,7 @@ export default function CustomersPage() {
         return await api.get<PaginatedResponse<Customer>>(`/customers?page=${page}&per_page=${perPage}`);
       }
     },
-    [page]
+    [page, user?.id]
   );
 
   const customers = data?.data || [];
