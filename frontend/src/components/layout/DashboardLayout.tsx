@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSettings } from "../../contexts/SettingsContext";
 import {
-  LayoutDashboard, Globe, Users, Receipt, Tag, Settings, PlusCircle, FileText, PanelLeftOpen, PanelLeftClose,
+  LayoutDashboard, Globe, Users, Receipt, Tag, Settings, PlusCircle, FileText, PanelLeftOpen, PanelLeftClose, Activity,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Navbar } from "./Navbar";
@@ -23,6 +23,7 @@ const resellerNavItems = [
   { href: "/customers", label: "Pelanggan", icon: Users },
   { href: "/billing", label: "Billing & Saldo", icon: Receipt },
   { href: "/prices", label: "Daftar Harga", icon: Tag },
+  { href: "/payments/monitoring", label: "Monitoring Pembayaran", icon: Activity },
   { href: "/settings", label: "Pengaturan Sistem", icon: Settings },
 ];
 

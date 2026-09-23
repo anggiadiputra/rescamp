@@ -23,6 +23,7 @@ const BillingPage = lazy(() => import("./pages/BillingPage"));
 const BillingPayPage = lazy(() => import("./pages/BillingPayPage"));
 const PricesPage = lazy(() => import("./pages/PricesPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const PaymentMonitoringPage = lazy(() => import("./pages/PaymentMonitoringPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const CompleteProfilePage = lazy(() => import("./pages/CompleteProfilePage"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
@@ -88,6 +89,7 @@ export default function App() {
                 <Route path="/prices" element={<ProtectedRoute><PricesPage /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
                 <Route path="/settings" element={<OperatorRoute><SettingsPage /></OperatorRoute>} />
+                <Route path="/payments/monitoring" element={<OperatorRoute><PaymentMonitoringPage /></OperatorRoute>} />
                 <Route path="/complete-profile" element={<CompleteProfilePage />} />
                 <Route path="/verify/:param1?/:param2?/:param3?" element={<VerifyPage />} />
                 <Route path="/verify/*" element={<VerifyPage />} />

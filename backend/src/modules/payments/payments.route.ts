@@ -4,8 +4,8 @@ import { processWebhookPayload } from "./payments.service";
 import { db } from "../../db";
 import { transactions, domains, customers, webhookReceipts } from "../../db/schema";
 import { eq, and, or } from "drizzle-orm";
-import { authGuard } from "../../middleware/auth";
-import { webhookRateLimiter, paymentStatusRateLimiter, rateLimit } from "../../lib/rate-limit";
+import { authGuard, adminGuard } from "../../middleware/auth";
+import { webhookRateLimiter, paymentStatusRateLimiter, settingsRateLimiter, rateLimit } from "../../lib/rate-limit";
 
 export const paymentRoutes = new Elysia({ prefix: "/payments" })
   // ── Checkout config (auth, untuk frontend) ──
@@ -387,4 +387,47 @@ export const paymentRoutes = new Elysia({ prefix: "/payments" })
         detail: { tags: ["Payments"], summary: "Get order & payment status by order ID" },
       }
     )
+  // ── Admin: payment monitoring (event log + stats + manual replay) ──
+  .guard(
+    { beforeHandle: [authGuard, adminGuard, rateLimit(settingsRateLimiter, "Terlalu banyak permintaan monitoring.")] },
+    (app) =>
+      app
+        .get(
+          "/admin/events",
+          async ({ query }) => {
+            const { listPaymentEvents } = await import("../../lib/payment-observability");
+            return await listPaymentEvents({
+              page: Number((query as any)?.page) || 1,
+              perPage: Number((query as any)?.perPage) || 20,
+              onlyIssues: String((query as any)?.onlyIssues || "") === "true",
+              orderId: String((query as any)?.orderId || "") || undefined,
+            });
+          },
+          {
+            detail: { tags: ["Payments"], summary: "Paginated payment event log (admin)" },
+          }
+        )
+        .get(
+          "/admin/stats",
+          async () => {
+            const { getPaymentEventStats } = await import("../../lib/payment-observability");
+            return { data: await getPaymentEventStats() };
+          },
+          {
+            detail: { tags: ["Payments"], summary: "Payment monitoring headline counters (admin)" },
+          }
+        )
+        .post(
+          "/admin/replay/:orderId",
+          async ({ params, set }) => {
+            const { replayOrderForAdmin } = await import("../../lib/payment-observability");
+            const result = await replayOrderForAdmin(String(params.orderId));
+            if (!result.ok) set.status = 400;
+            return { data: result };
+          },
+          {
+            detail: { tags: ["Payments"], summary: "Replay a paid-but-unprocessed order (admin)" },
+          }
+        )
+  )
   ;

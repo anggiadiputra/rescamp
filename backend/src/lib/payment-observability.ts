@@ -338,6 +338,121 @@ export async function sweepUnresolvedRejectedPayments(): Promise<void> {
 }
 
 /**
+ * Admin: paginated payment event log for the monitoring page.
+ * `onlyIssues` filters to warn/critical rows (what actually needs eyes).
+ */
+export async function listPaymentEvents(opts: {
+  page?: number;
+  perPage?: number;
+  onlyIssues?: boolean;
+  orderId?: string;
+}) {
+  const page = Math.max(1, Number(opts.page) || 1);
+  const perPage = Math.min(100, Math.max(1, Number(opts.perPage) || 20));
+  const offset = (page - 1) * perPage;
+
+  const filters: any[] = [];
+  if (opts.onlyIssues) filters.push(sql`${paymentEvents.severity} IN ('warn','critical')`);
+  if (opts.orderId) filters.push(sql`COALESCE(${paymentEvents.orderId},'') = ${opts.orderId}`);
+  const where = filters.length ? and(...filters) : undefined;
+
+  // COUNT(*) OVER() gives the total in the same round trip as the page.
+  const rows = await db
+    .select({
+      id: paymentEvents.id,
+      orderId: paymentEvents.orderId,
+      paymentId: paymentEvents.paymentId,
+      gateway: paymentEvents.gateway,
+      eventType: paymentEvents.eventType,
+      outcome: paymentEvents.outcome,
+      severity: paymentEvents.severity,
+      detail: paymentEvents.detail,
+      createdAt: paymentEvents.createdAt,
+      total: sql<number>`COUNT(*) OVER()`,
+    })
+    .from(paymentEvents)
+    .where(where as any)
+    .orderBy(sql`${paymentEvents.createdAt} DESC, ${paymentEvents.id} DESC`)
+    .limit(perPage)
+    .offset(offset);
+
+  const total = rows.length > 0 ? Number(rows[0]?.total ?? 0) : 0;
+  return {
+    data: rows.map(({ total: _t, ...r }) => r),
+    meta: { page, perPage, total, totalPages: Math.max(1, Math.ceil(total / perPage)) },
+  };
+}
+
+/** Admin: headline counters for the monitoring page. */
+export async function getPaymentEventStats() {
+  const [row] = await db
+    .select({
+      total: sql<number>`COUNT(*)`,
+      critical: sql<number>`SUM(${paymentEvents.severity} = 'critical')`,
+      warn: sql<number>`SUM(${paymentEvents.severity} = 'warn')`,
+      last24h: sql<number>`SUM(${paymentEvents.createdAt} > ${new Date(Date.now() - 24 * 60 * 60 * 1000)})`,
+    })
+    .from(paymentEvents);
+
+  const stuck = await findUnresolvedRejectedPayments(60);
+  return {
+    total: Number(row?.total || 0),
+    critical: Number(row?.critical || 0),
+    warn: Number(row?.warn || 0),
+    last24h: Number(row?.last24h || 0),
+    unresolved: stuck.length,
+  };
+}
+
+/**
+ * Admin: replay ONE order by its order id (the dashboard button). Reuses the
+ * same path as the automatic watchdog — idempotent, CAS-guarded, and it will
+ * refuse a genuine underpayment rather than provision it.
+ */
+export async function replayOrderForAdmin(orderId: string): Promise<{ ok: boolean; status: string; message?: string }> {
+  const [tx] = await db
+    .select()
+    .from(transactions)
+    .where(eq(transactions.orderId, orderId))
+    .limit(1);
+
+  if (!tx) return { ok: false, status: "not_found", message: "Order tidak ditemukan." };
+  if (tx.status === "completed" || tx.status === "processing_domain") {
+    return { ok: true, status: tx.status, message: `Order sudah berstatus ${tx.status}.` };
+  }
+
+  const meta = typeof tx.metadata === "string"
+    ? (() => { try { return JSON.parse(tx.metadata as string); } catch { return {}; } })()
+    : ((tx.metadata as any) || {});
+  const fee = Number(meta?.fee || 0);
+  const amount = Number(tx.amount);
+
+  const { processWebhookPayload } = await import("../modules/payments/payments.service");
+  const res: any = await processWebhookPayload({
+    event_type: "payment.completed",
+    data: {
+      payment_id: tx.paymentId,
+      order_id: tx.orderId,
+      amount: amount + fee,
+      fee,
+      net_amount: amount,
+      status: "completed",
+      _adminReplay: true,
+    },
+  }, "sumopod");
+
+  const status = String(res?.status || "unknown");
+  const ok = status === "processed_successfully" || status === "already_processing";
+  return {
+    ok,
+    status,
+    message: ok
+      ? "Order berhasil diproses ulang."
+      : `Replay ditolak oleh sistem: ${status}.`,
+  };
+}
+
+/**
  * Sweep: auto-replay safe stuck orders and alert on the rest. Runs from the
  * background sweeper in index.ts.
  */
