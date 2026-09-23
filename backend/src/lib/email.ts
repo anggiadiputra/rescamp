@@ -44,7 +44,7 @@ async function getEmailConfig() {
 }
 
 function renderEmailHtml(
-  type: "login_otp" | "register_otp" | "reset_password" | "register_success" | "order_invoice" | "payment_success" | "payment_failed" | "payment_expired",
+  type: "login_otp" | "register_otp" | "reset_password" | "register_success" | "order_invoice" | "payment_success" | "payment_failed" | "payment_expired" | "payment_alert",
   vars: Record<string, any>,
   brandName: string
 ): string {
@@ -129,6 +129,26 @@ function renderEmailHtml(
     `;
   }
 
+  if (type === "payment_alert") {
+    const orderId = vars.orderId || "";
+    const paymentId = vars.paymentId || "";
+    const outcome = vars.outcome || "unknown";
+    const detail = vars.detail || "";
+    return `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; color: #111827;">
+        <h2 style="margin-top: 0; font-size: 20px; font-weight: 700; color: #dc2626;">Peringatan Pembayaran — ${brandName}</h2>
+        <p style="font-size: 14px; color: #4b5563; line-height: 1.5;">Ada event pembayaran yang perlu ditindaklanjuti. Segera periksa agar tidak ada pembayaran yang tertahan.</p>
+        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 20px 0; font-size: 14px; color: #111827;">
+          <div style="padding: 4px 0;"><span style="color: #6b7280;">Kode masalah</span><br/><strong style="font-family: monospace;">${outcome}</strong></div>
+          <div style="padding: 4px 0;"><span style="color: #6b7280;">No. Order</span><br/><strong>${orderId || "-"}</strong></div>
+          <div style="padding: 4px 0;"><span style="color: #6b7280;">Payment ID</span><br/><strong style="font-family: monospace;">${paymentId || "-"}</strong></div>
+        </div>
+        ${detail ? `<div style="background: #f9fafb; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 12px; color: #374151; word-break: break-all;">${detail}</div>` : ""}
+        <p style="font-size: 12px; color: #9ca3af; line-height: 1.5; margin-bottom: 0;">Email ini dikirim otomatis oleh sistem pemantauan pembayaran.</p>
+      </div>
+    `;
+  }
+
   if (type === "payment_failed" || type === "payment_expired") {
     const domain = vars.domainName || vars.domain || "";
     const orderId = vars.orderId || "";
@@ -161,7 +181,7 @@ function renderEmailHtml(
 
 export async function sendEmail(
   to: string,
-  type: "login_otp" | "register_otp" | "reset_password" | "register_success" | "order_invoice" | "payment_success" | "payment_failed" | "payment_expired",
+  type: "login_otp" | "register_otp" | "reset_password" | "register_success" | "order_invoice" | "payment_success" | "payment_failed" | "payment_expired" | "payment_alert",
   variables: Record<string, any>
 ) {
   // H1: never log OTP codes or reset links — they are live credentials. Log destination + type.
@@ -224,6 +244,7 @@ export async function sendEmail(
     payment_success: `[${cfg.brandName}] Pembayaran Berhasil`,
     payment_failed: `[${cfg.brandName}] Pembayaran Gagal`,
     payment_expired: `[${cfg.brandName}] Pembayaran Kedaluwarsa`,
+    payment_alert: `${variables.subjectNote || `[${cfg.brandName}] Peringatan Pembayaran`}`,
   };
 
   const subject = subjectMap[type] || `[${cfg.brandName}] Notifikasi Account`;

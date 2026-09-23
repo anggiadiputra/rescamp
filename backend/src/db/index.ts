@@ -93,6 +93,24 @@ export async function ensureDatabaseSchema() {
         received_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    // Audit trail for payment events: the webhook ACKs with HTTP 200 even when
+    // an event is refused, so the HTTP status can never reveal a dropped
+    // payment. This table is the durable record (outcome + severity per event).
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS payment_events (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        order_id VARCHAR(100) NULL,
+        payment_id VARCHAR(100) NULL,
+        gateway VARCHAR(50) NULL,
+        event_type VARCHAR(50) NULL,
+        outcome VARCHAR(80) NOT NULL,
+        severity VARCHAR(20) NOT NULL DEFAULT 'info',
+        detail TEXT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX payment_events_order_idx (order_id),
+        INDEX payment_events_created_idx (created_at)
+      )
+    `);
     // One-time bootstrap: promote the most relevant master reseller to admin if no
     // admin exists yet. Deliberately non-fatal — this idempotent data migration
     // re-runs on every boot, so a failure here must never block server startup

@@ -5,4 +5,5 @@ export { transactions } from "./transactions";
 export { appSettings } from "./settings";
 export { otpCodes } from "./otpCodes";
 export { webhookReceipts } from "./webhookReceipts";
+export { paymentEvents } from "./paymentEvents";
 

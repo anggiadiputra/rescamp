@@ -9,6 +9,7 @@ import { resolveResellerCreds } from "../../lib/reseller-creds";
 import { canAccessTenantResource, loadTenantScope } from "../../lib/tenant-access";
 import { sendOrderNotification } from "../../lib/email";
 import { reconcileWebhookAmount } from "../../lib/payment-amount";
+import { reportPaymentOutcome } from "../../lib/payment-observability";
 import { env } from "../../config/env";
 
 export interface CreateDomainOrderPayload {
@@ -594,8 +595,48 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
  * Handle incoming webhook payload from Sumopod Payment Gateway
  * (multi-gateway: `gateway` menentukan filter kolom payment_gateway —
  *  orderId antar gateway diisolasi agar tidak saling menabrak).
+ *
+ * Public entrypoint: wraps the core processor so EVERY outcome (processed,
+ * ignored, or refused) is durably recorded and any "needs attention" outcome
+ * raises an operator alert. The webhook route ACKs with HTTP 200 even when an
+ * event is refused, so without this wrapper a dropped payment is invisible.
  */
 export async function processWebhookPayload(payload: any, gateway: "sumopod" | "duitku" = "sumopod") {
+  const eventType = payload?.event_type || payload?.type || payload?.event || null;
+  const data = payload?.data || payload || {};
+  const orderId = data?.order_id || data?.orderId || data?.reference_id || null;
+  const paymentId = data?.payment_id || data?.paymentId || null;
+
+  try {
+    const result: any = await processWebhookPayloadCore(payload, gateway);
+    const outcome = String(result?.status || "unknown");
+    await reportPaymentOutcome({
+      orderId,
+      paymentId,
+      gateway,
+      eventType,
+      outcome,
+      // Persist the amounts involved when the guard rejects, so a mismatch is
+      // auditable from the DB instead of only from the log file.
+      detail: outcome === "amount_mismatch"
+        ? { received: { amount: data?.amount, fee: data?.fee, net_amount: data?.net_amount ?? data?.netAmount }, result }
+        : (outcome === "error" ? { result } : undefined),
+    });
+    return result;
+  } catch (err: any) {
+    await reportPaymentOutcome({
+      orderId,
+      paymentId,
+      gateway,
+      eventType,
+      outcome: "error",
+      detail: { message: err?.message || String(err) },
+    });
+    throw err;
+  }
+}
+
+async function processWebhookPayloadCore(payload: any, gateway: "sumopod" | "duitku" = "sumopod") {
   const eventType = payload.event_type || payload.type || payload.event;
   const data = payload.data || payload;
   const orderId = data.order_id || data.orderId || data.reference_id;
