@@ -198,8 +198,11 @@ export class SumopodClient {
    */
   async getPayment(paymentId: string): Promise<any> {
     const cfg = await getSumopodConfig();
+    // config baseUrl may already end in /payments (admin stores the full
+    // payments endpoint) — normalise so we never build /payments/payments/{id}.
+    const cleanUrl = cfg.baseUrl.trim().replace(/\/payments$/, "").replace(/\/$/, "");
     try {
-      const response = await fetch(`${cfg.baseUrl}/payments/${paymentId}`, {
+      const response = await fetch(`${cleanUrl}/payments/${paymentId}`, {
         headers: {
           "X-Api-Key": cfg.apiKey,
         },

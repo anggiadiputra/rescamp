@@ -8,6 +8,7 @@ import { AppError } from "../../lib/error";
 import { resolveResellerCreds } from "../../lib/reseller-creds";
 import { canAccessTenantResource, loadTenantScope } from "../../lib/tenant-access";
 import { sendOrderNotification } from "../../lib/email";
+import { reconcileWebhookAmount } from "../../lib/payment-amount";
 import { env } from "../../config/env";
 
 export interface CreateDomainOrderPayload {
@@ -645,15 +646,18 @@ export async function processWebhookPayload(payload: any, gateway: "sumopod" | "
   }
 
   // Payment-integrity guard (S2, parity with the Duitku callback): a
-  // payment.completed event must carry the same amount the order was created
-  // with. Without this, an underpaid/partial "completed" webhook would still
-  // provision the domain and deduct wholesale cost. Amount is optional in the
-  // payload shape for legacy events, but when present it MUST match the row.
-  const webhookAmount = data.amount != null ? Number(data.amount) : NaN;
-  const txAmount = Number(tx.amount);
-  if (!Number.isNaN(webhookAmount) && Number.isFinite(txAmount) && Math.round(webhookAmount) !== Math.round(txAmount)) {
+  // payment.completed event must correspond to the amount the order was created
+  // with, otherwise an underpaid/partial "completed" webhook would still
+  // provision the domain and deduct wholesale cost.
+  //
+  // NOTE: Sumopod bills its fee ON TOP of the requested amount, so the payload
+  // `amount` is tx.amount + fee while `net_amount` equals tx.amount. Comparing
+  // `amount` directly against tx.amount rejected every legitimate Sumopod
+  // payment; reconcileWebhookAmount accepts any candidate that matches.
+  const amountCheck = reconcileWebhookAmount(tx.amount, data);
+  if (!amountCheck.ok) {
     console.warn(
-      `[webhook] Amount mismatch for ${orderId || paymentId}: webhook=${webhookAmount} db=${txAmount}`,
+      `[webhook] Amount mismatch for ${orderId || paymentId}: candidates=[${amountCheck.candidates.join(", ")}] db=${tx.amount}`,
     );
     return { status: "amount_mismatch" };
   }
