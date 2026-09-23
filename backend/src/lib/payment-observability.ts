@@ -25,6 +25,7 @@ const ALERT_OUTCOMES = new Set([
   "user_not_found",
   "error",
   "stuck_alert",
+  "rejected_payment_unresolved",
 ]);
 
 // Outcomes worth retrying automatically: the event was refused for a reason that
@@ -248,6 +249,92 @@ export async function replayStuckPaidOrders(minAgeMinutes = 30): Promise<Array<{
     }
   }
   return out;
+}
+
+/**
+ * Watchdog #2 — the class of failure that actually happened.
+ *
+ * When a webhook event is REFUSED (e.g. amount_mismatch), the transaction is
+ * left at payment_status='pending' / status='pending_payment': our DB never
+ * learns money moved, so `findStuckPaidOrders` (which keys on
+ * payment_status='completed') cannot see it. The only durable evidence is the
+ * payment_events row. This finds orders that have a needs-attention event but
+ * are still unsettled, so the initial one-shot alert cannot be the only signal.
+ */
+export async function findUnresolvedRejectedPayments(minAgeMinutes = 60, limit = 50) {
+  const cutoff = new Date(Date.now() - minAgeMinutes * 60 * 1000);
+  return db
+    .select({
+      id: transactions.id,
+      orderId: transactions.orderId,
+      paymentId: transactions.paymentId,
+      status: transactions.status,
+      paymentStatus: transactions.paymentStatus,
+      amount: transactions.amount,
+      createdAt: transactions.createdAt,
+    })
+    .from(transactions)
+    .where(and(
+      sql`(${transactions.paymentId} IS NOT NULL AND ${transactions.paymentId} <> '')`,
+      or(eq(transactions.status, "pending_payment"), eq(transactions.status, "expired"), eq(transactions.status, "failed")),
+      sql`${transactions.createdAt} < ${cutoff}`,
+      sql`EXISTS (
+        SELECT 1 FROM payment_events pe
+        WHERE pe.order_id = ${transactions.orderId}
+          AND pe.severity IN ('warn','critical')
+      )`,
+    ))
+    .limit(limit);
+}
+
+/**
+ * Sweep #2 driver: re-alert (de-duped to once per 6h per order) on orders whose
+ * payment event was refused and which are still unsettled. Persistent signal so
+ * a missed alert cannot mean a permanently silent failure.
+ */
+export async function sweepUnresolvedRejectedPayments(): Promise<void> {
+  try {
+    const rows = await findUnresolvedRejectedPayments(60);
+    for (const tx of rows) {
+      const alreadyAlerted = await db
+        .select({ id: paymentEvents.id })
+        .from(paymentEvents)
+        .where(and(
+          sql`COALESCE(${paymentEvents.orderId}, '') = ${tx.orderId || ""}`,
+          eq(paymentEvents.outcome, "rejected_payment_unresolved"),
+          sql`${paymentEvents.createdAt} > ${new Date(Date.now() - 6 * 60 * 60 * 1000)}`,
+        ))
+        .limit(1);
+      if (alreadyAlerted.length > 0) continue;
+
+      let lastEvent: any = null;
+      try {
+        const evs = await db
+          .select({ outcome: paymentEvents.outcome, detail: paymentEvents.detail, createdAt: paymentEvents.createdAt })
+          .from(paymentEvents)
+          .where(sql`COALESCE(${paymentEvents.orderId}, '') = ${tx.orderId || ""}`)
+          .orderBy(sql`${paymentEvents.createdAt} DESC`)
+          .limit(1);
+        lastEvent = evs[0] || null;
+      } catch {}
+
+      await recordPaymentEvent({
+        orderId: tx.orderId,
+        paymentId: tx.paymentId,
+        gateway: "sumopod",
+        outcome: "rejected_payment_unresolved",
+        detail: { status: tx.status, amount: tx.amount, lastEvent },
+      });
+      await alertPaymentIssue({
+        orderId: tx.orderId,
+        paymentId: tx.paymentId,
+        outcome: "rejected_payment_unresolved",
+        detail: `Order ${tx.orderId} (Rp${tx.amount}) masih ${tx.status} dan pembayarannya pernah ditolak (${lastEvent?.outcome || "unknown"}). Periksa apakah customer sudah membayar.`,
+      });
+    }
+  } catch (e: any) {
+    console.warn("[rejected-sweep] failed:", e?.message || e);
+  }
 }
 
 /**

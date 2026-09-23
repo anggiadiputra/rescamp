@@ -10,7 +10,7 @@ import { forwardingRoutes } from "./modules/forwarding/forwarding.route";
 import { paymentRoutes } from "./modules/payments/payments.route";
 import { settingsRoutes } from "./modules/settings/settings.route";
 import { sweepExpiredTransactions, sweepActionRequiredRetries, recoverStuckProcessingDomains } from "./modules/billing/billing.service";
-import { sweepStuckPaidOrders } from "./lib/payment-observability";
+import { sweepStuckPaidOrders, sweepUnresolvedRejectedPayments } from "./lib/payment-observability";
 import { ensureDatabaseSchema } from "./db";
 import { AppError } from "./lib/error";
 import { securityHeaders } from "./lib/security-headers";
@@ -123,11 +123,13 @@ function startAutoExpireSweeper() {
   // Safety net for paid-but-unprocessed orders: the provider ACKs with 200 and
   // never retries, so nothing else in the system notices a stuck payment.
   sweepStuckPaidOrders().catch((e) => console.warn("[sweeper] initial stuck-paid sweep failed:", e));
+  sweepUnresolvedRejectedPayments().catch((e) => console.warn("[sweeper] initial rejected-payment sweep failed:", e));
   sweepTimer = setInterval(() => {
     sweepExpiredTransactions().catch((e) => console.warn("[sweeper] run failed:", e));
     sweepActionRequiredRetries().catch((e) => console.warn("[sweeper] action_required run failed:", e));
     recoverStuckProcessingDomains().catch((e) => console.warn("[sweeper] processing_domain recovery failed:", e));
     sweepStuckPaidOrders().catch((e) => console.warn("[sweeper] stuck-paid sweep failed:", e));
+    sweepUnresolvedRejectedPayments().catch((e) => console.warn("[sweeper] rejected-payment sweep failed:", e));
   }, 15 * 60 * 1000);
 }
 
