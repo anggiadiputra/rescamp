@@ -54,10 +54,10 @@ function renderEmailHtml(
   if (type === "login_otp" || type === "register_otp") {
     const actionText = type === "login_otp" ? "masuk ke akun Anda" : "menyelesaikan pendaftaran akun Anda";
     return `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; color: #111827;">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 32px; color: #111827;">
         <h2 style="margin-top: 0; font-size: 20px; font-weight: 700; color: #111827;">Kode OTP Keamanan ${brandName}</h2>
         <p style="font-size: 14px; color: #4b5563; line-height: 1.5;">Gunakan kode OTP di bawah ini untuk ${actionText}. Kode ini berlaku selama 10 menit dan bersifat rahasia.</p>
-        <div style="background: #f3f4f6; border-radius: 8px; padding: 20px; text-align: center; margin: 24px 0;">
+        <div style="background: #f3f4f6; border-radius: 6px; padding: 20px; text-align: center; margin: 24px 0;">
           <span style="font-family: monospace; font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #000000;">${code}</span>
         </div>
         <p style="font-size: 12px; color: #9ca3af; line-height: 1.5; margin-bottom: 0;">Jika Anda tidak merasa melakukan permintaan ini, abaikan pesan email ini.</p>
@@ -69,14 +69,14 @@ function renderEmailHtml(
     const otpVal = vars.code || vars.otp || vars.token || "";
     const showOtp = otpVal && String(otpVal).length <= 8;
     return `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; color: #111827;">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 32px; color: #111827;">
         <h2 style="margin-top: 0; font-size: 20px; font-weight: 700; color: #111827;">Reset Password ${brandName}</h2>
         <p style="font-size: 14px; color: #4b5563; line-height: 1.5;">Kami menerima permintaan untuk mereset kata sandi akun Anda. Klik tombol di bawah ini untuk membuat kata sandi baru:</p>
         <div style="text-align: center; margin: 24px 0;">
           <a href="${resetUrl}" style="background-color: #000000; color: #ffffff; text-decoration: none; padding: 12px 28px; font-size: 14px; font-weight: 700; border-radius: 8px; display: inline-block;">Reset Password Sekarang</a>
         </div>
         ${showOtp ? `
-        <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+        <div style="background: #f3f4f6; border-radius: 6px; padding: 16px; text-align: center; margin: 20px 0;">
           <p style="font-size: 12px; color: #6b7280; margin: 0 0 6px 0;">Atau masukkan Kode OTP berikut pada form reset:</p>
           <span style="font-family: monospace; font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #000000;">${otpVal}</span>
         </div>
@@ -94,10 +94,10 @@ function renderEmailHtml(
     const payUrl = vars.paymentLinkUrl || vars.payment_link_url || "#";
     const typeLabel = vars.orderTypeLabel || "Domain";
     return `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; color: #111827;">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 32px; color: #111827;">
         <h2 style="margin-top: 0; font-size: 20px; font-weight: 700; color: #111827;">Invoice ${typeLabel} — ${brandName}</h2>
         <p style="font-size: 14px; color: #4b5563; line-height: 1.5;">Terima kasih! Pesanan Anda telah dibuat dan menunggu pembayaran.</p>
-        <div style="background: #f9fafb; border-radius: 8px; padding: 16px; margin: 20px 0; font-size: 14px; color: #111827;">
+        <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 20px 0; font-size: 14px; color: #111827;">
           <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">Domain</span><strong>${domain}</strong></div>
           <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">Durasi</span><strong>${years} tahun</strong></div>
           <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">No. Order</span><strong>${orderId}</strong></div>
@@ -116,10 +116,10 @@ function renderEmailHtml(
     const orderId = vars.orderId || "";
     const amount = vars.amount || 0;
     return `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; color: #111827;">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 32px; color: #111827;">
         <h2 style="margin-top: 0; font-size: 20px; font-weight: 700; color: #059669;">Pembayaran Berhasil — ${brandName}</h2>
         <p style="font-size: 14px; color: #4b5563; line-height: 1.5;">Pembayaran Anda telah kami terima. Pesanan sedang diproses.</p>
-        <div style="background: #f9fafb; border-radius: 8px; padding: 16px; margin: 20px 0; font-size: 14px; color: #111827;">
+        <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 20px 0; font-size: 14px; color: #111827;">
           <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">Domain</span><strong>${domain}</strong></div>
           <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">No. Order</span><strong>${orderId}</strong></div>
           <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">Total Dibayar</span><strong>${amount}</strong></div>
@@ -135,15 +135,15 @@ function renderEmailHtml(
     const outcome = vars.outcome || "unknown";
     const detail = vars.detail || "";
     return `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; color: #111827;">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 32px; color: #111827;">
         <h2 style="margin-top: 0; font-size: 20px; font-weight: 700; color: #dc2626;">Peringatan Pembayaran — ${brandName}</h2>
         <p style="font-size: 14px; color: #4b5563; line-height: 1.5;">Ada event pembayaran yang perlu ditindaklanjuti. Segera periksa agar tidak ada pembayaran yang tertahan.</p>
-        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 20px 0; font-size: 14px; color: #111827;">
+        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 16px; margin: 20px 0; font-size: 14px; color: #111827;">
           <div style="padding: 4px 0;"><span style="color: #6b7280;">Kode masalah</span><br/><strong style="font-family: monospace;">${outcome}</strong></div>
           <div style="padding: 4px 0;"><span style="color: #6b7280;">No. Order</span><br/><strong>${orderId || "-"}</strong></div>
           <div style="padding: 4px 0;"><span style="color: #6b7280;">Payment ID</span><br/><strong style="font-family: monospace;">${paymentId || "-"}</strong></div>
         </div>
-        ${detail ? `<div style="background: #f9fafb; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 12px; color: #374151; word-break: break-all;">${detail}</div>` : ""}
+        ${detail ? `<div style="background: #f9fafb; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; color: #374151; word-break: break-all;">${detail}</div>` : ""}
         <p style="font-size: 12px; color: #9ca3af; line-height: 1.5; margin-bottom: 0;">Email ini dikirim otomatis oleh sistem pemantauan pembayaran.</p>
       </div>
     `;
@@ -159,10 +159,10 @@ function renderEmailHtml(
       ? "Link pembayaran Anda telah kedaluwarsa dan pesanan dibatalkan."
       : "Pembayaran Anda tidak berhasil diproses dan pesanan dibatalkan.";
     return `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; color: #111827;">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 32px; color: #111827;">
         <h2 style="margin-top: 0; font-size: 20px; font-weight: 700; color: ${color};">${title} — ${brandName}</h2>
         <p style="font-size: 14px; color: #4b5563; line-height: 1.5;">${msg}</p>
-        <div style="background: #f9fafb; border-radius: 8px; padding: 16px; margin: 20px 0; font-size: 14px; color: #111827;">
+        <div style="background: #f9fafb; border-radius: 6px; padding: 16px; margin: 20px 0; font-size: 14px; color: #111827;">
           <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">Domain</span><strong>${domain}</strong></div>
           <div style="display: flex; justify-content: space-between; padding: 4px 0;"><span style="color: #6b7280;">No. Order</span><strong>${orderId}</strong></div>
         </div>
@@ -172,7 +172,7 @@ function renderEmailHtml(
   }
 
   return `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; color: #111827;">
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 32px; color: #111827;">
       <h2 style="margin-top: 0; font-size: 20px; font-weight: 700; color: #111827;">Selamat Datang di ${brandName}!</h2>
       <p style="font-size: 14px; color: #4b5563; line-height: 1.5;">Akun Anda telah berhasil dibuat. Anda dapat langsung mengelola domain, DNS, dan layanan hosting Anda melalui dashboard.</p>
     </div>
