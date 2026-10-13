@@ -134,8 +134,9 @@ try {
 }
 
 let renderLandingHtml;
+let renderSkeletonHtml;
 try {
-  ({ renderLandingHtml } = await import(serverBundle));
+  ({ renderLandingHtml, renderSkeletonHtml } = await import(serverBundle));
 } catch (e) {
   console.error("✖ Gagal memuat bundle SSR:", e.message);
   process.exit(1);
@@ -150,11 +151,15 @@ if (!indexHtml.includes('<div id="root"></div>')) {
 }
 
 // Shell bersih untuk route aplikasi (/dashboard, /login, …): TANPA markup landing,
-// tapi DENGAN skeleton loading statis (markup+CSS, aman dari meta CSP) supaya
-// layar tidak putih kosong selama bundle JS diunduh. Nginx melayani /app.html
+// tapi DENGAN skeleton loading statis supaya layar tidak putih kosong selama bundle
+// JS diunduh. Markup-nya dirender dari komponen React yang sama dengan yang dipakai
+// aplikasi (AppSkeleton), dan CSS-nya di-inline dari file bersama — jadi tampilan
+// static dan tampilan React tidak mungkin berbeda. Nginx melayani /app.html
 // sebagai fallback SPA.
-const skeletonPath = join(root, "scripts", "app-shell-skeleton.html");
-const skeleton = existsSync(skeletonPath) ? readFileSync(skeletonPath, "utf8") : "";
+const skeletonCssPath = join(root, "src", "styles", "app-skeleton.css");
+const skeletonCss = existsSync(skeletonCssPath) ? readFileSync(skeletonCssPath, "utf8") : "";
+if (!skeletonCss) console.warn("⚠  src/styles/app-skeleton.css tidak ditemukan — shell tanpa gaya skeleton.");
+const skeleton = `${skeletonCss ? `<style>${skeletonCss}</style>` : ""}${renderSkeletonHtml()}`;
 const shellHtml = indexHtml.replace(
   '<div id="root"></div>',
   () => `<div id="root">${skeleton}</div>`,

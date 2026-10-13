@@ -5,6 +5,7 @@ import { SettingsProvider } from "./contexts/SettingsContext";
 import { DataCacheProvider } from "./contexts/DataCacheContext";
 import { DashboardLayout } from "./components/layout/DashboardLayout";
 import { PublicLayout } from "./components/layout/PublicLayout";
+import AppSkeleton from "./components/ui/AppSkeleton";
 import { hasOperatorCapabilities } from "./lib/types";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -30,11 +31,10 @@ const LandingPage = lazy(() => import("./pages/LandingPage"));
 const VerifyPage = lazy(() => import("./pages/VerifyPage"));
 
 function PageLoader() {
-  return (
-    <div className="flex items-center justify-center min-h-[300px]">
-      <div className="animate-spin w-7 h-7 border-2 border-gray-300 border-t-black rounded-full" />
-    </div>
-  );
+  // Skeleton yang sama dengan shell statis di app.html, supaya transisi mulus:
+  // skeleton (bundle) -> skeleton (cek sesi / lazy chunk) -> konten. Tidak ada
+  // lagi pergantian gaya ke spinner kecil di tengah.
+  return <AppSkeleton />;
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {

@@ -1,0 +1,107 @@
+/*
+ * Skeleton loading shell.
+ *
+ * Single source of truth for two consumers:
+ *   1. the React component `AppSkeleton` (src/components/ui/AppSkeleton.tsx),
+ *      imported into the app bundle via src/main.tsx;
+ *   2. the STATIC app shell (dist/app.html), where scripts/prerender.mjs inlines
+ *      this file verbatim so the very first paint already shows the skeleton.
+ *
+ * Markup + CSS only — no JavaScript. The template's
+ * <meta http-equiv="Content-Security-Policy"> allows 'unsafe-inline' for styles
+ * but NOT for scripts, so a <script> here would be blocked.
+ *
+ * Class names are namespaced (appskel / sk) so they cannot collide with Tailwind.
+ */
+.appskel {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  background: #f0f2f5;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+.appskel__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 64px;
+  padding: 0 20px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+}
+.appskel__body {
+  padding: 28px 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.appskel__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.appskel__spacer {
+  flex: 1 1 auto;
+}
+.sk {
+  display: block;
+  border-radius: 8px;
+  background: #e2e8f0;
+  background-image: linear-gradient(90deg, #e2e8f0 0%, #eef1f5 50%, #e2e8f0 100%);
+  background-size: 200% 100%;
+  animation: appskel-shimmer 1.4s ease-in-out infinite;
+}
+.sk--circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+}
+.sk--text {
+  height: 12px;
+}
+.sk--title {
+  height: 22px;
+  width: 190px;
+}
+.sk--label {
+  width: 140px;
+}
+.sk--brand {
+  width: 96px;
+}
+.sk--pill-sm {
+  height: 28px;
+  width: 76px;
+  border-radius: 10px;
+}
+.sk--pill-md {
+  height: 28px;
+  width: 92px;
+  border-radius: 10px;
+}
+.sk--card {
+  height: 92px;
+  border-radius: 12px;
+  background-color: #ffffff;
+}
+.sk--block {
+  height: 220px;
+  border-radius: 12px;
+  background-color: #ffffff;
+}
+@keyframes appskel-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (max-width: 767px) {
+  .appskel__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk {
+    animation: none;
+  }
+}
