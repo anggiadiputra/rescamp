@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Globe, ShieldCheck, Lock, Unlock, Key, RefreshCw, Server, Mail,
   AlertTriangle, Trash2, Copy, Check, ExternalLink, Calendar, User, ArrowLeft
@@ -47,6 +47,21 @@ export default function DomainDetailPage() {
   useEffect(() => {
     api.get<any>("/billing/prices").then((data) => setPriceList(data || {})).catch(() => {});
   }, []);
+
+  // "Perpanjang" from the domain list lands here with ?renew=1: open the renew
+  // modal once the domain is loaded, then drop the param so a refresh doesn't reopen it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (!domain || searchParams.get("renew") !== "1") return;
+    if (domain.status !== "suspended") {
+      setRenewYears(1);
+      setRenewWithPrivacy(Boolean(domain.privacyProtection));
+      setRenewOpen(true);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("renew");
+    setSearchParams(next, { replace: true });
+  }, [domain, searchParams, setSearchParams]);
 
   // Payment modal state
   const [paymentData, setPaymentData] = useState<{

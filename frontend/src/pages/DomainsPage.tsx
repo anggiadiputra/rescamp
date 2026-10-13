@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, RefreshCw, ArrowRightLeft, Plus, AlertTriangle } from "lucide-react";
+import { Search, RefreshCw, ArrowRightLeft, Plus, AlertTriangle, RotateCw, ChevronRight } from "lucide-react";
 import { Card, Button, Badge, TableSkeleton, EmptyState, SearchBar, Pagination } from "../components/ui";
 import { api } from "../lib/api";
 import type { Domain, PaginatedResponse } from "../lib/types";
@@ -8,10 +8,68 @@ import { useSettings } from "../contexts/SettingsContext";
 import { useCachedFetch } from "../contexts/DataCacheContext";
 import { useAuth } from "../contexts/AuthContext";
 
-function formatDateOnly(dateStr?: string | null): string {
-  if (!dateStr) return "-";
-  const clean = String(dateStr).trim().split(" ")[0]?.split("T")[0];
-  return clean || "-";
+const RENEW_SOON_DAYS = 30;
+
+/** Parse the date part of "YYYY-MM-DD[ T]hh:mm:ss" as a local calendar date. */
+function parseDateOnly(dateStr?: string | null): Date | null {
+  if (!dateStr) return null;
+  const m = String(dateStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+/** "6 Apr 2027" — unambiguous, unlike 06/04/2027. */
+function formatDate(dateStr?: string | null): string {
+  const d = parseDateOnly(dateStr);
+  return d ? d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "-";
+}
+
+function daysUntil(dateStr?: string | null): number | null {
+  const d = parseDateOnly(dateStr);
+  if (!d) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((d.getTime() - today.getTime()) / 86_400_000);
+}
+
+function formatRupiah(n: number): string {
+  return `Rp${n.toLocaleString("id-ID")}`;
+}
+
+/** Renewal price per year for a TLD from /billing/prices (values < 1000 are in thousands). */
+function renewPriceFor(prices: Record<string, any> | null | undefined, tld?: string | null): number | null {
+  const info = prices?.[String(tld || "").toLowerCase()];
+  const raw = Number(info?.price_renew);
+  if (!info || !Number.isFinite(raw) || raw <= 0) return null;
+  return raw < 1000 ? raw * 1000 : raw;
+}
+
+function ExpiryInfo({ domain, compact = false }: { domain: Domain; compact?: boolean }) {
+  const days = daysUntil(domain.expiryDate);
+  let tone = "text-gray-500";
+  let label = "";
+  if (days !== null) {
+    if (days < 0) { tone = "text-red-600 font-semibold"; label = `Lewat ${Math.abs(days)} hari`; }
+    else if (days === 0) { tone = "text-red-600 font-semibold"; label = "Berakhir hari ini"; }
+    else if (days <= 7) { tone = "text-red-600 font-semibold"; label = `${days} hari lagi`; }
+    else if (days <= RENEW_SOON_DAYS) { tone = "text-amber-600 font-semibold"; label = `${days} hari lagi`; }
+    else { label = `${days} hari lagi`; }
+  }
+  return (
+    <div className={compact ? "flex items-baseline gap-1.5 flex-wrap" : ""}>
+      <p className={`text-gray-900 ${compact ? "text-xs" : "text-sm"}`}>{formatDate(domain.expiryDate)}</p>
+      {label && <p className={`text-xs ${compact ? "" : "mt-0.5"} ${tone}`}>{label}</p>}
+    </div>
+  );
+}
+
+function canRenew(d: Domain): boolean {
+  return d.status === "active" || d.status === "expired";
+}
+
+function needsRenewal(d: Domain): boolean {
+  const days = daysUntil(d.expiryDate);
+  return canRenew(d) && days !== null && days <= RENEW_SOON_DAYS;
 }
 
 export default function DomainsPage() {
@@ -29,6 +87,19 @@ export default function DomainsPage() {
     [page, user?.id]
   );
 
+  // Public price list — only used to show the renewal price per row.
+  const { data: prices } = useCachedFetch<Record<string, any>>(
+    "billing:prices",
+    () => api.get<Record<string, any>>("/billing/prices"),
+    []
+  );
+
+  const goRenew = (e: React.MouseEvent, d: Domain) => {
+    e.preventDefault();
+    e.stopPropagation();
+    nav(`/domains/${d.liquidOrderId || d.id}?renew=1`);
+  };
+
   const domains = data?.data || [];
   const total = data?.meta?.total || 0;
 
@@ -44,8 +115,9 @@ export default function DomainsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div>
           <h1 className="text-xl font-bold text-gray-900">Domains</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Kelola domain, masa berlaku, dan perpanjangan.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => refetch()} disabled={isRefreshing} variant="outline">
@@ -111,53 +183,80 @@ export default function DomainsPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50/70 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  <th className="px-4 py-3.5 whitespace-nowrap">Domain</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap">Tanggal Registrasi</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap">Expiry</th>
-                  <th className="px-4 py-3.5 text-center whitespace-nowrap">Status</th>
+                  <th className="px-3 py-3.5 whitespace-nowrap">Domain</th>
+                  <th className="px-3 py-3.5 whitespace-nowrap">Status</th>
+                  <th className="px-3 py-3.5 whitespace-nowrap">Masa Berlaku</th>
+                  <th className="px-3 py-3.5 whitespace-nowrap">Perpanjangan</th>
+                  <th className="px-3 py-3.5 whitespace-nowrap"><span className="sr-only">Aksi</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white text-sm">
-                {visibleDomains.map((d) => (
-                  <tr
-                    key={d.liquidOrderId || d.id}
-                    onClick={() => nav(`/domains/${d.liquidOrderId || d.id}`)}
-                    className={`hover:bg-gray-50/70 transition-colors cursor-pointer group ${
-                      d.status === "suspended" ? "bg-rose-50/40" : ""
-                    }`}
-                  >
-                    <td className="px-4 py-3.5 text-sm font-bold text-gray-900 group-hover:text-black whitespace-nowrap">
-                      {d.domainName}
-                      {d.status === "suspended" && d.suspendReason && (
-                        <p className="text-[11px] text-rose-700 font-normal mt-0.5 truncate max-w-xs" title={d.suspendReason}>
-                          Alasan: {d.suspendReason}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">{formatDateOnly(d.registrationDate)}</td>
-                    <td className="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">{formatDateOnly(d.expiryDate)}</td>
-                    <td className="px-4 py-3.5 text-center whitespace-nowrap"><Badge status={d.status} /></td>
-                  </tr>
-                ))}
+                {visibleDomains.map((d) => {
+                  const renewPrice = renewPriceFor(prices, d.tld);
+                  return (
+                    <tr
+                      key={d.liquidOrderId || d.id}
+                      onClick={() => nav(`/domains/${d.liquidOrderId || d.id}`)}
+                      className={`hover:bg-gray-50/70 transition-colors cursor-pointer group ${
+                        d.status === "suspended" ? "bg-rose-50/40" : ""
+                      }`}
+                    >
+                      <td className="px-3 py-3.5 text-sm font-bold text-gray-900 group-hover:text-black">
+                        <span className="break-all">{d.domainName}</span>
+                        {d.status === "suspended" && d.suspendReason && (
+                          <p className="text-[11px] text-rose-700 font-normal mt-0.5 truncate max-w-[14rem]" title={d.suspendReason}>
+                            Alasan: {d.suspendReason}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-3 py-3.5 whitespace-nowrap"><Badge status={d.status} /></td>
+                      <td className="px-3 py-3.5 whitespace-nowrap"><ExpiryInfo domain={d} /></td>
+                      <td className="px-3 py-3.5 text-sm text-gray-600 whitespace-nowrap">
+                        {renewPrice ? <>{formatRupiah(renewPrice)}<span className="text-gray-400">/thn</span></> : "-"}
+                      </td>
+                      <td className="pl-2 pr-3 py-3.5 text-right whitespace-nowrap w-px">
+                        {needsRenewal(d) ? (
+                          <Button size="sm" onClick={(e: React.MouseEvent) => goRenew(e, d)}>
+                            <RotateCw className="w-3.5 h-3.5 mr-1 inline" /> Perpanjang
+                          </Button>
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 inline" />
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
           <div className="block md:hidden divide-y divide-gray-100 p-4 space-y-4">
-            {visibleDomains.map((d) => (
-              <Link key={d.liquidOrderId || d.id} to={`/domains/${d.liquidOrderId || d.id}`} className={`block rounded-xl p-4 shadow-sm border bg-white hover:shadow-md transition-shadow ${d.status === "suspended" ? "border-rose-200 bg-rose-50/30" : ""}`}>
-                <div className="flex justify-between items-start gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-gray-900">{d.domainName}</p>
-                    <p className="text-xs text-gray-500 mt-1">Registrasi: {formatDateOnly(d.registrationDate)}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">Expires: {formatDateOnly(d.expiryDate)}</p>
-                    {d.status === "suspended" && d.suspendReason && (
-                      <p className="text-[11px] text-rose-700 mt-1">Alasan: {d.suspendReason}</p>
+            {visibleDomains.map((d) => {
+              const renewPrice = renewPriceFor(prices, d.tld);
+              return (
+                <Link key={d.liquidOrderId || d.id} to={`/domains/${d.liquidOrderId || d.id}`} className={`block rounded-xl p-4 shadow-sm border bg-white hover:shadow-md transition-shadow ${d.status === "suspended" ? "border-rose-200 bg-rose-50/30" : ""}`}>
+                  <div className="flex justify-between items-start gap-2">
+                    <p className="text-sm font-bold text-gray-900 min-w-0 break-all">{d.domainName}</p>
+                    <Badge status={d.status} />
+                  </div>
+                  <div className="mt-2">
+                    <ExpiryInfo domain={d} compact />
+                  </div>
+                  {d.status === "suspended" && d.suspendReason && (
+                    <p className="text-[11px] text-rose-700 mt-1">Alasan: {d.suspendReason}</p>
+                  )}
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <p className="text-xs text-gray-500">
+                      {renewPrice ? <>Perpanjang {formatRupiah(renewPrice)}/thn</> : "\u00a0"}
+                    </p>
+                    {needsRenewal(d) && (
+                      <Button size="sm" onClick={(e: React.MouseEvent) => goRenew(e, d)}>
+                        <RotateCw className="w-3.5 h-3.5 mr-1 inline" /> Perpanjang
+                      </Button>
                     )}
                   </div>
-                  <Badge status={d.status} />
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
           <div className="bg-gray-50 px-5 py-3 flex items-center justify-between border-t border-gray-100">
             <span className="text-xs text-gray-500 font-medium">Showing {visibleDomains.length} of {total} domains</span>
