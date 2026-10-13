@@ -405,9 +405,52 @@ export async function getPaymentEventStats() {
 }
 
 /**
- * Admin: replay ONE order by its order id (the dashboard button). Reuses the
- * same path as the automatic watchdog — idempotent, CAS-guarded, and it will
- * refuse a genuine underpayment rather than provision it.
+ * Ask the gateway itself whether `tx` was paid. The admin replay used to forge a
+ * "completed" event with amounts copied from our own row, which always passed
+ * the amount guard — one click provisioned an unpaid or underpaid order.
+ *
+ * Returns the gateway-reported amount fields so the normal amount guard in
+ * processWebhookPayload judges the replay against what was actually paid.
+ */
+export async function confirmPaymentAtGateway(tx: {
+  orderId: string | null;
+  paymentId: string | null;
+  paymentGateway: string | null;
+}): Promise<{ paid: boolean; reason?: string; data?: Record<string, any> }> {
+  const gateway = tx.paymentGateway === "duitku" ? "duitku" : "sumopod";
+  try {
+    if (gateway === "duitku") {
+      if (!tx.orderId) return { paid: false, reason: "order tanpa orderId" };
+      const { DuitkuClient } = await import("./duitku");
+      const st = await new DuitkuClient().checkStatus(tx.orderId);
+      if (st.statusCode !== "00") {
+        return { paid: false, reason: `Duitku melaporkan status ${st.statusCode || "?"} (${st.statusMessage || "-"})` };
+      }
+      return { paid: true, data: { amount: st.amount, payment_id: st.reference || tx.paymentId } };
+    }
+
+    if (!tx.paymentId) return { paid: false, reason: "order belum punya paymentId Sumopod" };
+    const { sumopodClient } = await import("./sumopod");
+    const raw = await sumopodClient.getPayment(tx.paymentId);
+    const detail = raw?.data && typeof raw.data === "object" ? raw.data : raw;
+    const st = String(detail?.status || "").toUpperCase();
+    if (!["COMPLETED", "PAID", "SUCCESS"].includes(st)) {
+      return { paid: false, reason: raw ? `Sumopod melaporkan status ${st || "?"}` : "Sumopod tidak dapat dihubungi" };
+    }
+    const data: Record<string, any> = { payment_id: tx.paymentId };
+    for (const k of ["amount", "fee", "net_amount", "netAmount"]) {
+      if (detail?.[k] != null) data[k] = detail[k];
+    }
+    return { paid: true, data };
+  } catch (e: any) {
+    return { paid: false, reason: `gagal cek status ke gateway: ${e?.message || e}` };
+  }
+}
+
+/**
+ * Admin: replay ONE order by its order id (the dashboard button). The gateway
+ * must confirm the payment first (see confirmPaymentAtGateway); the replay then
+ * goes through the same idempotent, CAS-guarded path as the watchdog.
  */
 export async function replayOrderForAdmin(orderId: string): Promise<{ ok: boolean; status: string; message?: string }> {
   const [tx] = await db
@@ -421,25 +464,46 @@ export async function replayOrderForAdmin(orderId: string): Promise<{ ok: boolea
     return { ok: true, status: tx.status, message: `Order sudah berstatus ${tx.status}.` };
   }
 
-  const meta = typeof tx.metadata === "string"
-    ? (() => { try { return JSON.parse(tx.metadata as string); } catch { return {}; } })()
-    : ((tx.metadata as any) || {});
-  const fee = Number(meta?.fee || 0);
-  const amount = Number(tx.amount);
+  const confirmation = await confirmPaymentAtGateway(tx);
+  if (!confirmation.paid) {
+    return {
+      ok: false,
+      status: "not_paid_at_gateway",
+      message: `Replay ditolak: pembayaran belum terkonfirmasi di gateway (${confirmation.reason}).`,
+    };
+  }
 
+  // Without gateway amounts the guard cannot see an underpayment, so an order
+  // that was already rejected for amount_mismatch stays rejected.
+  const gatewayData = confirmation.data || {};
+  const hasAmount = ["amount", "net_amount", "netAmount"].some((k) => gatewayData[k] != null);
+  if (!hasAmount) {
+    const [mismatch] = await db
+      .select({ id: paymentEvents.id })
+      .from(paymentEvents)
+      .where(and(eq(paymentEvents.orderId, orderId), eq(paymentEvents.outcome, "amount_mismatch")))
+      .limit(1);
+    if (mismatch) {
+      return {
+        ok: false,
+        status: "amount_unverified",
+        message: "Replay ditolak: order pernah ditolak karena nominal tidak cocok dan gateway tidak mengembalikan nominal untuk diverifikasi.",
+      };
+    }
+  }
+
+  const gateway = tx.paymentGateway === "duitku" ? "duitku" : "sumopod";
   const { processWebhookPayload } = await import("../modules/payments/payments.service");
   const res: any = await processWebhookPayload({
     event_type: "payment.completed",
     data: {
-      payment_id: tx.paymentId,
+      ...gatewayData,
+      payment_id: gatewayData.payment_id || tx.paymentId,
       order_id: tx.orderId,
-      amount: amount + fee,
-      fee,
-      net_amount: amount,
       status: "completed",
       _adminReplay: true,
     },
-  }, "sumopod");
+  }, gateway);
 
   const status = String(res?.status || "unknown");
   const ok = status === "processed_successfully" || status === "already_processing";

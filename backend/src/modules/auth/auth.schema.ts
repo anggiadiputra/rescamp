@@ -1,4 +1,5 @@
 import { t } from "elysia";
+import { sanitizedString } from "../../lib/schema-helpers";
 import { sanitizeInput, sanitizePhone } from "../../lib/sanitize";
 
 // Password policy: min 8 chars, must contain at least one letter and one digit
@@ -9,32 +10,20 @@ export const passwordField = t.String({
 });
 
 export const sendRegisterOtpSchema = t.Object({
-  email: t.String({ 
-    format: "email",
-    transform: (v: string) => (v || "").trim().toLowerCase(),
-  }),
+  email: sanitizedString((v: string) => (v || "").trim().toLowerCase(), { format: "email" }),
   cfTurnstileResponse: t.Optional(t.String()),
 });
 
 export const sendOtpSchema = t.Object({
-  email: t.String({ 
-    format: "email",
-    transform: (v: string) => (v || "").trim().toLowerCase(),
-  }),
+  email: sanitizedString((v: string) => (v || "").trim().toLowerCase(), { format: "email" }),
   password: t.String({ minLength: 6 }),
   cfTurnstileResponse: t.Optional(t.String()),
 });
 
 export const registerSchema = t.Object({
-  email: t.String({ 
-    format: "email",
-    transform: (v: string) => (v || "").trim().toLowerCase(),
-  }),
+  email: sanitizedString((v: string) => (v || "").trim().toLowerCase(), { format: "email" }),
   password: passwordField,
-  name: t.String({ 
-    minLength: 1,
-    transform: (v: string) => sanitizeInput(v),
-  }),
+  name: sanitizedString((v: string) => sanitizeInput(v), { minLength: 1 }),
   reseller_id: t.Optional(t.String()),
   company: t.Optional(t.String()),
   address: t.Optional(t.String()),
@@ -49,58 +38,24 @@ export const registerSchema = t.Object({
 });
 
 export const customerRegisterSchema = t.Object({
-  email: t.String({ 
-    format: "email",
-    transform: (v: string) => (v || "").trim().toLowerCase(),
-  }),
+  email: sanitizedString((v: string) => (v || "").trim().toLowerCase(), { format: "email" }),
   password: passwordField,
-  name: t.String({ 
-    minLength: 1,
-    transform: (v: string) => sanitizeInput(v),
-  }),
+  name: sanitizedString((v: string) => sanitizeInput(v), { minLength: 1 }),
   reseller_id: t.String({ minLength: 1 }),
-  company: t.String({ 
-    minLength: 1,
-    transform: (v: string) => sanitizeInput(v),
-  }),
-  address: t.String({ 
-    minLength: 1,
-    transform: (v: string) => sanitizeInput(v),
-  }),
-  city: t.String({ 
-    minLength: 1,
-    transform: (v: string) => sanitizeInput(v),
-  }),
-  state: t.String({ 
-    minLength: 1,
-    transform: (v: string) => sanitizeInput(v),
-  }),
-  country: t.String({ 
-    minLength: 2, 
-    maxLength: 2,
-    transform: (v: string) => (v || "").trim().toUpperCase(),
-  }),
-  zipcode: t.String({ 
-    minLength: 1,
-    transform: (v: string) => sanitizeInput(v),
-  }),
-  phone_cc: t.String({ 
-    minLength: 1,
-    transform: (v: string) => sanitizePhone(v),
-  }),
-  phone: t.String({ 
-    minLength: 1,
-    transform: (v: string) => sanitizePhone(v),
-  }),
+  company: sanitizedString((v: string) => sanitizeInput(v), { minLength: 1 }),
+  address: sanitizedString((v: string) => sanitizeInput(v), { minLength: 1 }),
+  city: sanitizedString((v: string) => sanitizeInput(v), { minLength: 1 }),
+  state: sanitizedString((v: string) => sanitizeInput(v), { minLength: 1 }),
+  country: sanitizedString((v: string) => (v || "").trim().toUpperCase(), { minLength: 2, maxLength: 2 }),
+  zipcode: sanitizedString((v: string) => sanitizeInput(v), { minLength: 1 }),
+  phone_cc: sanitizedString((v: string) => sanitizePhone(v), { minLength: 1 }),
+  phone: sanitizedString((v: string) => sanitizePhone(v), { minLength: 1 }),
   cfTurnstileResponse: t.Optional(t.String()),
   code: t.String({ minLength: 6, maxLength: 6, pattern: "^\\d{6}$" }),
 });
 
 export const loginSchema = t.Object({
-  email: t.String({ 
-    format: "email",
-    transform: (v: string) => (v || "").trim().toLowerCase(),
-  }),
+  email: sanitizedString((v: string) => (v || "").trim().toLowerCase(), { format: "email" }),
   // Legacy accounts may have shorter passwords; policy is enforced on register/reset only
   password: t.String({ minLength: 6 }),
   cfTurnstileResponse: t.Optional(t.String()),
@@ -109,9 +64,6 @@ export const loginSchema = t.Object({
 export const resetPasswordSchema = t.Object({
   token: t.String({ minLength: 1 }),
   password: passwordField,
-  email: t.String({
-    format: "email",
-    transform: (v: string) => (v || "").trim().toLowerCase(),
-  }),
+  email: sanitizedString((v: string) => (v || "").trim().toLowerCase(), { format: "email" }),
   cfTurnstileResponse: t.Optional(t.String()),
 });

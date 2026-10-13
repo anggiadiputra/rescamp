@@ -1,4 +1,5 @@
 import { t } from "elysia";
+import { sanitizedString } from "../../lib/schema-helpers";
 import { sanitizeDomain, sanitizeNameserver } from "../../lib/sanitize";
 
 // Pilihan gateway checkout (opsional — default sumopod).
@@ -9,21 +10,14 @@ const gatewaySelection = {
 };
 
 export const domainRegisterSchema = t.Object({
-  domain_name: t.String({ 
-    minLength: 1,
-    transform: (v: string) => sanitizeDomain(v),
-  }),
-  tld: t.String({ 
-    minLength: 1,
-    transform: (v: string) => sanitizeDomain(v),
-  }),
-  years: t.Numeric({ minimum: 1, maximum: 10, default: 1 }),
+  domain_name: sanitizedString((v: string) => sanitizeDomain(v), { minLength: 1 }),
+  tld: sanitizedString((v: string) => sanitizeDomain(v), { minLength: 1 }),
+  // Whole years only: a fractional value (1.5) used to flow into the price
+  // multiplier, the Liquid request and the local years counter.
+  years: t.Integer({ minimum: 1, maximum: 10, default: 1 }),
   customer_id: t.Optional(t.Numeric()),
   nameservers: t.Optional(t.Array(
-    t.String({ 
-      minLength: 1,
-      transform: (v: string) => sanitizeNameserver(v),
-    })
+    sanitizedString((v: string) => sanitizeNameserver(v), { minLength: 1 })
   )),
   auto_renew: t.Optional(t.Boolean()),
   privacy_protection: t.Optional(t.Boolean()),
@@ -31,25 +25,22 @@ export const domainRegisterSchema = t.Object({
 });
 
 export const domainRenewSchema = t.Object({
-  years: t.Numeric({ minimum: 1, maximum: 10, default: 1 }),
+  // Whole years only: a fractional value (1.5) used to flow into the price
+  // multiplier, the Liquid request and the local years counter.
+  years: t.Integer({ minimum: 1, maximum: 10, default: 1 }),
   purchase_privacy_protection: t.Optional(t.Boolean()),
   privacy_protection: t.Optional(t.Boolean()),
   ...gatewaySelection,
 });
 
 export const transferSchema = t.Object({
-  domain_name: t.String({
-    transform: (v: string) => sanitizeDomain(v),
-  }),
+  domain_name: sanitizedString((v: string) => sanitizeDomain(v)),
   auth_code: t.Optional(t.String()),
   ...gatewaySelection,
 });
 
 export const nameserverSchema = t.Object({
-  nameservers: t.Array(t.String({ 
-    minLength: 1,
-    transform: (v: string) => sanitizeNameserver(v),
-  }), { minItems: 2 }),
+  nameservers: t.Array(sanitizedString((v: string) => sanitizeNameserver(v), { minLength: 1 }), { minItems: 2 }),
 });
 
 export const authCodeSchema = t.Object({

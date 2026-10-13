@@ -5,6 +5,7 @@ import { LiquidClient, formatCustomerPrices } from "../../lib/liquid";
 import { AppError } from "../../lib/error";
 import { resolveResellerCreds } from "../../lib/reseller-creds";
 import { loadTenantScope } from "../../lib/tenant-access";
+import { parseOrderDomain, parseFullDomain } from "../../lib/sanitize";
 import dns from "node:dns/promises";
 
 async function checkDnsAvailability(domain: string): Promise<boolean> {
@@ -520,7 +521,14 @@ export async function orderRegisterDomain(
   user: { id: number; resellerId: string | null; apiKey: string | null },
   data: { domain_name: string; tld: string; years: number; customer_id?: number; nameservers?: string[]; auto_renew?: boolean; privacy_protection?: boolean }
 ) {
-  const fullDomain = `${data.domain_name}.${data.tld}`.toLowerCase().trim();
+  // One canonical FQDN drives the duplicate check, the price lookup AND the
+  // provisioned name — a dotted label ("premium.com" + tld "my.id") is rejected
+  // instead of being priced as one TLD and registered as another.
+  const parsed = parseOrderDomain(data.domain_name, data.tld);
+  if (!parsed) {
+    throw new AppError("Nama domain tidak valid. Masukkan nama tanpa titik dan pilih ekstensi yang tersedia.", 422);
+  }
+  const fullDomain = parsed.fqdn;
 
   // 1. Pre-check local DB for existing active/pending domain record
   const [existingDomain] = await db
@@ -560,7 +568,7 @@ export async function orderRegisterDomain(
   const liquid = await getLiquidRequired(user);
   
   const years = data.years || 1;
-  const tldKey = data.tld.toLowerCase();
+  const tldKey = parsed.tld;
   let unitPrice = 150000;
   let privacyPrice = 70000;
   let totalAmount = 0;
@@ -595,8 +603,8 @@ export async function orderRegisterDomain(
   return createDomainOrderPayment({
     userId: user.id,
     type: "register",
-    domainName: data.domain_name,
-    tld: data.tld,
+    domainName: parsed.fqdn,
+    tld: parsed.tld,
     years,
     customerId: data.customer_id,
     nameservers: data.nameservers,
@@ -612,8 +620,13 @@ export async function orderTransferDomain(
   user: { id: number; resellerId: string | null; apiKey: string | null },
   data: { domain_name: string; auth_code: string; customer_id?: number; nameservers?: string[] }
 ) {
+  const parsed = parseFullDomain(data.domain_name);
+  if (!parsed) {
+    throw new AppError("Nama domain tidak valid. Masukkan nama domain lengkap, misal: bisnisku.com", 422);
+  }
+  data = { ...data, domain_name: parsed.fqdn };
   const liquid = await getLiquidRequired(user);
-  const tld = data.domain_name.split(".").slice(1).join(".").toLowerCase();
+  const tld = parsed.tld;
 
   // Validate the EPP auth code BEFORE creating a payment link, so a customer
   // never pays for a transfer that will fail because the code is wrong.
@@ -1306,6 +1319,8 @@ export async function updateNameservers(user: { id?: number; resellerId: string 
 
 export async function getAuthCode(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number) {
   const domain = await getDomain(userParam, domainId);
+  // A suspended domain must not be transferable out via its EPP code.
+  assertNotSuspended(domain);
   const liquid = await getLiquidRequired(user);
 
   let ref = String(domain.liquidOrderId || "").trim();
@@ -1392,9 +1407,13 @@ export async function toggleTheftProtection(user: { id?: number; resellerId: str
 
 export async function restoreDomain(user: { id?: number; resellerId: string | null; apiKey: string | null }, userParam: any, domainId: string | number) {
   const domain = await getDomain(userParam, domainId);
+  // Restoring must not double as an unsuspend: flipping a suspended domain to
+  // "active" here used to disable every local suspension guard.
+  assertNotSuspended(domain);
   const liquid = await getLiquidRequired(user);
   const res = await liquid.restoreDomain(String(domain.liquidOrderId || domain.domainName));
-  await db.update(domains).set({ status: "active" }).where(eq(domains.id, domain.id));
+  await db.update(domains).set({ status: "active" })
+    .where(and(eq(domains.id, domain.id), inArray(domains.status, ["expired", "cancelled"])));
   return res;
 }
 

@@ -154,12 +154,39 @@ function addYearsToDate(dateStr: string | null | undefined, years: number): stri
   return d.toISOString().split("T")[0] ?? null;
 }
 
+const MAX_ORDER_ID_GENERATIONS = 50;
+const PENDING_CLAIM_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Whether a transaction holding an order id still represents an in-flight
+ * order that an identical new submission must collapse onto. Settled rows
+ * (completed/failed/cancelled/expired) and pending rows whose payment window
+ * has passed are not live, so the intent may be ordered again.
+ */
+export function isOrderClaimLive(
+  row: { status: string | null; expiresAt: Date | string | null; createdAt: Date | string | null },
+  now: number = Date.now(),
+): boolean {
+  if (row.status === "processing_domain" || row.status === "action_required") return true;
+  if (row.status !== "pending_payment") return false;
+  if (row.expiresAt) return new Date(row.expiresAt).getTime() > now;
+  const created = row.createdAt ? new Date(row.createdAt).getTime() : now;
+  return now - created < PENDING_CLAIM_TTL_MS;
+}
+
 export async function createDomainOrderPayment(payload: CreateDomainOrderPayload) {
   const years = payload.years || 1;
-  const tld = payload.tld || payload.domainName.split(".").slice(1).join(".") || "com";
+  if (!Number.isInteger(years) || years < 1 || years > 10) {
+    throw new AppError("Jumlah tahun harus bilangan bulat 1-10.", 422);
+  }
+  const tld = (payload.tld || payload.domainName.split(".").slice(1).join(".") || "com").toLowerCase().trim();
   const fullDomain = (payload.domainName.includes(".")
     ? payload.domainName
     : `${payload.domainName}.${tld}`).toLowerCase().trim();
+  // The amount was priced for `tld`; refuse to provision any other name.
+  if (!fullDomain.endsWith(`.${tld}`)) {
+    throw new AppError("Nama domain tidak sesuai dengan ekstensi yang dipesan.", 422);
+  }
 
   // R1: wrap ONLY the cross-user critical section — the "is this domain already
   // being ordered?" pre-check plus the claim INSERT — in a per-domain MySQL
@@ -180,7 +207,9 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
   // back via the shared result object.
   const intentKey = `${payload.userId}:${payload.type}:${fullDomain}:${years}:${payload.customerId ?? 0}:${payload.domainId ?? 0}`;
   const intentHash = createHash("sha256").update(intentKey).digest("hex").slice(0, 24);
-  const orderId = `INV-${payload.type.toUpperCase().slice(0, 3)}-${intentHash}`;
+  const baseOrderId = `INV-${payload.type.toUpperCase().slice(0, 3)}-${intentHash}`;
+  // Final id is decided at the claim gate (generation suffix, see below).
+  let orderId = baseOrderId;
 
   // Multi-gateway: pilih gateway + validasi channel Duitku SEBELUM claim insert
   // (validasi murah — DB settings; gagal cepat tanpa meninggalkan claim row).
@@ -236,50 +265,65 @@ export async function createDomainOrderPayment(payload: CreateDomainOrderPayload
   // the UNIQUE index on order_id turns the INSERT into the atomic gate.
   // The loser of the race gets ER_DUP_ENTRY and returns the winner's payment
   // link instead of creating a second Sumopod payment + transaction.
+  //
+  // The same intent recurs legitimately (renewing next year, re-ordering after
+  // a payment link expired), so a row holding the id that is already settled or
+  // stale does NOT absorb the new order: we move on to the next generation of
+  // the id (`<base>-2`, `<base>-3`, …). Concurrent identical submissions still
+  // compute the same generation, so the UNIQUE gate keeps collapsing them.
 
   // Claim gate: try to insert a placeholder transaction row FIRST (before any
   // external API call). Only the winner proceeds to create the payment link.
-  let winnerRow: typeof transactions.$inferSelect | null = null;
-  try {
-    const [claim] = await db.insert(transactions).values({
-      userId: payload.userId,
-      customerId: payload.customerId ?? null,
-      type: payload.type,
-      amount: String(payload.amount),
-      currency: "IDR",
-      paymentGateway: gateway,
-      orderId,
-      status: "pending_payment" as const,
-      paymentStatus: "pending" as const,
-      description: `Domain ${payload.type} - ${fullDomain} (${years} yr) - ${orderId}`,
-      metadata: JSON.stringify({ orderId, domainName: fullDomain, tld, years, type: payload.type, gateway }),
-    });
-    txId = Number((claim as any).insertId);
-  } catch (err: any) {
-    const isDup = err?.errno === 1062 || String(err?.code || "").includes("ER_DUP_ENTRY") || String(err?.message || "").includes("Duplicate entry");
-    if (!isDup) throw err;
-    // Lost the race: fetch the winner's transaction. If it already has a
-    // payment link, return it directly. If the winner is still mid-flight
-    // (no link yet), wait briefly and re-read before falling back.
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const [existing] = await db.select().from(transactions).where(eq(transactions.orderId, orderId)).limit(1);
-      if (existing?.paymentLinkUrl) {
-        lockOut = toPaymentResponse(existing);
-        return;
-      }
-      if (existing && existing.status !== "pending_payment") {
-        // winner finished with a terminal state — return it as-is
-        winnerRow = existing;
-        break;
-      }
-      await new Promise((r) => setTimeout(r, 200));
+  for (let generation = 1; ; generation++) {
+    if (generation > MAX_ORDER_ID_GENERATIONS) {
+      throw new AppError("Terlalu banyak order untuk domain ini. Hubungi admin.", 409);
     }
-    const [finalRow] = winnerRow
-      ? [winnerRow]
-      : await db.select().from(transactions).where(eq(transactions.orderId, orderId)).limit(1);
-    if (!finalRow) throw err;
-    lockOut = toPaymentResponse(finalRow);
-    return;
+    orderId = generation === 1 ? baseOrderId : `${baseOrderId}-${generation}`;
+    let winnerRow: typeof transactions.$inferSelect | null = null;
+    try {
+      const [claim] = await db.insert(transactions).values({
+        userId: payload.userId,
+        customerId: payload.customerId ?? null,
+        type: payload.type,
+        amount: String(payload.amount),
+        currency: "IDR",
+        paymentGateway: gateway,
+        orderId,
+        status: "pending_payment" as const,
+        paymentStatus: "pending" as const,
+        description: `Domain ${payload.type} - ${fullDomain} (${years} yr) - ${orderId}`,
+        metadata: JSON.stringify({ orderId, domainName: fullDomain, tld, years, type: payload.type, gateway }),
+      });
+      txId = Number((claim as any).insertId);
+      break;
+    } catch (err: any) {
+      const isDup = err?.errno === 1062 || String(err?.code || "").includes("ER_DUP_ENTRY") || String(err?.message || "").includes("Duplicate entry");
+      if (!isDup) throw err;
+      const [holder] = await db.select().from(transactions).where(eq(transactions.orderId, orderId)).limit(1);
+      if (holder && !isOrderClaimLive(holder)) continue; // settled/stale — next generation
+      // Lost the race: fetch the winner's transaction. If it already has a
+      // payment link, return it directly. If the winner is still mid-flight
+      // (no link yet), wait briefly and re-read before falling back.
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const [existing] = await db.select().from(transactions).where(eq(transactions.orderId, orderId)).limit(1);
+        if (existing?.paymentLinkUrl) {
+          lockOut = toPaymentResponse(existing);
+          return;
+        }
+        if (existing && existing.status !== "pending_payment") {
+          // winner finished with a terminal state — return it as-is
+          winnerRow = existing;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      const [finalRow] = winnerRow
+        ? [winnerRow]
+        : await db.select().from(transactions).where(eq(transactions.orderId, orderId)).limit(1);
+      if (!finalRow) throw err;
+      lockOut = toPaymentResponse(finalRow);
+      return;
+    }
   }
 
   // Deduplication & Concurrent Double-Submit Lock:
