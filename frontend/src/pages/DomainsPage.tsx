@@ -36,12 +36,29 @@ function formatRupiah(n: number): string {
   return `Rp${n.toLocaleString("id-ID")}`;
 }
 
-/** Renewal price per year for a TLD from /billing/prices (values < 1000 are in thousands). */
-function renewPriceFor(prices: Record<string, any> | null | undefined, tld?: string | null): number | null {
-  const info = prices?.[String(tld || "").toLowerCase()];
-  const raw = Number(info?.price_renew);
-  if (!info || !Number.isFinite(raw) || raw <= 0) return null;
-  return raw < 1000 ? raw * 1000 : raw;
+/** TLD suffix of a domain name, e.g. "whoops.web.id" -> "web.id". */
+function tldFromDomainName(name?: string | null): string {
+  const n = String(name || "").toLowerCase();
+  const i = n.indexOf(".");
+  return i >= 0 ? n.slice(i + 1) : "";
+}
+
+/**
+ * Renewal price per year from /billing/prices (values < 1000 are in thousands).
+ * Tries the API-provided `tld` first, then falls back to the suffix derived from
+ * the domain name itself — a stale/absent `tld` must not blank the column.
+ */
+function renewPriceFor(prices: Record<string, any> | null | undefined, domain: Domain): number | null {
+  const keys = [
+    String(domain.tld || "").toLowerCase(),
+    tldFromDomainName(domain.domainName),
+  ].filter(Boolean);
+  for (const key of keys) {
+    const info = prices?.[key];
+    const raw = Number(info?.price_renew);
+    if (info && Number.isFinite(raw) && raw > 0) return raw < 1000 ? raw * 1000 : raw;
+  }
+  return null;
 }
 
 function ExpiryInfo({ domain, compact = false }: { domain: Domain; compact?: boolean }) {
@@ -192,7 +209,7 @@ export default function DomainsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white text-sm">
                 {visibleDomains.map((d) => {
-                  const renewPrice = renewPriceFor(prices, d.tld);
+                  const renewPrice = renewPriceFor(prices, d);
                   return (
                     <tr
                       key={d.liquidOrderId || d.id}
@@ -231,7 +248,7 @@ export default function DomainsPage() {
           </div>
           <div className="block md:hidden divide-y divide-gray-100 p-4 space-y-4">
             {visibleDomains.map((d) => {
-              const renewPrice = renewPriceFor(prices, d.tld);
+              const renewPrice = renewPriceFor(prices, d);
               return (
                 <Link key={d.liquidOrderId || d.id} to={`/domains/${d.liquidOrderId || d.id}`} className={`block rounded-xl p-4 shadow-sm border bg-white hover:shadow-md transition-shadow ${d.status === "suspended" ? "border-rose-200 bg-rose-50/30" : ""}`}>
                   <div className="flex justify-between items-start gap-2">

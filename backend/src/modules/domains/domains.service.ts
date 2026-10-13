@@ -6,6 +6,7 @@ import { AppError } from "../../lib/error";
 import { resolveResellerCreds } from "../../lib/reseller-creds";
 import { loadTenantScope } from "../../lib/tenant-access";
 import { parseOrderDomain, parseFullDomain } from "../../lib/sanitize";
+import { tldFromDomainName } from "../../lib/domain-tld";
 import dns from "node:dns/promises";
 
 async function checkDnsAvailability(domain: string): Promise<boolean> {
@@ -2072,7 +2073,10 @@ export async function listDomainsFromLiquid(
       return {
         liquidOrderId: domainId,
         domainName: name,
-        tld: name.split(".").slice(1).join(""),
+        // Second-level ccTLDs must keep the dot ("web.id", not "webid"): the
+        // price list is keyed by "web.id"/"my.id", so collapsing it silently
+        // blanked the Perpanjangan column.
+        tld: tldFromDomainName(name),
         status,
         suspendReason,
         suspendedAt,
