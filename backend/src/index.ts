@@ -141,7 +141,11 @@ async function bootstrap() {
     console.warn("[db] ensureDatabaseSchema error during bootstrap:", err?.message || err);
   }
 
-  app.listen(env.PORT);
+  // idleTimeout: 60s — a domain search can legitimately take up to ~27s when the
+  // registrar is slow for .id ccTLDs (12s first pass + 15s retry). Elysia's
+  // default is 30s, which would close the connection mid-request and surface as
+  // a dropped request instead of a result.
+  app.listen({ port: Number(env.PORT), idleTimeout: 60 });
   console.log(`🚀 Server running on port ${env.PORT}`);
 
   startAutoExpireSweeper();

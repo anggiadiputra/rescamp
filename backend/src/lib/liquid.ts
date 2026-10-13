@@ -180,7 +180,9 @@ export class LiquidClient {
     // parallel, so the retry gets a deliberately larger window before we give up
     // and report "unknown".
     if (failedDomains.length > 0) {
-      const retryTimeoutMs = Math.min(Math.max(timeoutMs * 2, timeoutMs + 6_000), 20_000);
+      // Bounded so first pass + retry stays comfortably under Elysia's 30s
+      // server idleTimeout (a longer request gets its connection closed).
+      const retryTimeoutMs = Math.min(timeoutMs + 3_000, 15_000);
       console.log(`[checkBulkAvailability] Retrying ${failedDomains.length} failed domain(s) with ${(retryTimeoutMs / 1000).toFixed(0)}s:`, failedDomains);
       const retryResults = await Promise.allSettled(
         failedDomains.map((d) => this.checkAvailability(d, retryTimeoutMs))
