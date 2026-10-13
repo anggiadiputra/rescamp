@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const distIndex = join(root, "dist", "index.html");
+const distApp = join(root, "dist", "app.html");
 const serverBundle = join(root, "dist-server", "entry-server.cjs");
 const settingsApi = "https://api.ekstensi.id/api/settings/public";
 
@@ -146,6 +147,12 @@ const prerendered = renderLandingHtml();
 let indexHtml = readFileSync(distIndex, "utf8");
 if (!indexHtml.includes('<div id="root">')) throw new Error('dist/index.html tidak punya <div id="root">');
 
+// Shell bersih (tanpa markup landing) untuk route aplikasi (/dashboard, /login, …).
+// Nginx melayani /app.html sebagai fallback SPA. Tanpa ini, HTML berisi landing
+// yang sama ikut terkirim ke semua route, sehingga saat reload route aplikasi
+// browser sempat menggambar halaman landing sebelum React mengambil alih.
+const shellHtml = indexHtml;
+
 indexHtml = indexHtml.replace(
   '<div id="root">',
   () => `<div id="root">${prerendered}`,
@@ -170,6 +177,10 @@ if (settings && !(settings?.seo_title == null && settings?.seo_description == nu
 }
 
 writeFileSync(distIndex, indexHtml, "utf8");
+// Shell untuk route aplikasi. Nginx: `try_files $uri $uri/ /app.html;` (index
+// directive tetap melayani index.html untuk "/", jadi SEO beranda tidak berubah).
+writeFileSync(distApp, shellHtml, "utf8");
 
 const kb = (indexHtml.length / 1024).toFixed(1);
 console.log(`✔ Beranda ter-prerender: ${prerendered.length} karakter konten diinjeksikan ke #root (HTML total ${kb} KB).`);
+console.log(`✔ app.html (shell route aplikasi) ditulis: ${(shellHtml.length / 1024).toFixed(1)} KB, tanpa markup landing.`);
