@@ -145,13 +145,20 @@ console.log("→ Merender konten landing ke HTML…");
 const prerendered = renderLandingHtml();
 
 let indexHtml = readFileSync(distIndex, "utf8");
-if (!indexHtml.includes('<div id="root">')) throw new Error('dist/index.html tidak punya <div id="root">');
+if (!indexHtml.includes('<div id="root"></div>')) {
+  throw new Error('dist/index.html tidak punya <div id="root"></div> (template berubah?)');
+}
 
-// Shell bersih (tanpa markup landing) untuk route aplikasi (/dashboard, /login, …).
-// Nginx melayani /app.html sebagai fallback SPA. Tanpa ini, HTML berisi landing
-// yang sama ikut terkirim ke semua route, sehingga saat reload route aplikasi
-// browser sempat menggambar halaman landing sebelum React mengambil alih.
-const shellHtml = indexHtml;
+// Shell bersih untuk route aplikasi (/dashboard, /login, …): TANPA markup landing,
+// tapi DENGAN skeleton loading statis (markup+CSS, aman dari meta CSP) supaya
+// layar tidak putih kosong selama bundle JS diunduh. Nginx melayani /app.html
+// sebagai fallback SPA.
+const skeletonPath = join(root, "scripts", "app-shell-skeleton.html");
+const skeleton = existsSync(skeletonPath) ? readFileSync(skeletonPath, "utf8") : "";
+const shellHtml = indexHtml.replace(
+  '<div id="root"></div>',
+  () => `<div id="root">${skeleton}</div>`,
+);
 
 indexHtml = indexHtml.replace(
   '<div id="root">',
