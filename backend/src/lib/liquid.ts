@@ -174,11 +174,16 @@ export class LiquidClient {
       }
     }
 
-    // Quick retry for any failed domains (handles PANDI ccTLD transient lags)
+    // Quick retry for any failed domains (handles PANDI ccTLD transient lags).
+    // The .id second-level ccTLDs (co.id/sch.id/biz.id/ai.id) are typically
+    // 2-6s and can exceed the first-pass budget when many TLDs are queried in
+    // parallel, so the retry gets a deliberately larger window before we give up
+    // and report "unknown".
     if (failedDomains.length > 0) {
-      console.log(`[checkBulkAvailability] Retrying ${failedDomains.length} failed domain(s):`, failedDomains);
+      const retryTimeoutMs = Math.min(Math.max(timeoutMs * 2, timeoutMs + 6_000), 20_000);
+      console.log(`[checkBulkAvailability] Retrying ${failedDomains.length} failed domain(s) with ${(retryTimeoutMs / 1000).toFixed(0)}s:`, failedDomains);
       const retryResults = await Promise.allSettled(
-        failedDomains.map((d) => this.checkAvailability(d, timeoutMs))
+        failedDomains.map((d) => this.checkAvailability(d, retryTimeoutMs))
       );
       for (let i = 0; i < retryResults.length; i++) {
         const res = retryResults[i];

@@ -1713,7 +1713,10 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
 
   if (liquid) {
     try {
-      apiData = await liquid.checkBulkAvailability(allFullDomains, 8_000);
+      // 12s first pass: the .id second-level ccTLDs are slow (2-6s each) and can
+      // exceed a tighter budget under parallel load; the client retries the
+      // failures once more with a larger window before anything is "unknown".
+      apiData = await liquid.checkBulkAvailability(allFullDomains, 12_000);
       apiSucceeded = Boolean(apiData && typeof apiData === "object" && Object.keys(apiData).length > 0);
       console.log(`[bulkAvailability] API response keys:`, apiData ? Object.keys(apiData) : "null");
     } catch (e: any) {
@@ -1822,9 +1825,16 @@ export async function bulkAvailability(user: { id?: number; resellerId: string |
     };
   });
 
-  // Only cache results if API actually succeeded (don't cache fallback/failure results)
-  if (results.length > 0 && apiSucceeded) {
+  // Only cache when the API actually resolved EVERY TLD. A partially-resolved
+  // response (some rows still "unknown" because the registry was slow) must not
+  // be cached: otherwise the "Tidak Diketahui" state and the missing
+  // register/transfer action stick for the whole cache TTL even after the
+  // registry has recovered.
+  const allResolved = results.every((r) => r.status !== "unknown");
+  if (results.length > 0 && apiSucceeded && allResolved) {
     searchResultCache.set(cacheKey, { results, expiresAt: Date.now() + SEARCH_CACHE_TTL_MS });
+  } else if (results.length > 0 && apiSucceeded && !allResolved) {
+    console.log(`[bulkAvailability] not caching partial result for "${cacheKey}" (${results.filter((r) => r.status === "unknown").length} unresolved)`);
   }
 
   return results;

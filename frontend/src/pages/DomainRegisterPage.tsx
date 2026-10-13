@@ -382,7 +382,17 @@ export default function DomainRegisterPage() {
                       {isAvail ? (
                         <div className="text-sm font-bold text-gray-900">{fmtPrice(r.price)} <span className="text-[10px] text-gray-400 font-normal">/tahun</span></div>
                       ) : isUnknown ? (
-                        <div className="text-sm font-bold text-gray-400">—</div>
+                        // Availability lookup timed out, but the list price is known
+                        // (it comes from the price list, not the registry). Showing it
+                        // avoids a blank "—" that looks like the TLD has no price.
+                        fmtPrice(r.price) ? (
+                          <div>
+                            <div className="text-sm font-bold text-gray-500">{fmtPrice(r.price)} <span className="text-[10px] text-gray-400 font-normal">/tahun</span></div>
+                            <div className="text-[10px] text-gray-400">Harga daftar &middot; ketersediaan belum terverifikasi</div>
+                          </div>
+                        ) : (
+                          <div className="text-sm font-bold text-gray-400">—</div>
+                        )
                       ) : (
                         <div className="text-sm font-bold text-amber-700">
                           Transfer: {fmtPrice(r.transfer_price || r.renew_price || r.price)} <span className="text-[10px] text-amber-600/70 font-normal">/tahun</span>
